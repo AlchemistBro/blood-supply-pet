@@ -1,0 +1,104 @@
+{
+  "version": 1,
+  "component_kinds": [
+    {
+      "component_kind_code": "RBC",
+      "component_kind_name": "Эритроцитсодержащие компоненты",
+      "is_group_applicable": true,
+      "typical_volume_ml": 300,
+      "shelf_life_days": 42,
+      "is_active": true
+    },
+    {
+      "component_kind_code": "FFP",
+      "component_kind_name": "Свежезамороженная плазма",
+      "is_group_applicable": true,
+      "typical_volume_ml": 250,
+      "shelf_life_days": 1095,
+      "is_active": true
+    },
+    {
+      "component_kind_code": "PLT",
+      "component_kind_name": "Тромбоцитный концентрат",
+      "is_group_applicable": true,
+      "typical_volume_ml": 200,
+      "shelf_life_days": 7,
+      "is_active": true
+    },
+    {
+      "component_kind_code": "CRYO",
+      "component_kind_name": "Криопреципитат",
+      "is_group_applicable": false,
+      "typical_volume_ml": 20,
+      "shelf_life_days": 1095,
+      "is_active": true
+    }
+  ],
+  "blood_groups": [
+    {
+      "blood_group_code": "O+",
+      "abo_group": "O",
+      "rh_positive": true,
+      "population_share": 0.33
+    },
+    {
+      "blood_group_code": "O-",
+      "abo_group": "O",
+      "rh_positive": false,
+      "population_share": 0.04
+    },
+    {
+      "blood_group_code": "A+",
+      "abo_group": "A",
+      "rh_positive": true,
+      "population_share": 0.35
+    },
+    {
+      "blood_group_code": "A-",
+      "abo_group": "A",
+      "rh_positive": false,
+      "population_share": 0.04
+    },
+    {
+      "blood_group_code": "B+",
+      "abo_group": "B",
+      "rh_positive": true,
+      "population_share": 0.15
+    },
+    {
+      "blood_group_code": "B-",
+      "abo_group": "B",
+      "rh_positive": false,
+      "population_share": 0.02
+    },
+    {
+      "blood_group_code": "AB+",
+      "abo_group": "AB",
+      "rh_positive": true,
+      "population_share": 0.06
+    },
+    {
+      "blood_group_code": "AB-",
+      "abo_group": "AB",
+      "rh_positive": false,
+      "population_share": 0.01
+    }
+  ],
+  "urgency": [
+    {
+      "urgency_code": "PLANNED",
+      "urgency_name": "Плановая",
+      "confirm_window_minutes": 1440
+    },
+    {
+      "urgency_code": "URGENT",
+      "urgency_name": "Срочная",
+      "confirm_window_minutes": 120
+    },
+    {
+      "urgency_code": "EMERGENCY",
+      "urgency_name": "Экстренная",
+      "confirm_window_minutes": 15
+    }
+  ]
+}

@@ -1,0 +1,880 @@
+{
+  "version": 1,
+  "source": "синтетические данные, ADR-0010",
+  "districts": [
+    {
+      "district_id": 1,
+      "district_code": "D01",
+      "district_name": "Центральный",
+      "population": 770000
+    },
+    {
+      "district_id": 2,
+      "district_code": "D02",
+      "district_name": "Северный",
+      "population": 1180000
+    },
+    {
+      "district_id": 3,
+      "district_code": "D03",
+      "district_name": "Северо-Восточный",
+      "population": 1420000
+    },
+    {
+      "district_id": 4,
+      "district_code": "D04",
+      "district_name": "Восточный",
+      "population": 1520000
+    },
+    {
+      "district_id": 5,
+      "district_code": "D05",
+      "district_name": "Юго-Восточный",
+      "population": 1400000
+    },
+    {
+      "district_id": 6,
+      "district_code": "D06",
+      "district_name": "Южный",
+      "population": 1800000
+    },
+    {
+      "district_id": 7,
+      "district_code": "D07",
+      "district_name": "Юго-Западный",
+      "population": 1430000
+    },
+    {
+      "district_id": 8,
+      "district_code": "D08",
+      "district_name": "Западный",
+      "population": 1390000
+    },
+    {
+      "district_id": 9,
+      "district_code": "D09",
+      "district_name": "Северо-Западный",
+      "population": 1010000
+    },
+    {
+      "district_id": 10,
+      "district_code": "D10",
+      "district_name": "Зеленоградский",
+      "population": 250000
+    },
+    {
+      "district_id": 11,
+      "district_code": "D11",
+      "district_name": "Новомосковский",
+      "population": 300000
+    },
+    {
+      "district_id": 12,
+      "district_code": "D12",
+      "district_name": "Троицкий",
+      "population": 130000
+    }
+  ],
+  "clinics": [
+    {
+      "clinic_id": 1,
+      "clinic_code": "C001",
+      "clinic_name": "Городской центр крови (демо)",
+      "district_id": 8,
+      "is_active": true,
+      "is_blood_center": true
+    },
+    {
+      "clinic_id": 2,
+      "clinic_code": "C002",
+      "clinic_name": "Городская клиническая больница № 2 (демо)",
+      "district_id": 7,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 3,
+      "clinic_code": "C003",
+      "clinic_name": "Городская клиническая больница № 3 (демо)",
+      "district_id": 8,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 4,
+      "clinic_code": "C004",
+      "clinic_name": "Клиническая больница № 4 (демо)",
+      "district_id": 3,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 5,
+      "clinic_code": "C005",
+      "clinic_name": "Городская клиническая больница № 5 (демо)",
+      "district_id": 2,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 6,
+      "clinic_code": "C006",
+      "clinic_name": "Городская клиническая больница № 6 (демо)",
+      "district_id": 8,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 7,
+      "clinic_code": "C007",
+      "clinic_name": "Городская клиническая больница № 7 (демо)",
+      "district_id": 5,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 8,
+      "clinic_code": "C008",
+      "clinic_name": "Многопрофильный медицинский центр № 8 (демо)",
+      "district_id": 2,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 9,
+      "clinic_code": "C009",
+      "clinic_name": "Городская клиническая больница № 9 (демо)",
+      "district_id": 4,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 10,
+      "clinic_code": "C010",
+      "clinic_name": "Городская клиническая больница № 10 (демо)",
+      "district_id": 3,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 11,
+      "clinic_code": "C011",
+      "clinic_name": "Городская клиническая больница № 11 (демо)",
+      "district_id": 3,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 12,
+      "clinic_code": "C012",
+      "clinic_name": "Больница скорой помощи № 12 (демо)",
+      "district_id": 2,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 13,
+      "clinic_code": "C013",
+      "clinic_name": "Городская клиническая больница № 13 (демо)",
+      "district_id": 3,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 14,
+      "clinic_code": "C014",
+      "clinic_name": "Городская клиническая больница № 14 (демо)",
+      "district_id": 7,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 15,
+      "clinic_code": "C015",
+      "clinic_name": "Городская клиническая больница № 15 (демо)",
+      "district_id": 3,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 16,
+      "clinic_code": "C016",
+      "clinic_name": "Городская клиническая больница № 16 (демо)",
+      "district_id": 1,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 17,
+      "clinic_code": "C017",
+      "clinic_name": "Городская клиническая больница № 17 (демо)",
+      "district_id": 3,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 18,
+      "clinic_code": "C018",
+      "clinic_name": "Городская клиническая больница № 18 (демо)",
+      "district_id": 11,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 19,
+      "clinic_code": "C019",
+      "clinic_name": "Городская клиническая больница № 19 (демо)",
+      "district_id": 7,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 20,
+      "clinic_code": "C020",
+      "clinic_name": "Клиническая больница № 20 (демо)",
+      "district_id": 4,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 21,
+      "clinic_code": "C021",
+      "clinic_name": "Городская клиническая больница № 21 (демо)",
+      "district_id": 5,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 22,
+      "clinic_code": "C022",
+      "clinic_name": "Городская клиническая больница № 22 (демо)",
+      "district_id": 12,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 23,
+      "clinic_code": "C023",
+      "clinic_name": "Городская клиническая больница № 23 (демо)",
+      "district_id": 11,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 24,
+      "clinic_code": "C024",
+      "clinic_name": "Многопрофильный медицинский центр № 24 (демо)",
+      "district_id": 3,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 25,
+      "clinic_code": "C025",
+      "clinic_name": "Городская клиническая больница № 25 (демо)",
+      "district_id": 7,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 26,
+      "clinic_code": "C026",
+      "clinic_name": "Городская клиническая больница № 26 (демо)",
+      "district_id": 9,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 27,
+      "clinic_code": "C027",
+      "clinic_name": "Городская клиническая больница № 27 (демо)",
+      "district_id": 7,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 28,
+      "clinic_code": "C028",
+      "clinic_name": "Больница скорой помощи № 28 (демо)",
+      "district_id": 11,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 29,
+      "clinic_code": "C029",
+      "clinic_name": "Городская клиническая больница № 29 (демо)",
+      "district_id": 8,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 30,
+      "clinic_code": "C030",
+      "clinic_name": "Городская клиническая больница № 30 (демо)",
+      "district_id": 8,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 31,
+      "clinic_code": "C031",
+      "clinic_name": "Городская клиническая больница № 31 (демо)",
+      "district_id": 2,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 32,
+      "clinic_code": "C032",
+      "clinic_name": "Городская клиническая больница № 32 (демо)",
+      "district_id": 6,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 33,
+      "clinic_code": "C033",
+      "clinic_name": "Городская клиническая больница № 33 (демо)",
+      "district_id": 1,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 34,
+      "clinic_code": "C034",
+      "clinic_name": "Городская клиническая больница № 34 (демо)",
+      "district_id": 12,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 35,
+      "clinic_code": "C035",
+      "clinic_name": "Городская клиническая больница № 35 (демо)",
+      "district_id": 12,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 36,
+      "clinic_code": "C036",
+      "clinic_name": "Клиническая больница № 36 (демо)",
+      "district_id": 3,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 37,
+      "clinic_code": "C037",
+      "clinic_name": "Городская клиническая больница № 37 (демо)",
+      "district_id": 10,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 38,
+      "clinic_code": "C038",
+      "clinic_name": "Городская клиническая больница № 38 (демо)",
+      "district_id": 3,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 39,
+      "clinic_code": "C039",
+      "clinic_name": "Городская клиническая больница № 39 (демо)",
+      "district_id": 6,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 40,
+      "clinic_code": "C040",
+      "clinic_name": "Многопрофильный медицинский центр № 40 (демо)",
+      "district_id": 10,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 41,
+      "clinic_code": "C041",
+      "clinic_name": "Городская клиническая больница № 41 (демо)",
+      "district_id": 2,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 42,
+      "clinic_code": "C042",
+      "clinic_name": "Городская клиническая больница № 42 (демо)",
+      "district_id": 1,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 43,
+      "clinic_code": "C043",
+      "clinic_name": "Городская клиническая больница № 43 (демо)",
+      "district_id": 2,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 44,
+      "clinic_code": "C044",
+      "clinic_name": "Больница скорой помощи № 44 (демо)",
+      "district_id": 3,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 45,
+      "clinic_code": "C045",
+      "clinic_name": "Городская клиническая больница № 45 (демо)",
+      "district_id": 2,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 46,
+      "clinic_code": "C046",
+      "clinic_name": "Городская клиническая больница № 46 (демо)",
+      "district_id": 7,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 47,
+      "clinic_code": "C047",
+      "clinic_name": "Городская клиническая больница № 47 (демо)",
+      "district_id": 3,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 48,
+      "clinic_code": "C048",
+      "clinic_name": "Городская клиническая больница № 48 (демо)",
+      "district_id": 6,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 49,
+      "clinic_code": "C049",
+      "clinic_name": "Городская клиническая больница № 49 (демо)",
+      "district_id": 5,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 50,
+      "clinic_code": "C050",
+      "clinic_name": "Городская клиническая больница № 50 (демо)",
+      "district_id": 6,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 51,
+      "clinic_code": "C051",
+      "clinic_name": "Городская клиническая больница № 51 (демо)",
+      "district_id": 6,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 52,
+      "clinic_code": "C052",
+      "clinic_name": "Клиническая больница № 52 (демо)",
+      "district_id": 6,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 53,
+      "clinic_code": "C053",
+      "clinic_name": "Городская клиническая больница № 53 (демо)",
+      "district_id": 7,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 54,
+      "clinic_code": "C054",
+      "clinic_name": "Городская клиническая больница № 54 (демо)",
+      "district_id": 5,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 55,
+      "clinic_code": "C055",
+      "clinic_name": "Городская клиническая больница № 55 (демо)",
+      "district_id": 3,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 56,
+      "clinic_code": "C056",
+      "clinic_name": "Многопрофильный медицинский центр № 56 (демо)",
+      "district_id": 7,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 57,
+      "clinic_code": "C057",
+      "clinic_name": "Городская клиническая больница № 57 (демо)",
+      "district_id": 4,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 58,
+      "clinic_code": "C058",
+      "clinic_name": "Городская клиническая больница № 58 (демо)",
+      "district_id": 5,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 59,
+      "clinic_code": "C059",
+      "clinic_name": "Городская клиническая больница № 59 (демо)",
+      "district_id": 5,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 60,
+      "clinic_code": "C060",
+      "clinic_name": "Больница скорой помощи № 60 (демо)",
+      "district_id": 5,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 61,
+      "clinic_code": "C061",
+      "clinic_name": "Городская клиническая больница № 61 (демо)",
+      "district_id": 5,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 62,
+      "clinic_code": "C062",
+      "clinic_name": "Городская клиническая больница № 62 (демо)",
+      "district_id": 3,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 63,
+      "clinic_code": "C063",
+      "clinic_name": "Городская клиническая больница № 63 (демо)",
+      "district_id": 8,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 64,
+      "clinic_code": "C064",
+      "clinic_name": "Городская клиническая больница № 64 (демо)",
+      "district_id": 6,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 65,
+      "clinic_code": "C065",
+      "clinic_name": "Городская клиническая больница № 65 (демо)",
+      "district_id": 2,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 66,
+      "clinic_code": "C066",
+      "clinic_name": "Городская клиническая больница № 66 (демо)",
+      "district_id": 8,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 67,
+      "clinic_code": "C067",
+      "clinic_name": "Городская клиническая больница № 67 (демо)",
+      "district_id": 7,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 68,
+      "clinic_code": "C068",
+      "clinic_name": "Клиническая больница № 68 (демо)",
+      "district_id": 6,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 69,
+      "clinic_code": "C069",
+      "clinic_name": "Городская клиническая больница № 69 (демо)",
+      "district_id": 9,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 70,
+      "clinic_code": "C070",
+      "clinic_name": "Городская клиническая больница № 70 (демо)",
+      "district_id": 3,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 71,
+      "clinic_code": "C071",
+      "clinic_name": "Городская клиническая больница № 71 (демо)",
+      "district_id": 2,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 72,
+      "clinic_code": "C072",
+      "clinic_name": "Многопрофильный медицинский центр № 72 (демо)",
+      "district_id": 9,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 73,
+      "clinic_code": "C073",
+      "clinic_name": "Городская клиническая больница № 73 (демо)",
+      "district_id": 8,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 74,
+      "clinic_code": "C074",
+      "clinic_name": "Городская клиническая больница № 74 (демо)",
+      "district_id": 6,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 75,
+      "clinic_code": "C075",
+      "clinic_name": "Городская клиническая больница № 75 (демо)",
+      "district_id": 5,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 76,
+      "clinic_code": "C076",
+      "clinic_name": "Больница скорой помощи № 76 (демо)",
+      "district_id": 8,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 77,
+      "clinic_code": "C077",
+      "clinic_name": "Городская клиническая больница № 77 (демо)",
+      "district_id": 5,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 78,
+      "clinic_code": "C078",
+      "clinic_name": "Городская клиническая больница № 78 (демо)",
+      "district_id": 3,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 79,
+      "clinic_code": "C079",
+      "clinic_name": "Городская клиническая больница № 79 (демо)",
+      "district_id": 1,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 80,
+      "clinic_code": "C080",
+      "clinic_name": "Городская клиническая больница № 80 (демо)",
+      "district_id": 8,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 81,
+      "clinic_code": "C081",
+      "clinic_name": "Городская клиническая больница № 81 (демо)",
+      "district_id": 7,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 82,
+      "clinic_code": "C082",
+      "clinic_name": "Городская клиническая больница № 82 (демо)",
+      "district_id": 4,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 83,
+      "clinic_code": "C083",
+      "clinic_name": "Городская клиническая больница № 83 (демо)",
+      "district_id": 7,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 84,
+      "clinic_code": "C084",
+      "clinic_name": "Клиническая больница № 84 (демо)",
+      "district_id": 7,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 85,
+      "clinic_code": "C085",
+      "clinic_name": "Городская клиническая больница № 85 (демо)",
+      "district_id": 6,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 86,
+      "clinic_code": "C086",
+      "clinic_name": "Городская клиническая больница № 86 (демо)",
+      "district_id": 3,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 87,
+      "clinic_code": "C087",
+      "clinic_name": "Городская клиническая больница № 87 (демо)",
+      "district_id": 5,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 88,
+      "clinic_code": "C088",
+      "clinic_name": "Многопрофильный медицинский центр № 88 (демо)",
+      "district_id": 3,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 89,
+      "clinic_code": "C089",
+      "clinic_name": "Городская клиническая больница № 89 (демо)",
+      "district_id": 6,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 90,
+      "clinic_code": "C090",
+      "clinic_name": "Городская клиническая больница № 90 (демо)",
+      "district_id": 3,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 91,
+      "clinic_code": "C091",
+      "clinic_name": "Городская клиническая больница № 91 (демо)",
+      "district_id": 7,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 92,
+      "clinic_code": "C092",
+      "clinic_name": "Больница скорой помощи № 92 (демо)",
+      "district_id": 5,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 93,
+      "clinic_code": "C093",
+      "clinic_name": "Городская клиническая больница № 93 (демо)",
+      "district_id": 2,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 94,
+      "clinic_code": "C094",
+      "clinic_name": "Городская клиническая больница № 94 (демо)",
+      "district_id": 2,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 95,
+      "clinic_code": "C095",
+      "clinic_name": "Городская клиническая больница № 95 (демо)",
+      "district_id": 6,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 96,
+      "clinic_code": "C096",
+      "clinic_name": "Городская клиническая больница № 96 (демо)",
+      "district_id": 4,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 97,
+      "clinic_code": "C097",
+      "clinic_name": "Городская клиническая больница № 97 (демо)",
+      "district_id": 6,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 98,
+      "clinic_code": "C098",
+      "clinic_name": "Городская клиническая больница № 98 (демо)",
+      "district_id": 1,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 99,
+      "clinic_code": "C099",
+      "clinic_name": "Городская клиническая больница № 99 (демо)",
+      "district_id": 9,
+      "is_active": true,
+      "is_blood_center": false
+    },
+    {
+      "clinic_id": 100,
+      "clinic_code": "C100",
+      "clinic_name": "Клиническая больница № 100 (демо)",
+      "district_id": 9,
+      "is_active": true,
+      "is_blood_center": false
+    }
+  ]
+}
