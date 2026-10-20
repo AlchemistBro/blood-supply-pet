@@ -1,0 +1,164 @@
+# Стенд АС распределения компонентов донорской крови.
+#   task up            платформа + сервисы
+#   task up:platform   только платформа (сервисы запускаются локально: task dev:<svc>)
+# Профили: services (сервисы Go), edge (nginx + самоподписанный TLS), ui (Kafka UI).
+name: blood-supply
+
+x-service-env: &service-env
+  BS_ENV: local
+  BS_KAFKA_BROKERS: kafka:29092
+  BS_OIDC_ISSUER: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8180}/realms/blood-supply
+  BS_OIDC_JWKS_URL: http://keycloak:8080/realms/blood-supply/protocol/openid-connect/certs
+  BS_OIDC_AUDIENCE: blood-supply-api
+  BS_OTEL_ENDPOINT: otel-lgtm:4318
+  BS_LOG_LEVEL: info
+
+x-service-deps: &service-deps
+  postgres: { condition: service_healthy }
+  kafka: { condition: service_healthy }
+  keycloak: { condition: service_healthy }
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - pgdata:/var/lib/postgresql/data
+    # 5433 снаружи: на хосте часто уже стоит свой PostgreSQL на 5432.
+    ports: ["${POSTGRES_HOST_PORT:-5433}:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  kafka:
+    image: apache/kafka-native:3.9.1
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    ports: ["9092:9092"]
+    volumes:
+      - kafkadata:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 29092"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.4
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8180}
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+    volumes:
+      - ./keycloak/realm-blood-supply.json:/opt/keycloak/data/import/realm-blood-supply.json:ro
+    ports: ["8180:8080"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      # В образе нет curl: проверяем /health/ready на служебном порту через /dev/tcp.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"status\": \"UP\"' <&3"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 30s
+
+  otel-lgtm:
+    image: grafana/otel-lgtm:0.11.0
+    ports:
+      - "3000:3000"   # Grafana (admin / admin)
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+    volumes:
+      - lgtmdata:/data
+
+  mailpit:
+    image: axllent/mailpit:v1.22
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    ports:
+      - "1025:1025"   # SMTP (C04)
+      - "8025:8025"   # веб-просмотр писем
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    profiles: ["ui"]
+    environment:
+      KAFKA_CLUSTERS_0_NAME: blood-supply
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+    ports: ["8090:8080"]
+    depends_on:
+      kafka: { condition: service_healthy }
+
+  # ------------------------------------------------------------------ edge
+  certs:
+    image: alpine/openssl:latest
+    profiles: ["edge", "services"]
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        test -f /certs/tls.crt ||
+        openssl req -x509 -nodes -newkey rsa:2048 -days 365 -subj "/CN=localhost"
+        -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+        -keyout /certs/tls.key -out /certs/tls.crt
+    volumes:
+      - certs:/certs
+
+  nginx:
+    image: nginx:1.27-alpine
+    profiles: ["edge", "services"]
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - certs:/certs:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      certs: { condition: service_completed_successfully }
+
+  # ------------------------------------------------------------------ сервисы
+  audit:
+    build: { context: ../.., dockerfile: deploy/docker/Dockerfile, args: { SERVICE: audit, VERSION: "${IMAGE_TAG:-dev}" } }
+    image: ghcr.io/alchemistbro/blood-supply-audit:${IMAGE_TAG:-dev}
+    profiles: ["services"]
+    environment:
+      <<: *service-env
+      BS_DB_URL: postgres://audit:audit@postgres:5432/audit?sslmode=disable
+    ports: ["8108:8080"]
+    depends_on: *service-deps
+
+volumes:
+  pgdata:
+  kafkadata:
+  lgtmdata:
+  certs:
