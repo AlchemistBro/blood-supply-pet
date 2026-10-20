@@ -1,0 +1,159 @@
+version: "3"
+
+# Все задачи работают в Git Bash на Windows и в Linux CI. Запуск: task <имя>; список: task --list.
+
+vars:
+  COMPOSE: docker compose -f deploy/compose/compose.yaml --env-file deploy/compose/.env
+  SERVICES: audit
+  VERSION:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo dev
+
+env:
+  CGO_ENABLED: "0"
+
+tasks:
+  default:
+    cmds: [task --list]
+    silent: true
+
+  # ---------------------------------------------------------------- генерация и форматирование
+  gen:
+    desc: Сгенерировать код из OpenAPI (oapi-codegen) и SQL (sqlc)
+    cmds:
+      - for: { var: SERVICES, split: " " }
+        cmd: cd services/{{.ITEM}}/api && go tool oapi-codegen -config oapi-codegen.yaml openapi.yaml
+      - for: { var: SERVICES, split: " " }
+        cmd: cd services/{{.ITEM}}/sqlc && sqlc generate
+
+  gen:check:
+    desc: Убедиться, что сгенерированный код актуален (нет незакоммиченного diff после gen)
+    cmds:
+      - task: gen
+      - cmd: |
+          git diff --exit-code -- '*.gen.go' 'services/*/internal/adapters/postgres/gen' \
+            || { echo "Сгенерированный код устарел - выполните task gen и закоммитьте"; exit 1; }
+
+  fmt:
+    desc: Форматировать код (gofmt + goimports через golangci-lint)
+    cmds:
+      - golangci-lint fmt ./...
+
+  lint:
+    desc: Линтеры и архитектурные проверки
+    cmds:
+      - go vet ./...
+      - golangci-lint run ./...
+      - go test ./tools/archtest/...
+
+  # ---------------------------------------------------------------- тесты
+  test:
+    desc: Юнит-тесты (с -race, если доступен cgo)
+    cmds:
+      - go test -count=1 ./...
+      - task: test:race
+
+  test:race:
+    desc: Юнит-тесты с детектором гонок (нужен gcc; пропускается без него)
+    cmds:
+      - cmd: |
+          if command -v gcc >/dev/null 2>&1; then
+            CGO_ENABLED=1 go test -race -count=1 ./libs/... ./services/...
+          else
+            echo "gcc не найден: детектор гонок пропущен (в CI он включён)"
+          fi
+    silent: true
+
+  test:integration:
+    desc: Интеграционные тесты на реальных PostgreSQL и Kafka (Docker, testcontainers)
+    cmds:
+      - go test -tags integration -count=1 -timeout 15m ./libs/... ./services/...
+
+  test:fitness:
+    desc: Фитнес-тесты саги (гонки, дубли, kill шлюза); появятся с этапом 1
+    cmds:
+      - go test -tags integration -count=1 -timeout 15m -run 'Fitness|Race|Saga' ./services/... || true
+
+  test:e2e:
+    desc: Сквозные сценарии против поднятого стенда (task up)
+    cmds:
+      - go test -tags e2e -count=1 -timeout 10m ./tests/e2e/...
+
+  contracts:check:
+    desc: Проверка контрактов - примеры по схемам и обратная совместимость
+    cmds:
+      - go test -count=1 ./libs/contracts/...
+      - go run ./tools/contracts-check --base origin/main
+
+  # ---------------------------------------------------------------- сборка
+  build:
+    desc: Собрать бинарники сервисов в bin/
+    cmds:
+      - for: { var: SERVICES, split: " " }
+        cmd: go build -trimpath -ldflags "-s -w -X github.com/AlchemistBro/blood-supply-pet/libs/runtime.Version={{.VERSION}}" -o bin/{{.ITEM}}{{exeExt}} ./services/{{.ITEM}}/cmd/{{.ITEM}}
+
+  images:
+    desc: Собрать Docker-образы всех сервисов
+    cmds:
+      - for: { var: SERVICES, split: " " }
+        cmd: docker build -f deploy/docker/Dockerfile --build-arg SERVICE={{.ITEM}} --build-arg VERSION={{.VERSION}} -t ghcr.io/alchemistbro/blood-supply-{{.ITEM}}:dev .
+
+  # ---------------------------------------------------------------- стенд
+  up:
+    desc: Поднять стенд - платформа и сервисы (docker compose)
+    deps: [env]
+    cmds:
+      - "{{.COMPOSE}} --profile services up -d --build --wait"
+      - 'echo "Стенд поднят. Keycloak: http://localhost:8180  Grafana: http://localhost:3000  Почта: http://localhost:8025"'
+
+  up:platform:
+    desc: Поднять только платформу (PostgreSQL, Kafka, Keycloak, наблюдаемость) для разработки сервисов локально
+    deps: [env]
+    cmds:
+      - "{{.COMPOSE}} up -d --wait"
+
+  down:
+    desc: Остановить стенд и удалить тома
+    cmds:
+      - "{{.COMPOSE}} --profile services --profile ui down -v --remove-orphans"
+
+  logs:
+    desc: Логи стенда (task logs -- audit)
+    cmds:
+      - "{{.COMPOSE}} --profile services logs -f --tail=100 {{.CLI_ARGS}}"
+
+  env:
+    desc: Создать deploy/compose/.env из примера, если его нет
+    status:
+      - test -f deploy/compose/.env
+    cmds:
+      - cp deploy/compose/.env.example deploy/compose/.env
+
+  dev:*:
+    desc: Запустить сервис локально против платформы из compose (task dev:audit)
+    vars:
+      SVC: "{{index .MATCH 0}}"
+    env:
+      BS_HTTP_ADDR: ":0"
+      BS_DB_URL: "postgres://{{.SVC}}:{{.SVC}}@localhost:5433/{{.SVC}}?sslmode=disable"
+      BS_KAFKA_BROKERS: "localhost:9092"
+      BS_OIDC_ISSUER: "http://localhost:8180/realms/blood-supply"
+      BS_OTEL_ENDPOINT: "localhost:4318"
+      BS_LOG_FORMAT: text
+    cmds:
+      - go run ./services/{{.SVC}}/cmd/{{.SVC}}
+
+  # ---------------------------------------------------------------- прочее
+  audit:verify:
+    desc: Проверить цепочку хешей журнала аудита на поднятом стенде
+    cmds:
+      - go run ./tools/auditverify
+
+  ci:
+    desc: Всё, что делает GitHub Actions, локально
+    cmds:
+      - task: gen:check
+      - task: lint
+      - task: test
+      - task: test:integration
+      - task: contracts:check
+      - task: build

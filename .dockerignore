@@ -1,0 +1,14 @@
+.git
+.github
+.idea
+.vscode
+bin
+dist
+docs
+tests
+deploy
+*.md
+!README.md
+**/*_test.go
+coverage*
+node_modules

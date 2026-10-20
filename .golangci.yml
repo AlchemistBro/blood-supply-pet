@@ -1,0 +1,81 @@
+version: "2"
+
+run:
+  timeout: 5m
+  build-tags: [integration]
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gosec
+    - revive
+    - gocritic
+    - exhaustive
+    - depguard
+    - bodyclose
+    - noctx
+    - errorlint
+    - misspell
+  settings:
+    depguard:
+      rules:
+        kafka-only-in-messaging:
+          # Прямой клиент Kafka запрещён в бизнес-коде (ADR-0003): только через libs/messaging.
+          list-mode: lax
+          files:
+            - "!**/libs/messaging/**"
+            - "!**/libs/testinfra/**"
+            - "!**/tools/**"
+            - "!**/tests/**"
+            - "!**/*_test.go"
+          deny:
+            - pkg: github.com/twmb/franz-go
+              desc: "Kafka только через libs/messaging (ADR-0003)"
+        domain-is-pure:
+          list-mode: lax
+          files:
+            - "**/internal/domain/**"
+          deny:
+            - pkg: github.com/jackc/pgx
+              desc: "домен не зависит от БД"
+            - pkg: net/http
+              desc: "домен не зависит от HTTP"
+            - pkg: database/sql
+              desc: "домен не зависит от БД"
+    gosec:
+      excludes:
+        - G104
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+        - name: package-comments
+          disabled: true
+    exhaustive:
+      default-signifies-exhaustive: true
+    errorlint:
+      errorf: true
+  exclusions:
+    generated: lax
+    paths:
+      - ".*\\.gen\\.go$"
+      - "internal/adapters/postgres/gen"
+    rules:
+      - path: _test\.go
+        linters: [gosec, errcheck, noctx]
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/AlchemistBro/blood-supply-pet
+  exclusions:
+    generated: lax
