@@ -159,7 +159,7 @@ Keycloak, OpenTelemetry Collector + `grafana/otel-lgtm`, Nginx (compose) / ingre
 
 | Этап | Статус | Дата | Примечание |
 | --- | --- | --- | --- |
-| 0 | не начат | | |
+| 0 | в работе | 20.10.2026 | Библиотеки, messaging и audit проверены тестами; стенд и e2e ждут стабильного Docker. Подробно: docs/tasks/00-foundation.md |
 | 1 | не начат | | |
 | 2 | не начат | | |
 | 3 | не начат | | |

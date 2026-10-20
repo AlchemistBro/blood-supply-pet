@@ -40,6 +40,38 @@
 - [ ] `docs/architecture/diagrams/bpmn/README.md`: как редактировать BPMN (bpmn.io / Camunda Modeler), конвенции пулов и дорожек.
 - [ ] `task docs:diagrams` рендерит Mermaid из `docs/**/*.md` в `docs/architecture/diagrams/c4/*.svg` (mmdc в Docker).
 
+## Статус выполнения (20.10.2026)
+
+Записано по результатам запусков, а не по намерениям.
+
+**Сделано и проверено запуском**
+- Модуль Go, Taskfile (`task --list` работает), `.golangci.yml`: линтер показывает 0 замечаний, `go vet` чист в том числе с тегами `integration` и `e2e`.
+- Библиотеки `clock`, `correlation`, `pgx`, `contracts`, `httpx` (с JWT и матрицей прав), `observability`, `refdata`, `testdata`, `runtime`: юнит-тесты зелёные.
+- `tools/archtest` проверяет границы зависимостей, тест контрактов сверяет примеры, JSON Schema и Go-типы.
+- `libs/messaging` на настоящих PostgreSQL и Kafka (Testcontainers): четыре теста зелёные за 9,5 с. Это кругооборот outbox → Kafka → inbox с порядком, падение ретранслятора между отправкой и отметкой с отсечением дубля inbox, остановка на первой ошибке, ядовитое сообщение в DLT.
+- `libs/refdata`: сид справочников идемпотентен (интеграционный тест на PostgreSQL).
+- Сервис `audit`: цепочка хешей (юнит-тесты на подмену и удаление записи), миграция с триггером запрета UPDATE и DELETE, контракт OpenAPI, сгенерированный сервер и SQL.
+- Четыре workflow GitHub Actions проходят `actionlint` без замечаний; `docker compose config` валиден.
+
+**Проверка «тест действительно проверяет» (выполнена)**
+- Inbox отключён (`FirstTime` всегда true): падают `TestOutboxRelayInboxRoundTrip` и `TestRelayCrashBetweenSendAndMarkIsDeduplicatedByInbox`.
+- Ретранслятор не останавливается на ошибке: падает `TestRelayStopsOnFirstErrorAndKeepsOrder`.
+- Правила возвращены, все четыре теста снова зелёные.
+
+**Написано, но ещё не запускалось (нужен стабильный Docker)**
+- Интеграционные тесты сервиса audit: параллельные записи, дубль доставки, ядовитые сообщения, запрет изменения журнала, обнаружение подмены. Проверка «тест проверяет» для них: убрать `FOR UPDATE` с головы цепочки (должен упасть тест параллельных записей).
+- Стенд `task up`: импорт realm Keycloak и содержимое токенов (роль, `clinic_id`, `aud`), nginx с TLS, сервис audit в контейнере.
+- Сквозные тесты `tests/e2e` (токены, права по ролям, событие через Kafka в журнал, дубль, запись от служебного клиента).
+- `task audit:verify` против поднятого стенда.
+
+**Не сделано**
+- Шаблон сервиса `tools/scaffold` и задача `task docs:diagrams` (рендер Mermaid в SVG).
+- Детектор гонок `-race` на этой машине: нет gcc. В CI он включён.
+- Запуск workflow в GitHub Actions: изменения ещё не отправлены в репозиторий.
+- Защита ветки `main` в GitHub: настраивается владельцем вручную.
+
+**Причина задержки.** Docker Desktop на этой машине останавливал движок по простою, а VPN Outline обрывался и сбрасывал DNS; это ломало загрузку образов и связь агента с API. Разбор и меры: [docs/runbooks/dev-environment-windows.md](../runbooks/dev-environment-windows.md).
+
 ## Критерий выхода
 `task up` → все контейнеры healthy за ≤ 2 мин; `task ci` зелёный локально и в GitHub Actions; тест outbox → Kafka → inbox
 проходит, включая сценарий «relay убит посреди пачки, перезапущен, дублей у получателя нет».
