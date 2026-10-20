@@ -1,0 +1,13 @@
+{
+  "occurred_at": "2026-10-20T12:34:56Z",
+  "user_id": "operator-c001",
+  "role": "CLINIC_OPERATOR",
+  "clinic_id": 1,
+  "module": "transfer",
+  "action": "CONFIRM_TRANSFER",
+  "object_type": "obligation",
+  "object_id": "0192f3a1-7b2c-7d4e-8f90-1a2b3c4d5e6f",
+  "result": "SUCCESS",
+  "details": { "confirmed_qty": 2, "requested_qty": 3 },
+  "correlation_id": "0192f3a1-7b2c-7d4e-8f90-aaaaaaaaaaaa"
+}

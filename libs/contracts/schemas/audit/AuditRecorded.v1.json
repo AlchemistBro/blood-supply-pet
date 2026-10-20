@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/audit/AuditRecorded.v1.json",
+  "title": "AuditRecorded",
+  "description": "Запись аудита: участник, время, объект, результат (NFR008). Поля с ПДн и номером случая запрещены.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["occurred_at", "module", "action", "object_type", "object_id", "result"],
+  "properties": {
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "user_id": { "type": "string", "maxLength": 128 },
+    "role": { "type": "string", "enum": ["PHYSICIAN", "CLINIC_OPERATOR", "TERRITORIAL_ANALYST", "DUTY_OFFICER", "IT_SERVICE", "SERVICE"] },
+    "clinic_id": { "type": "integer", "minimum": 1 },
+    "module": { "type": "string", "enum": ["inventory", "demand", "planning", "matching", "transfer", "logistics", "web", "audit"] },
+    "action": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,47}$" },
+    "object_type": { "type": "string", "maxLength": 48 },
+    "object_id": { "type": "string", "maxLength": 64 },
+    "result": { "type": "string", "enum": ["SUCCESS", "DENIED", "ERROR"] },
+    "details": {
+      "type": "object",
+      "propertyNames": { "not": { "enum": ["patient_case_no", "full_name", "snils", "phenotype", "password"] } }
+    },
+    "correlation_id": { "type": "string", "maxLength": 64 }
+  }
+}
