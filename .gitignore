@@ -1,0 +1,31 @@
+# Go
+bin/
+dist/
+*.exe
+*.test
+*.out
+coverage*.html
+coverage*.txt
+
+# Tools
+.task/
+.golangci-cache/
+node_modules/
+
+# Env and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local data
+deploy/compose/.data/
+k6/results/
