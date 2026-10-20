@@ -1,0 +1,147 @@
+openapi: 3.0.3
+info:
+  title: audit
+  version: 0.1.0
+  description: |
+    Неизменяемый журнал аудита (NFR008, NFR016). Записи поступают из audit.events (outbox каждого сервиса)
+    и от web (POST /records). Каждая запись связана с предыдущей хешем; GET /internal/verify проверяет цепочку.
+servers:
+  - url: http://localhost:8108
+paths:
+  /records:
+    get:
+      operationId: listRecords
+      summary: Список записей аудита с фильтрами (роли DUTY_OFFICER, IT_SERVICE)
+      parameters:
+        - { name: module, in: query, schema: { type: string } }
+        - { name: action, in: query, schema: { type: string } }
+        - { name: objectType, in: query, schema: { type: string } }
+        - { name: objectId, in: query, schema: { type: string } }
+        - { name: userId, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+        - { name: afterSeq, in: query, description: Курсор — вернуть записи с seq больше указанного, schema: { type: integer, format: int64, minimum: 0 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
+      responses:
+        "200":
+          description: Страница записей
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecordPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      operationId: appendRecord
+      summary: Добавить запись (служебный токен web, роль SERVICE)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AuditRecordInput" }
+      responses:
+        "201":
+          description: Запись добавлена
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AppendResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /internal/verify:
+    get:
+      operationId: verifyChain
+      summary: Проверить целостность цепочки хешей (роли DUTY_OFFICER, IT_SERVICE)
+      responses:
+        "200":
+          description: Результат проверки; при разрыве поле broken заполнено
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VerifyResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+components:
+  responses:
+    BadRequest:
+      description: Неверный запрос
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Unauthorized:
+      description: Требуется вход
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Forbidden:
+      description: Недостаточно прав
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+  schemas:
+    Problem:
+      type: object
+      required: [title, status]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        correlation_id: { type: string }
+    AuditRecordInput:
+      type: object
+      required: [occurred_at, module, action, object_type, object_id, result]
+      properties:
+        occurred_at: { type: string, format: date-time }
+        user_id: { type: string, maxLength: 128 }
+        role: { type: string, maxLength: 32 }
+        clinic_id: { type: integer, format: int64 }
+        module: { type: string, enum: [inventory, demand, planning, matching, transfer, logistics, web, audit] }
+        action: { type: string, pattern: "^[A-Z][A-Z0-9_]{1,47}$" }
+        object_type: { type: string, maxLength: 48 }
+        object_id: { type: string, maxLength: 64 }
+        result: { type: string, enum: [SUCCESS, DENIED, ERROR] }
+        details:
+          type: object
+          additionalProperties: true
+        correlation_id: { type: string, maxLength: 64 }
+    AuditRecord:
+      allOf:
+        - $ref: "#/components/schemas/AuditRecordInput"
+        - type: object
+          required: [id, seq, received_at, producer, hash]
+          properties:
+            id: { type: string, format: uuid }
+            seq: { type: integer, format: int64 }
+            received_at: { type: string, format: date-time }
+            producer: { type: string }
+            hash: { type: string, description: hex sha256 }
+    RecordPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AuditRecord" }
+        next_after_seq:
+          type: integer
+          format: int64
+          description: Курсор для следующей страницы; отсутствует, если записей больше нет
+    AppendResult:
+      type: object
+      required: [seq, hash]
+      properties:
+        seq: { type: integer, format: int64 }
+        hash: { type: string }
+    VerifyResult:
+      type: object
+      required: [ok, checked]
+      properties:
+        ok: { type: boolean }
+        checked: { type: integer, format: int64 }
+        head_hash: { type: string }
+        broken:
+          type: object
+          required: [seq, reason]
+          properties:
+            seq: { type: integer, format: int64 }
+            reason: { type: string }
