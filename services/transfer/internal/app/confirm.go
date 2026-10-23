@@ -215,8 +215,13 @@ func (s *Service) sourceUnavailable(ctx context.Context, o domain.Obligation, op
 	if o.UrgencyCode != domain.UrgencyEmergency {
 		return domain.SourceSystemUnavailable{}, nil
 	}
-	// Статус O07 не меняется; эскалация и запись аудита — одна отдельная транзакция.
+	// Статус O07 не меняется; эскалация и запись аудита — одна отдельная транзакция. Повторы оператора
+	// не плодят эскалаций: одна на задание, пока оно PENDING (escalated_at).
 	err := s.inTx(ctx, nil, func(ctx context.Context, tx pgx.Tx) error {
+		first, err := s.store.MarkEscalated(ctx, tx, o.ID, s.clock.Now())
+		if err != nil || !first {
+			return err
+		}
 		reason := string(domain.EscalationSourceSystemUnavailable)
 		if err := s.event(ctx, tx, o.ID, EscalationRaised{
 			ObligationID: o.ID, RequestID: o.RequestID, Reason: reason, At: s.clock.Now(),

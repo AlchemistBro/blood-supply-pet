@@ -46,9 +46,11 @@ type Obligation struct {
 	ConfirmKey       *string
 	TransportRef     *string
 	StatusReason     *string
-	Version          int64
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	// Когда экстренное задание передано дежурному из-за недоступной АИСТ-М: одна эскалация на задание
+	EscalatedAt *time.Time
+	Version     int64
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 type RefBloodGroup struct {

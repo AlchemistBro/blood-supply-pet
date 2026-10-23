@@ -63,6 +63,8 @@ type Store interface {
 	CASConfirm(ctx context.Context, db DB, o domain.Obligation, qty int, key string, now time.Time) (bool, error)
 	CASTouch(ctx context.Context, db DB, o domain.Obligation, now time.Time) (bool, error)
 	CASTransportRequested(ctx context.Context, db DB, id uuid.UUID, shipmentRef string, now time.Time) (bool, error)
+	// MarkEscalated отмечает эскалацию PENDING-задания; false — уже было или задание не PENDING.
+	MarkEscalated(ctx context.Context, db DB, id uuid.UUID, now time.Time) (bool, error)
 
 	// LockStock блокирует строку Остатка (создаёт пустую, если её нет). Всегда первая блокировка.
 	LockStock(ctx context.Context, db DB, clinicID int64, kind string) (domain.Stock, error)

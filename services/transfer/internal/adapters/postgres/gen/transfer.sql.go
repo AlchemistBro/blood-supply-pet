@@ -336,7 +336,7 @@ func (q *Queries) IsAllocatedTo(ctx context.Context, arg IsAllocatedToParams) (b
 }
 
 const lockObligation = `-- name: LockObligation :one
-SELECT obligation_id, choice_id, request_id, origin, source_clinic_id, target_clinic_id, component_kind_code, blood_group_code, requested_qty, confirmed_qty, status, urgency_code, deadline, confirm_window_seconds, fallback_sources, spec_blood_group_code, spec_rh_positive, spec_phenotype, spec_min_expires_at, spec_rule_version, confirm_key, transport_ref, status_reason, version, created_at, updated_at FROM obligation WHERE obligation_id = $1 FOR UPDATE
+SELECT obligation_id, choice_id, request_id, origin, source_clinic_id, target_clinic_id, component_kind_code, blood_group_code, requested_qty, confirmed_qty, status, urgency_code, deadline, confirm_window_seconds, fallback_sources, spec_blood_group_code, spec_rh_positive, spec_phenotype, spec_min_expires_at, spec_rule_version, confirm_key, transport_ref, status_reason, escalated_at, version, created_at, updated_at FROM obligation WHERE obligation_id = $1 FOR UPDATE
 `
 
 // Вторая блокировка в порядке «Остаток, затем O07».
@@ -367,6 +367,7 @@ func (q *Queries) LockObligation(ctx context.Context, obligationID uuid.UUID) (O
 		&i.ConfirmKey,
 		&i.TransportRef,
 		&i.StatusReason,
+		&i.EscalatedAt,
 		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -399,6 +400,25 @@ func (q *Queries) LockStock(ctx context.Context, arg LockStockParams) (LockStock
 	return i, err
 }
 
+const markEscalated = `-- name: MarkEscalated :execrows
+UPDATE obligation SET escalated_at = $1
+WHERE obligation_id = $2 AND status = 'PENDING' AND escalated_at IS NULL
+`
+
+type MarkEscalatedParams struct {
+	Now          *time.Time
+	ObligationID uuid.UUID
+}
+
+// Одна эскалация «АИСТ-М недоступна» на задание, пока оно PENDING; статус и версия не меняются.
+func (q *Queries) MarkEscalated(ctx context.Context, arg MarkEscalatedParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markEscalated, arg.Now, arg.ObligationID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const notInStockAmong = `-- name: NotInStockAmong :many
 SELECT u.unit_id FROM unit_copy u JOIN ref_unit_status s USING (unit_status_code)
 WHERE u.unit_id = ANY($1::uuid[]) AND NOT s.is_available
@@ -426,7 +446,7 @@ func (q *Queries) NotInStockAmong(ctx context.Context, unitIds []uuid.UUID) ([]u
 }
 
 const obligationByID = `-- name: ObligationByID :one
-SELECT obligation_id, choice_id, request_id, origin, source_clinic_id, target_clinic_id, component_kind_code, blood_group_code, requested_qty, confirmed_qty, status, urgency_code, deadline, confirm_window_seconds, fallback_sources, spec_blood_group_code, spec_rh_positive, spec_phenotype, spec_min_expires_at, spec_rule_version, confirm_key, transport_ref, status_reason, version, created_at, updated_at FROM obligation WHERE obligation_id = $1
+SELECT obligation_id, choice_id, request_id, origin, source_clinic_id, target_clinic_id, component_kind_code, blood_group_code, requested_qty, confirmed_qty, status, urgency_code, deadline, confirm_window_seconds, fallback_sources, spec_blood_group_code, spec_rh_positive, spec_phenotype, spec_min_expires_at, spec_rule_version, confirm_key, transport_ref, status_reason, escalated_at, version, created_at, updated_at FROM obligation WHERE obligation_id = $1
 `
 
 func (q *Queries) ObligationByID(ctx context.Context, obligationID uuid.UUID) (Obligation, error) {
@@ -456,6 +476,7 @@ func (q *Queries) ObligationByID(ctx context.Context, obligationID uuid.UUID) (O
 		&i.ConfirmKey,
 		&i.TransportRef,
 		&i.StatusReason,
+		&i.EscalatedAt,
 		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -486,7 +507,7 @@ func (q *Queries) ObligationIDByChoice(ctx context.Context, choiceID uuid.UUID) 
 }
 
 const obligationsByRequest = `-- name: ObligationsByRequest :many
-SELECT obligation_id, choice_id, request_id, origin, source_clinic_id, target_clinic_id, component_kind_code, blood_group_code, requested_qty, confirmed_qty, status, urgency_code, deadline, confirm_window_seconds, fallback_sources, spec_blood_group_code, spec_rh_positive, spec_phenotype, spec_min_expires_at, spec_rule_version, confirm_key, transport_ref, status_reason, version, created_at, updated_at FROM obligation WHERE request_id = $1 ORDER BY created_at, obligation_id
+SELECT obligation_id, choice_id, request_id, origin, source_clinic_id, target_clinic_id, component_kind_code, blood_group_code, requested_qty, confirmed_qty, status, urgency_code, deadline, confirm_window_seconds, fallback_sources, spec_blood_group_code, spec_rh_positive, spec_phenotype, spec_min_expires_at, spec_rule_version, confirm_key, transport_ref, status_reason, escalated_at, version, created_at, updated_at FROM obligation WHERE request_id = $1 ORDER BY created_at, obligation_id
 `
 
 func (q *Queries) ObligationsByRequest(ctx context.Context, requestID uuid.UUID) ([]Obligation, error) {
@@ -522,6 +543,7 @@ func (q *Queries) ObligationsByRequest(ctx context.Context, requestID uuid.UUID)
 			&i.ConfirmKey,
 			&i.TransportRef,
 			&i.StatusReason,
+			&i.EscalatedAt,
 			&i.Version,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -537,7 +559,7 @@ func (q *Queries) ObligationsByRequest(ctx context.Context, requestID uuid.UUID)
 }
 
 const obligationsBySource = `-- name: ObligationsBySource :many
-SELECT obligation_id, choice_id, request_id, origin, source_clinic_id, target_clinic_id, component_kind_code, blood_group_code, requested_qty, confirmed_qty, status, urgency_code, deadline, confirm_window_seconds, fallback_sources, spec_blood_group_code, spec_rh_positive, spec_phenotype, spec_min_expires_at, spec_rule_version, confirm_key, transport_ref, status_reason, version, created_at, updated_at FROM obligation
+SELECT obligation_id, choice_id, request_id, origin, source_clinic_id, target_clinic_id, component_kind_code, blood_group_code, requested_qty, confirmed_qty, status, urgency_code, deadline, confirm_window_seconds, fallback_sources, spec_blood_group_code, spec_rh_positive, spec_phenotype, spec_min_expires_at, spec_rule_version, confirm_key, transport_ref, status_reason, escalated_at, version, created_at, updated_at FROM obligation
 WHERE source_clinic_id = $1
   AND ($2::text IS NULL OR status = $2)
 ORDER BY created_at DESC, obligation_id
@@ -584,6 +606,7 @@ func (q *Queries) ObligationsBySource(ctx context.Context, arg ObligationsBySour
 			&i.ConfirmKey,
 			&i.TransportRef,
 			&i.StatusReason,
+			&i.EscalatedAt,
 			&i.Version,
 			&i.CreatedAt,
 			&i.UpdatedAt,

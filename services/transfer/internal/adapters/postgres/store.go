@@ -195,6 +195,15 @@ func (Store) CASTransportRequested(ctx context.Context, db app.DB, id uuid.UUID,
 	return n == 1, nil
 }
 
+// MarkEscalated — одна эскалация на PENDING-задание.
+func (Store) MarkEscalated(ctx context.Context, db app.DB, id uuid.UUID, now time.Time) (bool, error) {
+	n, err := q(db).MarkEscalated(ctx, gen.MarkEscalatedParams{Now: &now, ObligationID: id})
+	if err != nil {
+		return false, fmt.Errorf("отметка эскалации %s: %w", id, err)
+	}
+	return n == 1, nil
+}
+
 // LockStock создаёт строку Остатка при отсутствии и блокирует её.
 func (Store) LockStock(ctx context.Context, db app.DB, clinicID int64, kind string) (domain.Stock, error) {
 	key := gen.EnsureStockParams{ClinicID: clinicID, ComponentKindCode: kind}

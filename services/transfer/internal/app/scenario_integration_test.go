@@ -111,8 +111,10 @@ func TestEmergencyWithAistMDownRaisesEscalation(t *testing.T) {
 	o := h.openWith(cmd)
 
 	h.aist.setDown(true)
-	if res := h.confirm(o, []uuid.UUID{unit}, false); !isType[domain.SourceSystemUnavailable](res) {
-		t.Fatalf("ожидали SourceSystemUnavailable, получили %#v", res)
+	for i := 0; i < 3; i++ { // оператор повторяет: эскалация одна
+		if res := h.confirm(o, []uuid.UUID{unit}, false); !isType[domain.SourceSystemUnavailable](res) {
+			t.Fatalf("ожидали SourceSystemUnavailable, получили %#v", res)
+		}
 	}
 	if s := h.view(o).Status; s != domain.StatusPending {
 		t.Fatalf("статус %s, ожидали PENDING", s)

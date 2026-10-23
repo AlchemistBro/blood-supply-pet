@@ -53,6 +53,11 @@ UPDATE obligation
 SET status = 'TRANSPORT_REQUESTED', transport_ref = sqlc.arg('transport_ref'), version = version + 1, updated_at = sqlc.arg('now')
 WHERE obligation_id = sqlc.arg('obligation_id') AND status = 'CONFIRMED';
 
+-- name: MarkEscalated :execrows
+-- Одна эскалация «АИСТ-М недоступна» на задание, пока оно PENDING; статус и версия не меняются.
+UPDATE obligation SET escalated_at = sqlc.arg('now')
+WHERE obligation_id = sqlc.arg('obligation_id') AND status = 'PENDING' AND escalated_at IS NULL;
+
 -- name: UrgencyWindowMinutes :one
 SELECT confirm_window_minutes FROM ref_urgency WHERE urgency_code = $1;
 

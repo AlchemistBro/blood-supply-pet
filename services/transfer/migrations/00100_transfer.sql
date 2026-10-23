@@ -65,6 +65,7 @@ CREATE TABLE obligation (
     confirm_key            text,
     transport_ref          text,
     status_reason          text,
+    escalated_at           timestamptz,
     version                bigint      NOT NULL DEFAULT 0,
     created_at             timestamptz NOT NULL,
     updated_at             timestamptz NOT NULL,
@@ -76,6 +77,7 @@ CREATE INDEX obligation_pending_deadline_idx ON obligation (deadline) WHERE stat
 CREATE INDEX obligation_request_idx ON obligation (request_id);
 CREATE INDEX obligation_source_status_idx ON obligation (source_clinic_id, status);
 COMMENT ON COLUMN obligation.fallback_sources IS 'Следующие источники для эскалации по таймеру, по порядку ранжирования';
+COMMENT ON COLUMN obligation.escalated_at IS 'Когда экстренное задание передано дежурному из-за недоступной АИСТ-М: одна эскалация на задание';
 COMMENT ON COLUMN obligation.spec_phenotype IS 'Спецификация замены (ADR-0011): квазиидентификатор, не логируется';
 
 -- Закрепление единицы O18. NFR004 держит частичный уникальный индекс: одна единица — одно действующее закрепление.
