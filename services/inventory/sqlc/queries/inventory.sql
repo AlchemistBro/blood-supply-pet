@@ -97,4 +97,4 @@ SELECT * FROM sync_run
 WHERE (sqlc.narg(sync_kind)::varchar IS NULL OR sync_kind = sqlc.narg(sync_kind)::varchar)
   AND (sqlc.narg(before_id)::uuid IS NULL OR sync_run_id < sqlc.narg(before_id)::uuid)
 ORDER BY sync_run_id DESC
-LIMIT @row_limit::integer;
+LIMIT @row_limit::bigint;

@@ -335,13 +335,13 @@ SELECT sync_run_id, sync_kind, requested_by, started_at, finished_at, sync_resul
 WHERE ($1::varchar IS NULL OR sync_kind = $1::varchar)
   AND ($2::uuid IS NULL OR sync_run_id < $2::uuid)
 ORDER BY sync_run_id DESC
-LIMIT $3::integer
+LIMIT $3::bigint
 `
 
 type ListSyncRunsParams struct {
 	SyncKind *string
 	BeforeID *uuid.UUID
-	RowLimit int32
+	RowLimit int64
 }
 
 // Журнал сеансов обмена, новые первыми; курсор — sync_run_id (uuid v7 растёт со временем создания).

@@ -27,6 +27,8 @@ type Config struct {
 	StatusTimeout time.Duration
 	// MaxStatusIDs — сколько единиц можно спросить за один вызов.
 	MaxStatusIDs int
+	// StaleAfter — порог актуальности копии (NFR015): старше — экран предупреждает. Демо-значение.
+	StaleAfter time.Duration
 }
 
 func (c Config) withDefaults() Config {
@@ -44,6 +46,9 @@ func (c Config) withDefaults() Config {
 	}
 	if c.MaxStatusIDs <= 0 {
 		c.MaxStatusIDs = 1000
+	}
+	if c.StaleAfter <= 0 {
+		c.StaleAfter = 10 * time.Minute
 	}
 	return c
 }
