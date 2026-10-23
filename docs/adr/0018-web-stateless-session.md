@@ -51,7 +51,8 @@
   обработчиков `on*` в шаблонах. Источник Keycloak в `form-action` нужен, потому что форма выхода перенаправляет на
   end-session.
 - `Strict-Transport-Security: max-age=31536000` — только если запрос пришёл по TLS или через nginx
-  (`X-Forwarded-Proto: https`); `BS_HSTS_MAX_AGE=0` выключает.
+  (`X-Forwarded-Proto: https`); `BS_HSTS_MAX_AGE=0` выключает. В compose он выключен: HSTS на `localhost` не
+  различает порты и перевёл бы на https и Keycloak на `http://localhost:8180`; в Kubernetes и проде включён.
 - `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`,
   `Cross-Origin-Opener-Policy: same-origin`, `Cache-Control: no-store` для страниц с сессией.
 

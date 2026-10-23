@@ -157,6 +157,30 @@ services:
     ports: ["8108:8080"]
     depends_on: *service-deps
 
+  web:
+    build: { context: ../.., dockerfile: deploy/docker/Dockerfile, args: { SERVICE: web, VERSION: "${IMAGE_TAG:-dev}" } }
+    image: ghcr.io/alchemistbro/blood-supply-web:${IMAGE_TAG:-dev}
+    profiles: ["services"]
+    environment:
+      <<: *service-env
+      # Без базы (ADR-0018): сессия в зашифрованной cookie, аудит по HTTP (ADR-0017).
+      BS_WEB_PUBLIC_URL: ${WEB_PUBLIC_URL:-https://localhost}
+      BS_OIDC_DISCOVERY_URL: http://keycloak:8080/realms/blood-supply
+      BS_OIDC_CLIENT_ID: web
+      BS_OIDC_CLIENT_SECRET: web-demo-secret
+      # Демо-ключ по умолчанию: старый .env без BS_SESSION_KEY не ломает стенд.
+      BS_SESSION_KEY: ${BS_SESSION_KEY:-/SOEjDxUt7nj0eKQL+i7zzr82TvK/a2fNw4TZh596RU=}
+      # HSTS на localhost перевёл бы браузер на https и для Keycloak на http://localhost:8180 (HSTS не
+      # различает порты), и вход сломался бы. В Kubernetes и проде заголовок включён (значение по умолчанию).
+      BS_HSTS_MAX_AGE: "0"
+      BS_AUDIT_URL: http://audit:8080
+      BS_SERVICE_CLIENT_ID: services
+      BS_SERVICE_CLIENT_SECRET: services-demo-secret
+    ports: ["8080:8080"]
+    depends_on:
+      keycloak: { condition: service_healthy }
+      audit: { condition: service_started }
+
 volumes:
   pgdata:
   kafkadata:
