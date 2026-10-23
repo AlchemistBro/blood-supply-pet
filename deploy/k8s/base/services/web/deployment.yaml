@@ -1,5 +1,6 @@
 # web — BFF с серверным рендерингом (ADR-0007), без базы (ADR-0018): сессия в зашифрованной cookie.
-# Ходит в API сервисов и пишет аудит в audit по HTTP служебным токеном (ADR-0017).
+# Пишет аудит в audit по HTTP служебным токеном (ADR-0017). Переменные — services/web/cmd/web/main.go;
+# настройки без секретов — ConfigMap web-config (kustomization.yaml рядом).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -32,14 +33,11 @@ spec:
           envFrom:
             - configMapRef:
                 name: platform-env
+            - configMapRef:
+                name: web-config
           env:
             - name: BS_HTTP_ADDR
               value: ":8080"
-            - name: BS_PUBLIC_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: service-endpoints
-                  key: BS_PUBLIC_URL
             - name: BS_OIDC_CLIENT_ID
               value: web
             - name: BS_OIDC_CLIENT_SECRET
@@ -52,6 +50,13 @@ spec:
                 secretKeyRef:
                   name: web-secrets
                   key: BS_SESSION_KEY
+            # Прежний ключ сессии на время ротации; ключа в секрете может не быть.
+            - name: BS_SESSION_KEY_PREVIOUS
+              valueFrom:
+                secretKeyRef:
+                  name: web-secrets
+                  key: BS_SESSION_KEY_PREVIOUS
+                  optional: true
             - name: BS_SERVICE_CLIENT_ID
               valueFrom:
                 secretKeyRef:
@@ -62,41 +67,6 @@ spec:
                 secretKeyRef:
                   name: service-client
                   key: BS_SERVICE_CLIENT_SECRET
-            - name: BS_INVENTORY_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: service-endpoints
-                  key: BS_INVENTORY_URL
-            - name: BS_DEMAND_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: service-endpoints
-                  key: BS_DEMAND_URL
-            - name: BS_PLANNING_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: service-endpoints
-                  key: BS_PLANNING_URL
-            - name: BS_MATCHING_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: service-endpoints
-                  key: BS_MATCHING_URL
-            - name: BS_TRANSFER_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: service-endpoints
-                  key: BS_TRANSFER_URL
-            - name: BS_LOGISTICS_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: service-endpoints
-                  key: BS_LOGISTICS_URL
-            - name: BS_NOTIFICATION_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: service-endpoints
-                  key: BS_NOTIFICATION_URL
             - name: BS_AUDIT_URL
               valueFrom:
                 configMapKeyRef:

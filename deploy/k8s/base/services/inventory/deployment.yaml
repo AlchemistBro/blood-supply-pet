@@ -47,6 +47,14 @@ spec:
                 configMapKeyRef:
                   name: external-systems
                   key: BS_AIST_URL
+            # Опрос изменений АИСТ-М (ИНТ-01); значения равны умолчаниям services/inventory/internal/config.
+            - name: BS_AIST_POLL_INTERVAL
+              value: 5s
+            - name: BS_AIST_PAGE_LIMIT
+              value: "500"
+            - name: BS_AIST_STATUS_TIMEOUT
+              value: 3s
+            # Формат kid:base64key[,kid:base64key], первый — текущий (libs/k1seal/opener).
             - name: BS_K1_KEYS
               valueFrom:
                 secretKeyRef:

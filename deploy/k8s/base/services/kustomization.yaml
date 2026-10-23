@@ -27,17 +27,19 @@ configMapGenerator:
       - BS_LOG_LEVEL=info
       - BS_LOG_FORMAT=json
       - BS_KAFKA_BROKERS=kafka.bs-app.svc:9092
-      # Издатель — внешний адрес Keycloak за ingress (KC_HOSTNAME + realm); ключи и токены — изнутри кластера.
+      # Издатель — внешний адрес Keycloak за ingress (KC_HOSTNAME + realm); ключи, discovery (web)
+      # и служебные токены (BS_SERVICE_TOKEN_URL: transfer; web берёт его из discovery) — изнутри кластера.
       - BS_OIDC_ISSUER=https://localhost/auth/realms/blood-supply
       - BS_OIDC_JWKS_URL=http://keycloak.bs-edge.svc:8080/auth/realms/blood-supply/protocol/openid-connect/certs
-      - BS_OIDC_TOKEN_URL=http://keycloak.bs-edge.svc:8080/auth/realms/blood-supply/protocol/openid-connect/token
+      - BS_OIDC_DISCOVERY_URL=http://keycloak.bs-edge.svc:8080/auth/realms/blood-supply
+      - BS_SERVICE_TOKEN_URL=http://keycloak.bs-edge.svc:8080/auth/realms/blood-supply/protocol/openid-connect/token
       - BS_OIDC_AUDIENCE=blood-supply-api
       - BS_OTEL_ENDPOINT=otel-lgtm.bs-observability.svc:4318
-  # Адреса сервисов для web (BFF) и transfer → inventory (ADR-0004). Каждый сервис берёт только нужные ключи.
+  # Адреса сервисов: web → audit (ADR-0017), transfer → inventory (ADR-0004); остальные — для будущих
+  # вызовов web. Каждый сервис берёт только нужные ключи (configMapKeyRef).
   - name: service-endpoints
     namespace: bs-app
     literals:
-      - BS_PUBLIC_URL=https://localhost
       - BS_INVENTORY_URL=http://inventory.bs-app.svc:8101
       - BS_DEMAND_URL=http://demand.bs-app.svc:8102
       - BS_PLANNING_URL=http://planning.bs-app.svc:8103

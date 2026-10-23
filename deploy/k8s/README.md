@@ -108,20 +108,26 @@ kubectl kustomize deploy/k8s/overlays/ci
 Образы `ghcr.io/alchemistbro/blood-supply-<сервис>:edge` (deploy/docker/Dockerfile: distroless static,
 пользователь 65532). Сервис слушает порт из `docs/PLAN.md` (`BS_HTTP_ADDR`), Service отдаёт его же.
 
+Имена переменных сверены с кодом сервисов (в скобках — где они читаются). Где кода ещё нет, стоит пометка
+«уточнить при реализации»: имя взято из `docs/architecture/deployment.md`.
+
 | Сервис | Namespace | Порт | База и роль | Реплики | Особые переменные |
 | --- | --- | --- | --- | --- | --- |
-| `web` | `bs-app` | 8080 | — (ADR-0018) | HPA 2–3 | `BS_PUBLIC_URL`, `BS_OIDC_CLIENT_ID`, `BS_OIDC_CLIENT_SECRET`, `BS_SESSION_KEY`, служебный клиент, `BS_<СЕРВИС>_URL` |
-| `inventory` | `bs-app` | 8101 | `inventory` | HPA 2–3 | `BS_AIST_URL`, `BS_K1_KEYS` |
-| `demand` | `bs-app` | 8102 | `demand` | 1 | — |
-| `planning` | `bs-app` | 8103 | `planning` | 1 | — (ИНТ-02 принимает по HTTP) |
-| `matching` | `bs-app` | 8104 | `matching` | HPA 2–3 | `BS_K1_KEYS` |
-| `transfer` | `bs-app` | 8105 | `transfer` | 1 | `BS_INVENTORY_URL`, служебный клиент (ADR-0004) |
-| `logistics-gateway` | `bs-app` | 8106 | `logistics` | 1 | `BS_C03_URL` |
-| `notification` | `bs-app` | 8107 | `notification` | 1 | `BS_SMTP_ADDR` (ADR-0021) |
-| `audit` | `bs-app` | 8108 | `audit` | 1 | — |
-| `sim-aist` (C01) | `bs-sims` | 8201 | — | 1 | — |
-| `sim-emergency` (C02) | `bs-sims` | 8202 | — | 1 | `BS_FORECAST_URL` |
-| `sim-logistics` (C03) | `bs-sims` | 8203 | — | 1 | — |
+| `web` | `bs-app` | 8080 | — (ADR-0018) | HPA 2–3 | ConfigMap `web-config`: `BS_WEB_PUBLIC_URL`, `BS_SESSION_TTL`, `BS_COOKIE_SECURE`, `BS_HSTS_MAX_AGE`, `BS_DEMO_ACCESS`; `BS_OIDC_CLIENT_ID`, `BS_OIDC_CLIENT_SECRET`, `BS_SESSION_KEY`, `BS_SESSION_KEY_PREVIOUS` (необязателен), служебный клиент, `BS_AUDIT_URL` (`services/web/cmd/web`) |
+| `inventory` | `bs-app` | 8101 | `inventory` | HPA 2–3 | `BS_AIST_URL`, `BS_AIST_POLL_INTERVAL`, `BS_AIST_PAGE_LIMIT`, `BS_AIST_STATUS_TIMEOUT` (`internal/config`), `BS_K1_KEYS` (`libs/k1seal`) |
+| `demand` | `bs-app` | 8102 | `demand` | 1 | только общие; уточнить при реализации |
+| `planning` | `bs-app` | 8103 | `planning` | 1 | только общие (ИНТ-02 принимает по HTTP); уточнить при реализации |
+| `matching` | `bs-app` | 8104 | `matching` | HPA 2–3 | `BS_K1_KEYS` (`libs/k1seal`); прочее уточнить при реализации |
+| `transfer` | `bs-app` | 8105 | `transfer` | 1 | `BS_INVENTORY_URL`, `BS_INVENTORY_TIMEOUT`, служебный клиент и `BS_SERVICE_TOKEN_URL` (`adapters/inventoryclient`, ADR-0004); `BS_EXPIRY_INTERVAL`, `BS_ALLOW_COPY_CONFIRM_EMERGENCY` (`internal/app`) |
+| `logistics-gateway` | `bs-app` | 8106 | `logistics` | 1 | `BS_C03_URL`, `BS_C03_TIMEOUT`, `BS_LOGISTICS_LEASE`, `BS_LOGISTICS_MAX_ATTEMPTS`, `BS_LOGISTICS_RECONCILER_ENABLED` (`cmd/logistics-gateway/config.go`) |
+| `notification` | `bs-app` | 8107 | `notification` | 1 | `BS_SMTP_ADDR` — уточнить при реализации отправки (ADR-0021); `BS_NOTIFY_RECIPIENTS_FILE` не задан — встроенный справочник |
+| `audit` | `bs-app` | 8108 | `audit` | 1 | только общие |
+| `sim-aist` (C01) | `bs-sims` | 8201 | — | 1 | `BS_LOG_LEVEL`, `BS_LOG_FORMAT` (`internal/config`) |
+| `sim-emergency` (C02) | `bs-sims` | 8202 | — | 1 | `BS_PLANNING_URL` — база planning, путь `/int/forecast` добавляется (`internal/config`) |
+| `sim-logistics` (C03) | `bs-sims` | 8203 | — | 1 | `BS_ENV`, `BS_OTEL_ENDPOINT` (`cmd/sim-logistics`) |
+
+Явно заданные значения настроек (`BS_AIST_*`, `BS_C03_TIMEOUT`, `BS_LOGISTICS_*`, `BS_EXPIRY_INTERVAL`) равны
+умолчаниям в коде: они вынесены, чтобы их было видно и можно было менять overlay-ем.
 
 ### Стандарт пода (`components/go-service`)
 
@@ -149,22 +155,27 @@ HPA по CPU (70 %) у `web`, `inventory`, `matching` (docs/tasks/08-kubernetes.
 | `BS_KAFKA_BROKERS` | `kafka.bs-app.svc:9092` |
 | `BS_OIDC_ISSUER` | `https://localhost/auth/realms/blood-supply` — внешний адрес Keycloak (`KC_HOSTNAME`) + realm |
 | `BS_OIDC_JWKS_URL` | `http://keycloak.bs-edge.svc:8080/auth/realms/blood-supply/protocol/openid-connect/certs` |
-| `BS_OIDC_TOKEN_URL` | `http://keycloak.bs-edge.svc:8080/auth/realms/blood-supply/protocol/openid-connect/token` |
+| `BS_OIDC_DISCOVERY_URL` | `http://keycloak.bs-edge.svc:8080/auth/realms/blood-supply` — discovery для `web` изнутри кластера, из него же `web` берёт адрес токенов |
+| `BS_SERVICE_TOKEN_URL` | `http://keycloak.bs-edge.svc:8080/auth/realms/blood-supply/protocol/openid-connect/token` — служебный токен `transfer` (без него адрес выводится из издателя, а внешний `https://localhost` из пода недоступен) |
 | `BS_OIDC_AUDIENCE` | `blood-supply-api` |
 | `BS_OTEL_ENDPOINT` | `otel-lgtm.bs-observability.svc:4318` |
 
+`BS_HTTP_ADDR` (`libs/runtime`, по умолчанию `:8080`) задаётся явно в каждом Deployment: сервис слушает порт из PLAN.
 В compose у Keycloak нет префикса `/auth`; в k8s он нужен, чтобы ingress отдавал `/auth` Keycloak на том же хосте.
 
-Адреса — ConfigMap `service-endpoints` (`BS_PUBLIC_URL`, `BS_<СЕРВИС>_URL`) и `external-systems`
+Адреса — ConfigMap `service-endpoints` (`BS_<СЕРВИС>_URL`) и `external-systems`
 (`BS_AIST_URL`, `BS_C03_URL`, `BS_SMTP_ADDR`; на стенде указывают на имитаторы в `bs-sims`). Сервис берёт
 только нужные ключи (`configMapKeyRef`). Имитаторы читают свой ConfigMap `sims-env` в `bs-sims`.
+
+`web-config` в `local` и `ci`: `BS_HSTS_MAX_AGE=0` (самоподписанный сертификат на `localhost` не закрепляется
+в браузере) и `BS_DEMO_ACCESS=true` (блок демо-учёток на странице входа); в base — HSTS год и без демо-доступа.
 
 Секреты (в `local`/`ci` — `components/demo-secrets`, в реальном развёртывании — внешний менеджер):
 
 | Secret (`bs-app`) | Ключи | Кому |
 | --- | --- | --- |
 | `<сервис>-db` | `BS_DB_URL` = `postgres://<роль>:<пароль>@pg-rw.bs-data.svc:5432/<база>?sslmode=require` | сервису с базой |
-| `web-secrets` | `BS_OIDC_CLIENT_SECRET`, `BS_SESSION_KEY` (32 байта, base64) | `web` |
+| `web-secrets` | `BS_OIDC_CLIENT_SECRET`, `BS_SESSION_KEY` (32 байта, base64), при ротации `BS_SESSION_KEY_PREVIOUS` | `web` |
 | `service-client` | `BS_SERVICE_CLIENT_ID`, `BS_SERVICE_CLIENT_SECRET` (клиент `services`, client credentials) | `web` (аудит, ADR-0017), `transfer` (ADR-0004) |
 | `k1-keys` | `BS_K1_KEYS` (`идентификатор:ключ-base64`, через запятую для ротации) | только `matching` и `inventory` (ADR-0020) |
 
@@ -228,11 +239,11 @@ HPA по CPU (70 %) у `web`, `inventory`, `matching` (docs/tasks/08-kubernetes.
 11. **Пробы**: у Kafka и otel-lgtm — TCP и HTTP-проверки порта; пробы сервисов задаёт `components/go-service`.
 12. Ни один образ и ни один CRD при подготовке манифестов не скачивались; теги образов `minio/minio`,
     `ghcr.io/cloudnative-pg/postgresql:16.9` и `apache/kafka:3.9.1` проверяются при первой загрузке.
-13. **Переменные ещё не написанных сервисов** (`web`, `sim-emergency`, ключи K1) названы по документам и
-    решениям этапов заранее: `BS_PUBLIC_URL`, `BS_OIDC_CLIENT_ID`/`_SECRET`, `BS_SESSION_KEY`,
-    `BS_SERVICE_CLIENT_ID`/`_SECRET`, `BS_OIDC_TOKEN_URL`, `BS_<СЕРВИС>_URL`, `BS_K1_KEYS`, `BS_FORECAST_URL`.
-    Если код сервиса выберет другое имя или формат, правится манифест, а не код. Сервисы, которых ещё нет
-    в `services/`, не соберутся в образ — их Deployment будет ждать образа (`ErrImagePull`), остальное работает.
+13. **Переменные `demand`, `planning`, `matching` (кроме `BS_K1_KEYS`) и SMTP у `notification`** — уточнить
+    при реализации: кода с ними ещё нет. Если сервис выберет другое имя, правится манифест, а не код.
+    Сервисы, которых ещё нет в `services/`, не соберутся в образ — их Deployment будет ждать образа
+    (`ErrImagePull`), остальное работает. `sim-emergency` пока не получает служебный токен (client credentials
+    в имитаторе не подключены): отправка прогноза в `planning` будет отклонена до их подключения.
 14. **Тег `edge`** подвижный (`imagePullPolicy: IfNotPresent`); для воспроизводимого стенда автоматизации
     стоит подменять его на собранный тег (`kustomize edit set image`, `kind load docker-image`).
 15. **Имитаторы**: состояние в памяти, одна реплика, без PDB; `/dev/*` маршруты открыты внутри кластера —

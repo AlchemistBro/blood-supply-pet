@@ -31,16 +31,21 @@ spec:
           env:
             - name: BS_HTTP_ADDR
               value: ":8203"
-            - name: BS_ENV
-              valueFrom:
-                configMapKeyRef:
-                  name: sims-env
-                  key: BS_ENV
             - name: BS_LOG_LEVEL
               valueFrom:
                 configMapKeyRef:
                   name: sims-env
                   key: BS_LOG_LEVEL
+            - name: BS_LOG_FORMAT
+              valueFrom:
+                configMapKeyRef:
+                  name: sims-env
+                  key: BS_LOG_FORMAT
+            - name: BS_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: sims-env
+                  key: BS_ENV
             - name: BS_OTEL_ENDPOINT
               valueFrom:
                 configMapKeyRef:

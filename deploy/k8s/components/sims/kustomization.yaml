@@ -25,6 +25,7 @@ configMapGenerator:
       # Имитаторы есть только в local и ci; различать окружение им незачем.
       - BS_ENV=sim
       - BS_LOG_LEVEL=info
+      - BS_LOG_FORMAT=json
       - BS_OTEL_ENDPOINT=otel-lgtm.bs-observability.svc:4318
       # ИНТ-02: прогноз ЧС идёт в planning напрямую, минуя ingress (на входе — белый список полей, NFR010).
-      - BS_FORECAST_URL=http://planning.bs-app.svc:8103/int/forecast
+      - BS_PLANNING_URL=http://planning.bs-app.svc:8103

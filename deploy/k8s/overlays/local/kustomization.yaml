@@ -21,3 +21,10 @@ configMapGenerator:
     behavior: merge
     literals:
       - BS_ENV=local
+  # Самоподписанный сертификат на localhost: HSTS закрепил бы его в браузере для всех приложений на localhost.
+  - name: web-config
+    namespace: bs-app
+    behavior: merge
+    literals:
+      - BS_HSTS_MAX_AGE=0
+      - BS_DEMO_ACCESS=true

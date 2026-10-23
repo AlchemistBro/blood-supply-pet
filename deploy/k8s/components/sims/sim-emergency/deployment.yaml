@@ -1,4 +1,6 @@
 # sim-emergency — имитатор C02: отправляет агрегированный прогноз ЧС в planning (ИНТ-02).
+# BS_PLANNING_URL — база planning, путь /int/forecast имитатор добавляет сам. Служебный токен в имитаторе
+# ещё не подключён: без него отправка отклоняется (BS_SIM_NO_AUTH=true — только локальная разработка).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -31,26 +33,21 @@ spec:
           env:
             - name: BS_HTTP_ADDR
               value: ":8202"
-            - name: BS_ENV
-              valueFrom:
-                configMapKeyRef:
-                  name: sims-env
-                  key: BS_ENV
             - name: BS_LOG_LEVEL
               valueFrom:
                 configMapKeyRef:
                   name: sims-env
                   key: BS_LOG_LEVEL
-            - name: BS_OTEL_ENDPOINT
+            - name: BS_LOG_FORMAT
               valueFrom:
                 configMapKeyRef:
                   name: sims-env
-                  key: BS_OTEL_ENDPOINT
-            - name: BS_FORECAST_URL
+                  key: BS_LOG_FORMAT
+            - name: BS_PLANNING_URL
               valueFrom:
                 configMapKeyRef:
                   name: sims-env
-                  key: BS_FORECAST_URL
+                  key: BS_PLANNING_URL
           resources:
             requests:
               cpu: 50m

@@ -7,3 +7,15 @@ resources:
   - service.yaml
   - pdb.yaml
   - hpa.yaml
+
+configMapGenerator:
+  # Настройки web без секретов (services/web/cmd/web/main.go). Overlay local/ci меняет HSTS и демо-доступ.
+  - name: web-config
+    namespace: bs-app
+    literals:
+      # Адрес, который видит браузер: redirect_uri = BS_WEB_PUBLIC_URL + /auth/callback.
+      - BS_WEB_PUBLIC_URL=https://localhost
+      - BS_SESSION_TTL=8h
+      - BS_COOKIE_SECURE=true
+      - BS_HSTS_MAX_AGE=31536000
+      - BS_DEMO_ACCESS=false

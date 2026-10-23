@@ -46,6 +46,9 @@ spec:
                 configMapKeyRef:
                   name: service-endpoints
                   key: BS_INVENTORY_URL
+            - name: BS_INVENTORY_TIMEOUT
+              value: 3s
+            # Служебный токен для inventory: эндпоинт токенов BS_SERVICE_TOKEN_URL приходит из platform-env.
             - name: BS_SERVICE_CLIENT_ID
               valueFrom:
                 secretKeyRef:
@@ -56,6 +59,11 @@ spec:
                 secretKeyRef:
                   name: service-client
                   key: BS_SERVICE_CLIENT_SECRET
+            # Таймер истечения O07 и запрет подтверждения копированием для экстренных (services/transfer/internal/app).
+            - name: BS_EXPIRY_INTERVAL
+              value: 5s
+            - name: BS_ALLOW_COPY_CONFIRM_EMERGENCY
+              value: "false"
           resources:
             requests:
               cpu: 100m

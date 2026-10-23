@@ -1,5 +1,6 @@
 # notification — письма оператору и эскалации дежурному через почтовый шлюз C04 (ADR-0021).
-# На стенде шлюз — Mailpit в bs-sims.
+# На стенде шлюз — Mailpit в bs-sims. Имя BS_SMTP_ADDR взято из deployment.md: уточнить при реализации
+# отправки писем. Справочник адресатов — встроенный demo.json (BS_NOTIFY_RECIPIENTS_FILE не задан).
 apiVersion: apps/v1
 kind: Deployment
 metadata:

@@ -45,6 +45,15 @@ spec:
                 configMapKeyRef:
                   name: external-systems
                   key: BS_C03_URL
+            # Значения равны умолчаниям services/logistics-gateway/cmd/logistics-gateway/config.go.
+            - name: BS_C03_TIMEOUT
+              value: 5s
+            - name: BS_LOGISTICS_LEASE
+              value: 30s
+            - name: BS_LOGISTICS_MAX_ATTEMPTS
+              value: "5"
+            - name: BS_LOGISTICS_RECONCILER_ENABLED
+              value: "true"
           resources:
             requests:
               cpu: 50m

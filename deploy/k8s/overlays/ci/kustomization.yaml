@@ -21,6 +21,12 @@ configMapGenerator:
     behavior: merge
     literals:
       - BS_ENV=ci
+  - name: web-config
+    namespace: bs-app
+    behavior: merge
+    literals:
+      - BS_HSTS_MAX_AGE=0
+      - BS_DEMO_ACCESS=true
 
 patches:
   - path: patch-resources.yaml
