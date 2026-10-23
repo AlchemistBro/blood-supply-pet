@@ -157,6 +157,17 @@ func CancelledReply(obligationID uuid.UUID) Reply {
 	return Reply{Kind: ReplyCancelled, ObligationID: obligationID}
 }
 
+// NothingToCancel — у C03 нет и не будет заказа по строке в этом состоянии: на отмену отвечаем сразу
+// TransportCancelled, не обращаясь к перевозчику.
+func NothingToCancel(s Status) bool {
+	switch s {
+	case StatusRejected, StatusFailed, StatusCancelled:
+		return true
+	default:
+		return false
+	}
+}
+
 // Step — что сделать с C03 дальше.
 type Step int
 

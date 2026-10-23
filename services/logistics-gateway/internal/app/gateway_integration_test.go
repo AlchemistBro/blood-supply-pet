@@ -733,3 +733,101 @@ func TestCarrierRefusalIsReported(t *testing.T) {
 		t.Fatalf("причина %v, ожидали REFUSED", reason)
 	}
 }
+
+// --- сценарии сверх прототипа ---
+
+func cancelMessage(t *testing.T, id uuid.UUID) messaging.Message {
+	t.Helper()
+	body, err := json.Marshal(logistics.CancelTransport{ObligationID: id, Reason: logistics.CancelUnitWithdrawn})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return messaging.Message{ID: uuid.New(), Type: "CancelTransport", SchemaVersion: 1, Payload: body, Producer: "transfer"}
+}
+
+// Шлюз отвечает на каждую отмену, и когда заказа не было; повтор доставки той же отмены ответа не множит.
+func TestEveryCancelIsAnsweredOnceEvenWithoutShipment(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	id := uuid.New()
+	first := cancelMessage(t, id)
+	for _, msg := range []messaging.Message{first, first, cancelMessage(t, id)} {
+		if err := f.gw.AcceptCancel(ctx, msg, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	assertReplies(t, f.repliesOf(id), "TransportCancelled", "TransportCancelled")
+	if s := f.status(id); s != domain.StatusCancelled {
+		t.Fatalf("статус %s, ожидали надгробие CANCELLED", s)
+	}
+}
+
+// Отмена пришла, пока шёл заказ, а перевозчик отказал: transfer получает и отказ, и ответ на отмену.
+func TestCancelDuringRefusedSubmitIsAnswered(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	c := command()
+	f.insert(c)
+	f.faults(map[string]any{"refuseNext": "нет свободной машины", "slowMs": 1000})
+	done := make(chan error, 1)
+	go func() { done <- f.gw.Drive(ctx, c.ObligationID) }()
+	f.eventually("аренда взята", func() bool {
+		var leased bool
+		err := f.pool.QueryRow(ctx, `SELECT lease_owner IS NOT NULL FROM transport_request WHERE obligation_id = $1`,
+			c.ObligationID).Scan(&leased)
+		return err == nil && leased
+	})
+	if err := f.gw.AcceptCancel(ctx, cancelMessage(t, c.ObligationID), c.ObligationID); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("drive: %v", err)
+	}
+
+	if s := f.status(c.ObligationID); s != domain.StatusRejected {
+		t.Fatalf("статус %s, ожидали REJECTED", s)
+	}
+	assertShipments(t, f.shipments(c.ObligationID), 0)
+	assertReplies(t, f.repliesOf(c.ObligationID), "TransportRejected", "TransportCancelled")
+}
+
+// Исход пишется только при ожидаемом статусе: аренда наша, но строку успели перевести — запись отбрасывается.
+func TestOutcomeIsNotWrittenOverChangedStatus(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	c := command()
+	f.insert(c)
+	owner := uuid.New()
+	now := f.clock.Now()
+	if _, ok, err := f.store.Claim(ctx, c.ObligationID, owner, now, now.Add(30*time.Second)); err != nil || !ok {
+		t.Fatalf("аренда: %v, %v", ok, err)
+	}
+	if _, err := f.pool.Exec(ctx, `UPDATE transport_request SET status = 'UNKNOWN' WHERE obligation_id = $1`, c.ObligationID); err != nil {
+		t.Fatal(err)
+	}
+	err := bspgx.WithTx(ctx, f.pool, func(ctx context.Context, tx pgx.Tx) error {
+		finished, _, err := f.store.Finish(ctx, tx, c.ObligationID, owner, domain.StatusRequesting, domain.StatusAccepted,
+			"C03-1", now)
+		if err != nil {
+			return err
+		}
+		if finished {
+			t.Error("исход записан поверх изменившегося статуса")
+		}
+		failed, err := f.store.FailAttempt(ctx, tx, c.ObligationID, owner, domain.StatusRequesting, domain.StatusRequesting,
+			"C03 недоступна", now, now)
+		if err != nil {
+			return err
+		}
+		if failed {
+			t.Error("неудачная попытка записана поверх изменившегося статуса")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s := f.status(c.ObligationID); s != domain.StatusUnknown {
+		t.Fatalf("статус %s, ожидали нетронутый UNKNOWN", s)
+	}
+}

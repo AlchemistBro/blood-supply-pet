@@ -55,6 +55,17 @@ func TestRequestValidation(t *testing.T) {
 	}
 }
 
+func TestNothingToCancelOnlyWithoutShipment(t *testing.T) {
+	for s, want := range map[domain.Status]bool{
+		domain.StatusRejected: true, domain.StatusFailed: true, domain.StatusCancelled: true,
+		domain.StatusRequesting: false, domain.StatusAccepted: false, domain.StatusUnknown: false,
+	} {
+		if got := domain.NothingToCancel(s); got != want {
+			t.Errorf("%s: %v, ожидали %v", s, got, want)
+		}
+	}
+}
+
 func TestBeginReconcilesBeforeAnything(t *testing.T) {
 	for _, s := range []domain.Status{domain.StatusRequesting, domain.StatusUnknown} {
 		if d := row(s).Begin(); d.Step != domain.StepReconcile {

@@ -35,18 +35,27 @@ WHERE obligation_id = @obligation_id
   AND (status IN ('REQUESTING', 'UNKNOWN') OR (status = 'ACCEPTED' AND cancel_requested))
 RETURNING *;
 
--- name: Finish :execrows
--- Исход записывается, только если аренда всё ещё наша (CAS по lease_owner).
+-- name: Finish :one
+-- Исход записывается, только если аренда всё ещё наша и статус тот, что видели при аренде (CAS по lease_owner
+-- и status). Возвращает флаг отмены на момент записи: отмена могла прийти, пока шли вызовы C03.
 UPDATE transport_request
 SET status = @status, shipment_ref = coalesce(sqlc.narg('shipment_ref'), shipment_ref),
     lease_owner = NULL, lease_until = NULL, last_error = NULL, updated_at = @now
-WHERE obligation_id = @obligation_id AND lease_owner = @owner::uuid;
+WHERE obligation_id = @obligation_id AND lease_owner = @owner::uuid AND status = @expected_status::text
+RETURNING cancel_requested;
 
 -- name: FailAttempt :execrows
--- C03 недоступна: попытка засчитана, следующая не раньше next_attempt_at. Тоже только под нашей арендой.
+-- C03 недоступна: попытка засчитана, следующая не раньше next_attempt_at. Тоже только под нашей арендой
+-- и при ожидаемом статусе.
 UPDATE transport_request
 SET status = @status, attempts = attempts + 1, last_error = @last_error, next_attempt_at = @next_attempt_at,
     lease_owner = NULL, lease_until = NULL, updated_at = @now
+WHERE obligation_id = @obligation_id AND lease_owner = @owner::uuid AND status = @expected_status::text;
+
+-- name: Release :execrows
+-- Отпустить аренду без исхода и без засчитанной попытки: ход не сделан, строку подберёт сверщик.
+UPDATE transport_request
+SET lease_owner = NULL, lease_until = NULL, updated_at = @now
 WHERE obligation_id = @obligation_id AND lease_owner = @owner::uuid;
 
 -- name: Due :many

@@ -83,29 +83,42 @@ func (s *Store) Claim(ctx context.Context, id, owner uuid.UUID, now, until time.
 	return toRow(r), true, nil
 }
 
-// Finish записывает исход под арендой owner. Пустой shipmentRef не стирает записанный номер.
-func (s *Store) Finish(ctx context.Context, tx pgx.Tx, id, owner uuid.UUID, status domain.Status, shipmentRef string,
-	now time.Time) (bool, error) {
-	n, err := s.q.WithTx(tx).Finish(ctx, gen.FinishParams{
-		ObligationID: id, Owner: owner, Status: string(status), ShipmentRef: optional(shipmentRef), Now: now,
+// Finish записывает исход под арендой owner при статусе expected. Пустой shipmentRef не стирает записанный номер.
+// cancelRequested — флаг отмены на момент записи.
+func (s *Store) Finish(ctx context.Context, tx pgx.Tx, id, owner uuid.UUID, expected, status domain.Status,
+	shipmentRef string, now time.Time) (finished, cancelRequested bool, err error) {
+	cancelRequested, err = s.q.WithTx(tx).Finish(ctx, gen.FinishParams{
+		ObligationID: id, Owner: owner, ExpectedStatus: string(expected), Status: string(status),
+		ShipmentRef: optional(shipmentRef), Now: now,
 	})
-	if err != nil {
-		return false, fmt.Errorf("исход transport_request: %w", err)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, false, nil
 	}
-	return n == 1, nil
+	if err != nil {
+		return false, false, fmt.Errorf("исход transport_request: %w", err)
+	}
+	return true, cancelRequested, nil
 }
 
-// FailAttempt засчитывает неудачную попытку под арендой owner.
-func (s *Store) FailAttempt(ctx context.Context, tx pgx.Tx, id, owner uuid.UUID, status domain.Status, lastError string,
-	nextAttemptAt, now time.Time) (bool, error) {
+// FailAttempt засчитывает неудачную попытку под арендой owner при статусе expected.
+func (s *Store) FailAttempt(ctx context.Context, tx pgx.Tx, id, owner uuid.UUID, expected, status domain.Status,
+	lastError string, nextAttemptAt, now time.Time) (bool, error) {
 	n, err := s.q.WithTx(tx).FailAttempt(ctx, gen.FailAttemptParams{
-		ObligationID: id, Owner: owner, Status: string(status), LastError: optional(lastError),
-		NextAttemptAt: nextAttemptAt, Now: now,
+		ObligationID: id, Owner: owner, ExpectedStatus: string(expected), Status: string(status),
+		LastError: optional(lastError), NextAttemptAt: nextAttemptAt, Now: now,
 	})
 	if err != nil {
 		return false, fmt.Errorf("неудачная попытка transport_request: %w", err)
 	}
 	return n == 1, nil
+}
+
+// Release отпускает аренду owner без исхода и без засчитанной попытки.
+func (s *Store) Release(ctx context.Context, id, owner uuid.UUID, now time.Time) error {
+	if _, err := s.q.Release(ctx, gen.ReleaseParams{ObligationID: id, Owner: owner, Now: now}); err != nil {
+		return fmt.Errorf("освобождение аренды transport_request: %w", err)
+	}
+	return nil
 }
 
 // Due — очередь сверщика.

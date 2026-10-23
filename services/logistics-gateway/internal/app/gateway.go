@@ -34,10 +34,12 @@ type Store interface {
 	RequestCancel(ctx context.Context, tx pgx.Tx, obligationID uuid.UUID, now time.Time) (before domain.Status, existed bool, err error)
 	// Claim берёт аренду строки, если ей есть что делать с C03 и её никто не держит.
 	Claim(ctx context.Context, obligationID, owner uuid.UUID, now, until time.Time) (domain.Row, bool, error)
-	// Finish записывает исход, только если аренда всё ещё у owner.
-	Finish(ctx context.Context, tx pgx.Tx, obligationID, owner uuid.UUID, status domain.Status, shipmentRef string, now time.Time) (bool, error)
-	// FailAttempt засчитывает неудачную попытку, только если аренда всё ещё у owner.
-	FailAttempt(ctx context.Context, tx pgx.Tx, obligationID, owner uuid.UUID, status domain.Status, lastError string,
+	// Finish записывает исход, только если аренда всё ещё у owner и статус равен expected (CAS).
+	// cancelRequested — флаг отмены на момент записи: отмена могла прийти, пока шли вызовы C03.
+	Finish(ctx context.Context, tx pgx.Tx, obligationID, owner uuid.UUID, expected, status domain.Status, shipmentRef string,
+		now time.Time) (finished, cancelRequested bool, err error)
+	// FailAttempt засчитывает неудачную попытку, только если аренда всё ещё у owner и статус равен expected.
+	FailAttempt(ctx context.Context, tx pgx.Tx, obligationID, owner uuid.UUID, expected, status domain.Status, lastError string,
 		nextAttemptAt, now time.Time) (bool, error)
 	// Due — строки, которым пора к C03, по next_attempt_at.
 	Due(ctx context.Context, now time.Time, limit int) ([]uuid.UUID, error)
@@ -142,7 +144,9 @@ func (g *Gateway) AcceptRequest(ctx context.Context, msg messaging.Message, req 
 }
 
 // AcceptCancel — CancelTransport. Строки нет — надгробие и сразу TransportCancelled: поздний RequestTransport
-// упрётся в него. Заказа не было (REJECTED, FAILED) — тоже сразу TransportCancelled. Иначе флаг, снимает Drive.
+// упрётся в него. Снимать у C03 нечего (REJECTED, FAILED, уже CANCELLED) — тоже сразу TransportCancelled: шлюз
+// отвечает на каждую отмену, и когда заказа не было (events.md); повтор доставки той же отмены отсекает inbox.
+// Иначе флаг, заказ снимает Drive.
 func (g *Gateway) AcceptCancel(ctx context.Context, msg messaging.Message, obligationID uuid.UUID) error {
 	first := false
 	err := bspgx.WithTx(ctx, g.pool, func(ctx context.Context, tx pgx.Tx) error {
@@ -156,7 +160,7 @@ func (g *Gateway) AcceptCancel(ctx context.Context, msg messaging.Message, oblig
 		if err != nil {
 			return fmt.Errorf("отмена заказа перевозки: %w", err)
 		}
-		if !existed || before == domain.StatusRejected || before == domain.StatusFailed {
+		if !existed || domain.NothingToCancel(before) {
 			if err := g.outbox.Reply(ctx, tx, domain.CancelledReply(obligationID)); err != nil {
 				return err
 			}
@@ -207,17 +211,25 @@ func (g *Gateway) Drive(ctx context.Context, obligationID uuid.UUID) error {
 	}
 	return bspgx.WithTx(ctx, g.pool, func(ctx context.Context, tx pgx.Tx) error {
 		now := g.clock.Now()
-		ok, err := g.store.Finish(ctx, tx, obligationID, owner, outcome.Status, outcome.ShipmentRef, now)
+		finished, cancelRequested, err := g.store.Finish(ctx, tx, obligationID, owner, row.Status, outcome.Status,
+			outcome.ShipmentRef, now)
 		if err != nil {
 			return fmt.Errorf("запись исхода заказа перевозки: %w", err)
 		}
-		if !ok {
+		if !finished {
 			g.log.WarnContext(ctx, "аренда заказа перевозки истекла до записи исхода, исход отброшен",
 				"obligation_id", obligationID, "status", string(outcome.Status))
 			return nil
 		}
 		if outcome.Reply != nil {
 			if err := g.outbox.Reply(ctx, tx, *outcome.Reply); err != nil {
+				return err
+			}
+		}
+		// Отмена пришла, пока шли вызовы C03, а заказа так и не стало (отказ, FAILED): на отмену тоже отвечаем,
+		// иначе transfer не дождётся TransportCancelled. ACCEPTED с флагом снимет следующий drive.
+		if cancelRequested && outcome.Status != domain.StatusCancelled && domain.NothingToCancel(outcome.Status) {
+			if err := g.outbox.Reply(ctx, tx, domain.CancelledReply(obligationID)); err != nil {
 				return err
 			}
 		}
@@ -263,7 +275,8 @@ func (g *Gateway) recordFailure(ctx context.Context, row domain.Row, owner uuid.
 	return bspgx.WithTx(ctx, g.pool, func(ctx context.Context, tx pgx.Tx) error {
 		now := g.clock.Now()
 		f := g.settings.Retry.OnCarrierUnavailable(row, now)
-		ok, err := g.store.FailAttempt(ctx, tx, row.ObligationID, owner, f.Status, cause.Error(), f.NextAttemptAt, now)
+		ok, err := g.store.FailAttempt(ctx, tx, row.ObligationID, owner, row.Status, f.Status, cause.Error(),
+			f.NextAttemptAt, now)
 		if err != nil {
 			return fmt.Errorf("запись неудачной попытки: %w", err)
 		}

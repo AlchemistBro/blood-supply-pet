@@ -99,19 +99,21 @@ const failAttempt = `-- name: FailAttempt :execrows
 UPDATE transport_request
 SET status = $1, attempts = attempts + 1, last_error = $2, next_attempt_at = $3,
     lease_owner = NULL, lease_until = NULL, updated_at = $4
-WHERE obligation_id = $5 AND lease_owner = $6::uuid
+WHERE obligation_id = $5 AND lease_owner = $6::uuid AND status = $7::text
 `
 
 type FailAttemptParams struct {
-	Status        string
-	LastError     *string
-	NextAttemptAt time.Time
-	Now           time.Time
-	ObligationID  uuid.UUID
-	Owner         uuid.UUID
+	Status         string
+	LastError      *string
+	NextAttemptAt  time.Time
+	Now            time.Time
+	ObligationID   uuid.UUID
+	Owner          uuid.UUID
+	ExpectedStatus string
 }
 
-// C03 недоступна: попытка засчитана, следующая не раньше next_attempt_at. Тоже только под нашей арендой.
+// C03 недоступна: попытка засчитана, следующая не раньше next_attempt_at. Тоже только под нашей арендой
+// и при ожидаемом статусе.
 func (q *Queries) FailAttempt(ctx context.Context, arg FailAttemptParams) (int64, error) {
 	result, err := q.db.Exec(ctx, failAttempt,
 		arg.Status,
@@ -120,6 +122,7 @@ func (q *Queries) FailAttempt(ctx context.Context, arg FailAttemptParams) (int64
 		arg.Now,
 		arg.ObligationID,
 		arg.Owner,
+		arg.ExpectedStatus,
 	)
 	if err != nil {
 		return 0, err
@@ -156,34 +159,37 @@ func (q *Queries) Find(ctx context.Context, obligationID uuid.UUID) (TransportRe
 	return i, err
 }
 
-const finish = `-- name: Finish :execrows
+const finish = `-- name: Finish :one
 UPDATE transport_request
 SET status = $1, shipment_ref = coalesce($2, shipment_ref),
     lease_owner = NULL, lease_until = NULL, last_error = NULL, updated_at = $3
-WHERE obligation_id = $4 AND lease_owner = $5::uuid
+WHERE obligation_id = $4 AND lease_owner = $5::uuid AND status = $6::text
+RETURNING cancel_requested
 `
 
 type FinishParams struct {
-	Status       string
-	ShipmentRef  *string
-	Now          time.Time
-	ObligationID uuid.UUID
-	Owner        uuid.UUID
+	Status         string
+	ShipmentRef    *string
+	Now            time.Time
+	ObligationID   uuid.UUID
+	Owner          uuid.UUID
+	ExpectedStatus string
 }
 
-// Исход записывается, только если аренда всё ещё наша (CAS по lease_owner).
-func (q *Queries) Finish(ctx context.Context, arg FinishParams) (int64, error) {
-	result, err := q.db.Exec(ctx, finish,
+// Исход записывается, только если аренда всё ещё наша и статус тот, что видели при аренде (CAS по lease_owner
+// и status). Возвращает флаг отмены на момент записи: отмена могла прийти, пока шли вызовы C03.
+func (q *Queries) Finish(ctx context.Context, arg FinishParams) (bool, error) {
+	row := q.db.QueryRow(ctx, finish,
 		arg.Status,
 		arg.ShipmentRef,
 		arg.Now,
 		arg.ObligationID,
 		arg.Owner,
+		arg.ExpectedStatus,
 	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+	var cancel_requested bool
+	err := row.Scan(&cancel_requested)
+	return cancel_requested, err
 }
 
 const flagCancel = `-- name: FlagCancel :exec
@@ -270,4 +276,25 @@ func (q *Queries) LockStatus(ctx context.Context, obligationID uuid.UUID) (strin
 	var status string
 	err := row.Scan(&status)
 	return status, err
+}
+
+const release = `-- name: Release :execrows
+UPDATE transport_request
+SET lease_owner = NULL, lease_until = NULL, updated_at = $1
+WHERE obligation_id = $2 AND lease_owner = $3::uuid
+`
+
+type ReleaseParams struct {
+	Now          time.Time
+	ObligationID uuid.UUID
+	Owner        uuid.UUID
+}
+
+// Отпустить аренду без исхода и без засчитанной попытки: ход не сделан, строку подберёт сверщик.
+func (q *Queries) Release(ctx context.Context, arg ReleaseParams) (int64, error) {
+	result, err := q.db.Exec(ctx, release, arg.Now, arg.ObligationID, arg.Owner)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
