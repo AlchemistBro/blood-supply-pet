@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/inventory/AllocateUnitsToPatient.v1.json",
+  "title": "AllocateUnitsToPatient",
+  "type": "object",
+  "description": "Команда inventory.commands: закрепить подтверждённые единицы за пациентом в АИСТ-М (ИНТ-05, FR051, NFR017). Номер случая — только зашифрованный конверт (ADR-0020).",
+  "additionalProperties": false,
+  "required": [
+    "obligation_id",
+    "request_id",
+    "idempotency_key",
+    "unit_ids",
+    "target_clinic_id",
+    "patient_case_sealed"
+  ],
+  "properties": {
+    "obligation_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "request_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Заявка врача; AAD конверта"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Ключ идемпотентности: один и тот же при каждом повторе отправки в C01 (NFR017)"
+    },
+    "unit_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      }
+    },
+    "target_clinic_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "patient_case_sealed": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^v1\\.[A-Za-z0-9_-]{1,32}\\.[A-Za-z0-9_-]+$",
+      "description": "Номер случая пациента (K1) в зашифрованном конверте v1.<kid>.<base64url> (AES-256-GCM, AAD = request_id, ADR-0020). Непрозрачная строка: не номер, не расшифровывается получателем без ключа, не логируется."
+    }
+  }
+}

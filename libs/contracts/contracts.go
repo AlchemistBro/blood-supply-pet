@@ -35,5 +35,9 @@ var AllTopics = []string{
 	TopicLogisticsReplies, TopicLogisticsEvents, TopicAuditEvents,
 }
 
+// PatientCaseSealedPattern — шаблон зашифрованного конверта номера случая пациента v1.<kid>.<base64url>
+// (ADR-0020), формат libs/k1seal. Каждое поле patient_case_sealed в схемах объявлено строкой ровно с этим шаблоном (тест контрактов).
+const PatientCaseSealedPattern = `^v1\.[A-Za-z0-9_-]{1,32}\.[A-Za-z0-9_-]+$`
+
 // DLTSuffix — суффикс топика ядовитых сообщений: после исчерпания повторов сообщение уходит в <topic>.dlt.
 const DLTSuffix = ".dlt"

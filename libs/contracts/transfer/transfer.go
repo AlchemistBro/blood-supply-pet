@@ -106,6 +106,10 @@ type OpenObligation struct {
 	// FallbackSources — следующие источники для эскалации по таймеру, по порядку ранжирования.
 	FallbackSources []int64         `json:"fallback_sources,omitempty"`
 	Spec            ReplacementSpec `json:"spec"`
+	// PatientCaseSealed — номер случая пациента в зашифрованном конверте v1.<kid>.<base64url> (ADR-0020, этап 6).
+	// Только для выбора врача; transfer не может его прочитать, хранит как есть и передаёт в AllocateUnitsToPatient.
+	// В события transfer не попадает, не логируется. Тип k1seal.Sealed после слияния stage6/wp1.
+	PatientCaseSealed string `json:"patient_case_sealed,omitempty"`
 }
 
 // MessageType реализует contracts.Payload.

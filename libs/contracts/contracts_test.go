@@ -172,6 +172,55 @@ func TestNoSchemaHasPatientCaseNo(t *testing.T) {
 	}
 }
 
+// Номер случая ходит между сервисами только зашифрованным конвертом (ADR-0020): каждое поле patient_case_sealed
+// объявлено строкой с шаблоном конверта, и открытый номер этот шаблон не проходит.
+func TestPatientCaseSealedIsEnvelope(t *testing.T) {
+	schemas, err := filepath.Glob("schemas/*/*.json")
+	if err != nil || len(schemas) == 0 {
+		t.Fatalf("схемы не найдены: %v", err)
+	}
+	found := 0
+	for _, path := range schemas {
+		var walk func(node map[string]any)
+		walk = func(node map[string]any) {
+			props, _ := node["properties"].(map[string]any)
+			for name, raw := range props {
+				prop, _ := raw.(map[string]any)
+				if prop == nil {
+					continue
+				}
+				if name == "patient_case_sealed" {
+					found++
+					if prop["type"] != "string" || prop["pattern"] != contracts.PatientCaseSealedPattern {
+						t.Errorf("%s: patient_case_sealed должен быть строкой с шаблоном %s, а описан %v",
+							path, contracts.PatientCaseSealedPattern, prop)
+					}
+				}
+				walk(prop)
+			}
+			if items, ok := node["items"].(map[string]any); ok {
+				walk(items)
+			}
+		}
+		walk(readJSON(t, path))
+	}
+	if found < 2 {
+		t.Fatalf("patient_case_sealed найден в %d схемах, ожидали OpenObligation и AllocateUnitsToPatient", found)
+	}
+
+	schema, err := jsonschema.NewCompiler().Compile("schemas/inventory/AllocateUnitsToPatient.v1.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, plain := range []string{"2026/123", "123456", "v1..abc", "v2.kid.QUJDREVGR0hJSktMTU5PUA"} {
+		v := readJSON(t, "examples/inventory/AllocateUnitsToPatient.v1.json")
+		v["patient_case_sealed"] = plain
+		if err := schema.Validate(v); err == nil {
+			t.Errorf("значение %q прошло шаблон конверта", plain)
+		}
+	}
+}
+
 // hasProperty ищет имя среди ключей любого объекта properties на любом уровне схемы.
 func hasProperty(node any, name string) bool {
 	switch x := node.(type) {

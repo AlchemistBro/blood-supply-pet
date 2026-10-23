@@ -33,6 +33,12 @@
         "min_expires_at": { "type": "string", "format": "date-time" },
         "rule_version": { "type": "string", "minLength": 1, "maxLength": 64 }
       }
+    },
+    "patient_case_sealed": {
+      "type": "string",
+      "maxLength": 4096,
+      "pattern": "^v1\\.[A-Za-z0-9_-]{1,32}\\.[A-Za-z0-9_-]+$",
+      "description": "Номер случая пациента (K1) в зашифрованном конверте v1.<kid>.<base64url> (AES-256-GCM, AAD = request_id, ADR-0020). Только для выбора врача; transfer не расшифровывает, передаёт в AllocateUnitsToPatient, в события не публикует."
     }
   }
 }

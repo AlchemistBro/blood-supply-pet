@@ -37,6 +37,7 @@ const (
 	OpReplaceUnit        Operation = "REPLACE_UNIT"
 	OpRejectTransfer     Operation = "REJECT_TRANSFER"
 	OpCreateRequest      Operation = "CREATE_REQUEST"
+	OpViewRequests       Operation = "VIEW_REQUESTS"
 	OpSelectVariant      Operation = "SELECT_VARIANT"
 	OpCancelRequest      Operation = "CANCEL_REQUEST"
 	OpReadPatientCase    Operation = "READ_PATIENT_CASE"
@@ -71,6 +72,7 @@ var policy = map[Operation][]Role{
 	OpReplaceUnit:        {RoleOperator, RoleDuty},
 	OpRejectTransfer:     {RoleOperator, RoleDuty},
 	OpCreateRequest:      {RolePhysician},
+	OpViewRequests:       {RolePhysician, RoleDuty},
 	OpSelectVariant:      {RolePhysician},
 	OpCancelRequest:      {RolePhysician},
 	OpReadPatientCase:    {RolePhysician, RoleOperator},

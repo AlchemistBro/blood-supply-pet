@@ -1,0 +1,28 @@
+{
+  "clinical_request_id": "0192f3a1-7b2c-7d4e-8f90-800000000001",
+  "variants": [
+    {
+      "variant_offer_id": "0192f3a1-7b2c-7d4e-8f90-810000000001",
+      "rank_no": 1,
+      "source_clinic_id": 2,
+      "component_kind": "RBC",
+      "blood_group": "A+",
+      "available_units": 3,
+      "delivery_minutes": 0,
+      "is_deficit_stock_used": false,
+      "matching_rule_id": "0192f3a1-7b2c-7d4e-8f90-820000000001"
+    },
+    {
+      "variant_offer_id": "0192f3a1-7b2c-7d4e-8f90-810000000002",
+      "rank_no": 2,
+      "source_clinic_id": 5,
+      "component_kind": "RBC",
+      "blood_group": "O+",
+      "available_units": 6,
+      "delivery_minutes": 35,
+      "is_deficit_stock_used": true,
+      "matching_rule_id": "0192f3a1-7b2c-7d4e-8f90-820000000002"
+    }
+  ],
+  "stock_watermark": 1042
+}
