@@ -75,7 +75,8 @@
     тест контрактов этапа 1 остаётся. `transfer` хранит конверт из `OpenObligation` и передаёт его в
     `AllocateUnitsToPatient` без изменений; ключа у него нет. Добавление необязательного поля обратно совместимо.
 11. **Срок жизни.** В `inventory` конверт лежит в `aist_outbox_message.payload` до квитанции АИСТ-М, затем затирается
-    (этап 6, S6-WP4). В `transfer` — в строке обязательства до отправки `AllocateUnitsToPatient`. В `matching` —
+    (этап 6, S6-WP4). В `transfer` — в колонке `obligation.patient_case_sealed text NULL`, затирается в конечных
+    статусах обязательства (S6-WP4). В `matching` —
     в `clinical_request_patient` вместе с `request_id`.
 12. **Аудит.** `object_id` записи об операциях с номером случая — идентификатор заявки, не номер и не конверт.
 
