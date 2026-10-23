@@ -122,10 +122,11 @@ func TestSourceSelection(t *testing.T) {
 			coverage:  1,
 		},
 		{
+			// Норматив источника 2100 делится на A+ 840 и O+ 1260: порог группы O+ позволил бы отдать 1740 мл,
+			// защищённый объём вида (2100 мл, 7 ед.) — только 900 мл. Без единиц A+ клиника 2 сама в дефиците по A+.
 			name: "защищённый объём источника ограничивает передачу (NFR013)",
 			in: func() Input {
 				in := baseInput()
-				in.GroupShares = []GroupShare{{Group: "O+", Share: 1}}
 				in.Forecast = &Forecast{Lines: []ForecastLine{emergencyAt(1, 1, "RBC", "O+", 3000)}}
 				in.Norms = []Norm{{ClinicID: 2, Kind: "RBC", NormML: 2100}}
 				in.Units = stock(1, 10, 2, "RBC", "O+", 300, 20, UnitStatusInStock)
@@ -133,14 +134,15 @@ func TestSourceSelection(t *testing.T) {
 				return in
 			},
 			proposals: []wantProposal{{source: 2, target: 1, group: "O+", units: 3, volume: 900, minutes: 30}},
-			deficits:  []wantDeficit{{clinic: 1, group: "O+", uncovered: 2100}},
-			coverage:  0.3,
+			deficits:  []wantDeficit{{clinic: 1, group: "O+", uncovered: 2100}, {clinic: 2, group: "A+", uncovered: 840}},
+			coverage:  0.2344,
 		},
 		{
+			// Защищённый объём 2100 + 600 = 2700 мл (9 ед.) оставляет одну единицу; порог группы O+
+			// (3000 - 600 - 1260 = 1140 мл) позволил бы три. Без слагаемого обязательств тест падает.
 			name: "подтверждённые обязательства источника входят в защищённый объём",
 			in: func() Input {
 				in := baseInput()
-				in.GroupShares = []GroupShare{{Group: "O+", Share: 1}}
 				in.Forecast = &Forecast{Lines: []ForecastLine{emergencyAt(1, 1, "RBC", "O+", 3000)}}
 				in.Norms = []Norm{{ClinicID: 2, Kind: "RBC", NormML: 2100}}
 				in.Units = stock(1, 10, 2, "RBC", "O+", 300, 20, UnitStatusInStock)
@@ -149,8 +151,8 @@ func TestSourceSelection(t *testing.T) {
 				return in
 			},
 			proposals: []wantProposal{{source: 2, target: 1, group: "O+", units: 1, volume: 300, minutes: 30}},
-			deficits:  []wantDeficit{{clinic: 1, group: "O+", uncovered: 2700}},
-			coverage:  0.1,
+			deficits:  []wantDeficit{{clinic: 1, group: "O+", uncovered: 2700}, {clinic: 2, group: "A+", uncovered: 840}},
+			coverage:  0.0781,
 		},
 		{
 			name: "источник без оценки доставки не рассматривается",
