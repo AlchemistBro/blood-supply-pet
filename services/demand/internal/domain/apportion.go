@@ -37,11 +37,12 @@ func apportion(total int64, weights []int64) ([]int64, error) {
 	var assigned int64
 	for i, w := range weights {
 		// total·w/sum < 2^63·sum, значит старшее слово меньше делителя и Div64 не паникует.
-		hi, lo := bits.Mul64(uint64(total), uint64(w))
+		hi, lo := bits.Mul64(uint64(total), uint64(w)) //nolint:gosec // total и w неотрицательны, проверено выше
 		q, r := bits.Div64(hi, lo, sum)
-		out[i] = int64(q)
+		part := int64(q) //nolint:gosec // q ≤ total < 2^63
+		out[i] = part
 		rem[i] = r
-		assigned += int64(q)
+		assigned += part
 	}
 	left := total - assigned
 	if left == 0 {

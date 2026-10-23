@@ -62,6 +62,7 @@ func (b *csvBuilder) file(name string) CSVFile {
 }
 
 func newRand(seed int64, salt uint64) *rand.Rand {
+	//nolint:gosec // детерминированный генератор демо-данных (ADR-0010), не криптография
 	return rand.New(rand.NewPCG(uint64(seed), uint64(seed)^salt))
 }
 

@@ -103,7 +103,7 @@ func (s *Store) InsertProfiles(ctx context.Context, tx pgx.Tx, fileID uuid.UUID,
 			return fmt.Errorf("население района %s вне integer", p.DistrictCode)
 		}
 		rows = append(rows, gen.InsertDistrictProfilesParams{DistrictProfileID: id, StatisticsFileID: fileID,
-			DistrictID: p.DistrictID, Population: int32(p.Population)})
+			DistrictID: p.DistrictID, Population: int32(p.Population)}) //nolint:gosec // диапазон проверен выше
 		for g, sh := range p.GroupShares {
 			shares = append(shares, gen.InsertDistrictGroupSharesParams{DistrictProfileID: id, BloodGroupCode: g, GroupShare: shareNumeric(sh)})
 		}

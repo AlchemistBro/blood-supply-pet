@@ -84,7 +84,7 @@ func (s *Service) parse(kind domain.FileKind, content []byte) (parsed, error) {
 // отклоняется по SHA-256.
 func (s *Service) Upload(ctx context.Context, in UploadInput) (UploadResult, error) {
 	if _, err := domain.ParseFileKind(string(in.Kind)); err != nil {
-		return UploadResult{}, fmt.Errorf("%w: %v", ErrInvalidUpload, err)
+		return UploadResult{}, fmt.Errorf("%w: %w", ErrInvalidUpload, err)
 	}
 	p, err := s.parse(in.Kind, in.Content)
 	if err != nil {
