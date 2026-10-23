@@ -19,8 +19,8 @@
    (`IN_STOCK`, `WITHDRAWN`), канон перечня не задавал. Основание: ПП 641, п. 62 а — статус «на карантине» ведётся в базе;
    единица на карантине не готова к выдаче, закреплять её под передачу нельзя (вывод проекта).
 2. **Карантин закреплённой единицы равен выбытию**: `UnitUpdated(status = QUARANTINE)` для закреплённой единицы переводит
-   O07 в `BROKEN` с причиной `UNIT_QUARANTINED` той же транзакцией и с теми же компенсациями, что выбытие (закрепления
-   `RELEASED`, резерв уменьшается, `TransferBroken`, `CancelTransport`). Возврат единицы из карантина `BROKEN` не отменяет.
+   O07 в `BROKEN` с причиной `QUARANTINE` той же транзакцией и с теми же компенсациями, что выбытие (закрепления
+   `RELEASED`, резерв уменьшается, `TransferBroken`, `CancelTransport(UNIT_QUARANTINED)`). Возврат единицы из карантина `BROKEN` не отменяет.
    Причина: отправлять такую единицу нельзя, а ждать решения АИСТ-М значит ввести состояние «ожидает замены», которого
    нет (решение владельца от 23.10.2026, ADR-0011).
 3. **Причины выбытия** (`UnitWithdrawn.reason`): `ISSUED` вместо `TRANSFUSED`, `DISCARDED`, `TRANSFERRED`, `EXPIRED`.
@@ -31,7 +31,8 @@
 
 4. **Отмена** (в прототипе её не было): команда `CancelObligation(obligation_id, reason)` и HTTP-операция отмены.
    Переходы `PENDING`, `CONFIRMED`, `TRANSPORT_REQUESTED` → `CANCELLED` по CAS; закрепления `RELEASED`, резерв снимается,
-   событие `TransferCancelled(obligation_id, request_id, reason)`; из `TRANSPORT_REQUESTED` ещё команда `CancelTransport`.
+   событие `TransferCancelled(obligation_id, request_id, reason)`; из `CONFIRMED` и `TRANSPORT_REQUESTED` ещё команда
+   `CancelTransport(OBLIGATION_CANCELLED)`: `RequestTransport` уходит уже при подтверждении, и шлюз мог успеть создать заказ.
    Повтор отмены идемпотентен. Из конечных статусов и после `DISPATCHED` отмены нет.
 5. **Эскалация — отдельное событие** `EscalationRaised(obligation_id, request_id, reason, at)`, причины
    `EXPIRED_NO_FALLBACK`, `TRANSPORT_REFUSED`, `TRANSPORT_OUTCOME_UNKNOWN`, `SOURCE_SYSTEM_UNAVAILABLE`. Оно пишется только
@@ -39,7 +40,7 @@
    факт истечения срока со ссылкой на новое задание, если запасной источник был. В прототипе эскалация была только записью
    аудита, в каноне `EscalationRaised.kind` и `TransferExpired` дублировали друг друга.
 6. **`TransferBroken` несёт `request_id` и `reason`** (причина выбытия из `UnitWithdrawn`: `ISSUED`, `DISCARDED`,
-   `TRANSFERRED`, `EXPIRED`; для карантина — `UNIT_QUARANTINED`): получателю (`matching`,
+   `TRANSFERRED`, `EXPIRED`; для карантина — `QUARANTINE`): получателю (`matching`,
    `planning`) не нужно хранить связь обязательства с заявкой, чтобы записать дефицит.
 7. **`clinic_id` — `bigint` везде**: в контрактах, в `source_stock`, `obligation.source_clinic_id/target_clinic_id`,
    `fallback_sources bigint[]`. В прототипе был `text`. Ключ справочника `ref_clinic` один на все базы.
@@ -52,7 +53,7 @@
 ### Внешние системы
 
 10. **Экстренная заявка при недоступном АИСТ-М — всегда отказ** `SourceSystemUnavailable`: задание остаётся `PENDING`,
-    для экстренной срочности пишется `EscalationRaised(SOURCE_SYSTEM_UNAVAILABLE)`. Подтверждения по копии нет; флаг
+    для экстренной срочности пишутся `EscalationRaised(SOURCE_SYSTEM_UNAVAILABLE)` и запись аудита. Подтверждения по копии нет; флаг
     `BS_ALLOW_COPY_CONFIRM_EMERGENCY` существует и по умолчанию `false`. Это отступление от ADR-0004 и схемы 12, где экстренное
     задание допускалось подтвердить по копии с алертом. Причина: копия отстаёт до 5 минут, а закрепление выбывшей единицы
     в экстренной ситуации хуже честного отказа с немедленной эскалацией.
@@ -62,7 +63,8 @@
 
 ### Прослеживаемость и данные пациента
 
-12. **Строки `allocation` не удаляются**: закрепление только меняет статус (`CONFIRMED` → `RELEASED` или `CONSUMED`).
+12. **Строки `allocation` не удаляются**: закрепление только меняет статус (`CONFIRMED` → `RELEASED` или `CONSUMED`),
+    `DELETE` запрещён триггером.
     Индекс `(unit_id, created_at)` отвечает на вопрос «куда уходила единица». Основание: ПП 641, п. 17–18 (прослеживаемость)
     и п. 54 (анализ выданных компонентов донора за 12 месяцев). Эндпоинт прослеживаемости — этап 7.
 13. **Номер случая пациента не входит ни в один контракт этапа 1**: в `OpenObligation` нет `patient_case_ref`, обязательство
@@ -74,9 +76,11 @@
 - Канон обновлён: `obligation-states.md` (переходы в `CANCELLED`, карантин → `BROKEN`, `EscalationRaised`), `events.md`,
   `saga-confirmation.md`, `data-model.md`, пометки в ADR-0004 и ADR-0011.
 - Добавляются тесты, которых в прототипе не было: `quarantinedUnitIsNeverAllocated`, карантин закреплённой единицы → `BROKEN`,
-  отмена из каждого допустимого статуса, отказ экстренному заданию при недоступном АИСТ-М.
-- Отмена из `CONFIRMED` не шлёт `CancelTransport`. Если шлюз успел создать заказ, запоздалый `TransportAccepted` для
-  `CANCELLED` игнорируется с записью в аудит, а заказ у C03 снимает дежурный вручную. Пересмотреть вместе с ADR-0023 (этап 7).
+  отмена из каждого допустимого статуса, отказ экстренному заданию при недоступном АИСТ-М, запрет `DELETE` из `allocation`.
+- `CancelTransport` уходит при любом переходе в `BROKEN` и при отмене из `CONFIRMED` и `TRANSPORT_REQUESTED`; шлюз отвечает
+  `TransportCancelled` и тогда, когда заказа не было, поэтому лишняя команда безвредна.
+- Повтор подтверждения с тем же ключом идемпотентен и после ответа перевозчика: в `CONFIRMED` и `TRANSPORT_REQUESTED`
+  он возвращает `Confirmed`.
 - Возврат единицы из карантина не восстанавливает нарушенное обязательство: подбор предложит новый вариант.
 
 ## Условия пересмотра

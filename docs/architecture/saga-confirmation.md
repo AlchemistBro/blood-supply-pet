@@ -89,8 +89,8 @@ sequenceDiagram
 | Шлюз упал после ответа C03, до записи исхода | сверщик находит заказ, второго нет |
 | Восемь экземпляров шлюза одновременно | аренда строки: один заказ |
 | C03 лежит дольше `max-attempts` | `TransportRejected(OUTCOME_UNKNOWN)`; O07 остаётся CONFIRMED; `EscalationRaised(TRANSPORT_OUTCOME_UNKNOWN)`; если сверка позже найдёт заказ — запоздалый `TransportAccepted` |
-| АИСТ-М не ответила за 3 с | `SourceSystemUnavailable` для любой срочности: задание остаётся PENDING, «повторите»; для экстренного ещё `EscalationRaised(SOURCE_SYSTEM_UNAVAILABLE)`. По копии не закрепляем (ADR-0027) |
-| Отмена O07 (`CancelObligation` или API) | `PENDING`/`CONFIRMED`/`TRANSPORT_REQUESTED` → `CANCELLED`, закрепления `RELEASED`, `TransferCancelled`; из `TRANSPORT_REQUESTED` ещё `CancelTransport` (ADR-0027) |
+| АИСТ-М не ответила за 3 с | `SourceSystemUnavailable` для любой срочности: задание остаётся PENDING, «повторите»; для экстренного ещё `EscalationRaised(SOURCE_SYSTEM_UNAVAILABLE)` и аудит. По копии не закрепляем (ADR-0027) |
+| Отмена O07 (`CancelObligation` или API) | `PENDING`/`CONFIRMED`/`TRANSPORT_REQUESTED` → `CANCELLED`, закрепления `RELEASED`, `TransferCancelled`; из `CONFIRMED` и `TRANSPORT_REQUESTED` ещё `CancelTransport` (ADR-0027) |
 | Замена единицы и `TransportAccepted` одновременно меняют O07 | CAS пропускает одного; проигравшая замена не применяется, оператор повторяет её уже в `TRANSPORT_REQUESTED`, где замена разрешена |
 
 ## Долговечный таймер срока

@@ -97,7 +97,7 @@
 | `TransferRejected` | `obligation_id`, `request_id`, `reason`(UNITS_WITHDRAWN/SOURCE_REFUSED) |
 | `TransferExpired` | `obligation_id`, `request_id`, `next_obligation_id?` (новое задание у следующего источника, если он был) |
 | `TransferCancelled` | `obligation_id`, `request_id`, `reason`(REQUEST_CANCELLED/PLAN_RECALCULATED/DUTY_OFFICER_DECISION) |
-| `TransferBroken` | `obligation_id`, `request_id`, `unit_id`, `reason`(ISSUED/DISCARDED/TRANSFERRED/EXPIRED — причина выбытия из `UnitWithdrawn`; UNIT_QUARANTINED — карантин закреплённой единицы, ADR-0027) |
+| `TransferBroken` | `obligation_id`, `request_id`, `unit_id`, `reason`(ISSUED/DISCARDED/TRANSFERRED/EXPIRED — причина выбытия из `UnitWithdrawn`; QUARANTINE — карантин закреплённой единицы, ADR-0027) |
 | `TransferUnitReplaced` | `obligation_id`, `old_unit_id`, `new_unit_id`, `rule_version` |
 | `TransportRequested` | `obligation_id`, `shipment_ref` |
 | `TransportRequestFailed` | `obligation_id`, `reason`(REFUSED/OUTCOME_UNKNOWN), `details?` |
@@ -109,7 +109,7 @@
 | Тип | Поля |
 | --- | --- |
 | команда `RequestTransport` | `obligation_id`, `request_id`, `source_clinic_id`, `target_clinic_id`, `component_kind`, `quantity`, `temperature_regime` (номеров единиц нет: замена единицы не трогает заказ; режим по виду компонента, значения демо, ПП РФ № 641 п. 68 в, ADR-0022) |
-| команда `CancelTransport` | `obligation_id`, `reason`(UNIT_WITHDRAWN/OBLIGATION_CANCELLED) |
+| команда `CancelTransport` | `obligation_id`, `reason`(UNIT_WITHDRAWN/UNIT_QUARANTINED/OBLIGATION_CANCELLED) |
 | `TransportAccepted` | `obligation_id`, `shipment_ref` |
 | `TransportRejected` | `obligation_id`, `reason`(REFUSED/OUTCOME_UNKNOWN), `details?` |
 | `TransportCancelled` | `obligation_id` (и тогда, когда заказа не было) |

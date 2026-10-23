@@ -14,7 +14,7 @@ stateDiagram-v2
     PENDING --> EXPIRED: таймер срока: эскалация,\nновое O07 PENDING у следующего источника (одна TX)
     PENDING --> CANCELLED: CancelObligation (заявка отменена / план пересчитан)
     CONFIRMED --> TRANSPORT_REQUESTED: TransportAccepted от logistics-gateway
-    CONFIRMED --> CANCELLED: CancelObligation
+    CONFIRMED --> CANCELLED: CancelObligation → CancelTransport
     CONFIRMED --> BROKEN: закреплённая единица выбыла\nили ушла на карантин в АИСТ-М
     CONFIRMED --> CONFIRMED: замена равноценной единицы (ADR-0011)
     TRANSPORT_REQUESTED --> CANCELLED: CancelObligation → CancelTransport
@@ -38,8 +38,8 @@ stateDiagram-v2
 | `DELIVERED` | Доставлено, принято клиникой | — | да |
 | `REJECTED` | Отклонено: все единицы выбыли или источник отказал; подбор предложит следующий вариант | нет | да |
 | `EXPIRED` | Не подтверждено в срок; новое O07 у следующего источника (`TransferExpired.next_obligation_id`); без запасного источника — `EscalationRaised(EXPIRED_NO_FALLBACK)` дежурному | нет | да |
-| `CANCELLED` | Отменено командой `CancelObligation` или через API (заявка отменена, план пересчитан, решение дежурного); закрепления сняты; из `TRANSPORT_REQUESTED` ушёл `CancelTransport` | нет | да |
-| `BROKEN` | Нарушено: закреплённая единица выбыла или ушла на карантин в АИСТ-М после подтверждения (`TransferBroken.reason` — причина выбытия из `UnitWithdrawn` или `UNIT_QUARANTINED`); закрепления сняты, `CancelTransport`; дефицит заявки записывает `matching` | нет | да |
+| `CANCELLED` | Отменено командой `CancelObligation` или через API (заявка отменена, план пересчитан, решение дежурного); закрепления сняты; из `CONFIRMED` и `TRANSPORT_REQUESTED` ушёл `CancelTransport` | нет | да |
+| `BROKEN` | Нарушено: закреплённая единица выбыла или ушла на карантин в АИСТ-М после подтверждения (`TransferBroken.reason` — причина выбытия из `UnitWithdrawn` или `QUARANTINE`); закрепления сняты, `CancelTransport`; дефицит заявки записывает `matching` | нет | да |
 
 Статус «ожидает подтверждения АИСТ-М» из ПР6 (FR051, FR052) реализуется **не** отдельным состоянием O07, а полем
 `aist_ack_at` и статусом сообщения в `inventory.aist_outbox_message`: O07 остаётся `CONFIRMED`, UI показывает
@@ -48,7 +48,7 @@ stateDiagram-v2
 Частичное подтверждение — не состояние: `confirmed_qty < requested_qty`, на недостачу событие `TransferShortfallRecorded`.
 
 Закрепление O18 (`allocation`) имеет статусы `CONFIRMED` (держит единицу), `RELEASED` (снято: замена, отмена, нарушение)
-и `CONSUMED` (единица отправлена). Строки не удаляются: по ним восстанавливается, куда уходила единица (ПП РФ № 641, п. 17–18, 54).
+и `CONSUMED` (единица отправлена). Строки не удаляются (`DELETE` запрещён триггером): по ним восстанавливается, куда уходила единица (ПП РФ № 641, п. 17–18, 54).
 
 Единица закрепляется только в статусе `IN_STOCK`. Статусы `QUARANTINE`, `ISSUED`, `DISCARDED`, `TRANSFERRED` для подтверждения
 и замены означают «единицы нет» (ПП РФ № 641, п. 62 а; ADR-0027).
@@ -61,16 +61,16 @@ stateDiagram-v2
    Обработчик ответов логистики блокирует только `obligation`.
 3. Проверка статуса единиц в АИСТ-М (через `inventory`) идёт **синхронно до транзакции**, вне блокировки, таймаут 3 с.
    Хранимого состояния «проверяется» нет: оператор получает ответ в том же HTTP-запросе.
-4. Повтор подтверждения с тем же `idempotency_key` при статусе `CONFIRMED` возвращает тот же результат `Confirmed`.
+4. Повтор подтверждения с тем же `idempotency_key` при статусе `CONFIRMED` или `TRANSPORT_REQUESTED` возвращает тот же результат `Confirmed`.
 5. После `DISPATCHED` отмена уже не компенсация: возврат единицы решает ОПК, автоматически свободной она не становится.
 
 ## Подтверждение: порядок шагов (`ConfirmTransfer`)
 
 ```
-1. find O07; нет → InvalidRequest. status ≠ PENDING → CONFIRMED с тем же ключом ? Confirmed : TaskWithdrawn(status)
+1. find O07; нет → InvalidRequest. status ≠ PENDING → (CONFIRMED | TRANSPORT_REQUESTED) с тем же ключом ? Confirmed : TaskWithdrawn(status)
 2. validate: непустой список разных единиц, не больше requested_qty, все единицы источника и того же вида
 3. statuses = inventory.CheckUnits(ids)          // единственный синхронный вызов; SourceSystemUnavailable → ответ «повторите»,
-                                                 // для экстренной срочности ещё TX: outbox EscalationRaised(SOURCE_SYSTEM_UNAVAILABLE)
+                                                 // для экстренной срочности ещё TX: outbox EscalationRaised(SOURCE_SYSTEM_UNAVAILABLE), аудит
 4. present (IN_STOCK) / withdrawn (всё остальное, включая QUARANTINE) разделить
    все выбыли              → TX: CAS PENDING→REJECTED, событие TransferRejected, аудит → Rejected
    часть выбыла, !partial  → UnitsUnavailable(withdrawn), состояние не менялось
@@ -90,7 +90,7 @@ stateDiagram-v2
 `ProtectedVolumeExceeded`, `InvalidRequest`, `SourceSystemUnavailable`.
 
 При недоступности АИСТ-М подтверждения по копии нет ни для какой срочности: задание остаётся `PENDING`, для экстренной
-пишется `EscalationRaised(SOURCE_SYSTEM_UNAVAILABLE)`. Флаг `BS_ALLOW_COPY_CONFIRM_EMERGENCY` по умолчанию `false` (ADR-0027).
+пишутся `EscalationRaised(SOURCE_SYSTEM_UNAVAILABLE)` и запись аудита. Флаг `BS_ALLOW_COPY_CONFIRM_EMERGENCY` по умолчанию `false` (ADR-0027).
 
 ## Замена единицы (`ReplaceUnit`, ADR-0011)
 
@@ -114,11 +114,11 @@ stateDiagram-v2
 | Событие | Реакция `transfer` |
 | --- | --- |
 | `UnitWithdrawn` из `inventory` для закреплённой единицы | Сразу, в одной транзакции: CAS → `BROKEN`, все закрепления O07 → `RELEASED`, резерв уменьшается, в outbox `TransferBroken(reason = причина выбытия)`, `CancelTransport` (шлётся всегда: шлюз отвечает и тогда, когда заказа не было), аудит. Решение владельца от 23.10.2026, как в Java-прототипе (`InventoryProjection`). Замену равноценной единицей оператор делает только **до** выбытия, через `ReplaceUnit` |
-| `UnitUpdated(status = QUARANTINE)` для закреплённой единицы | Как выбытие: CAS → `BROKEN`, `TransferBroken(reason = UNIT_QUARANTINED)`, `CancelTransport`. Возврат из карантина `BROKEN` не отменяет (ADR-0027) |
+| `UnitUpdated(status = QUARANTINE)` для закреплённой единицы | Как выбытие: CAS → `BROKEN`, `TransferBroken(reason = QUARANTINE)`, `CancelTransport(UNIT_QUARANTINED)`. Возврат из карантина `BROKEN` не отменяет (ADR-0027) |
 | `TransportRejected(REFUSED)` | O07 остаётся `CONFIRMED`, события `TransportRequestFailed` и `EscalationRaised(TRANSPORT_REFUSED)`: перевозку организует дежурный вручную |
 | `TransportRejected(OUTCOME_UNKNOWN)` | O07 остаётся `CONFIRMED`, `TransportRequestFailed` и `EscalationRaised(TRANSPORT_OUTCOME_UNKNOWN)`; если сверка шлюза позже найдёт заказ, придёт запоздалый `TransportAccepted` |
 | `TransportAccepted` для не-`CONFIRMED` O07 | Игнорируется с записью в аудит: `CancelTransport` уже ушла в момент нарушения или отмены |
-| `CancelObligation` от `matching`/`planning` или отмена через API | `PENDING`/`CONFIRMED`/`TRANSPORT_REQUESTED` → `CANCELLED` (CAS), закрепления `RELEASED`, резерв снят, `TransferCancelled`; из `TRANSPORT_REQUESTED` ещё `CancelTransport`. Повтор идемпотентен; из конечных статусов и `DISPATCHED` отмены нет (ADR-0027) |
+| `CancelObligation` от `matching`/`planning` или отмена через API | `PENDING`/`CONFIRMED`/`TRANSPORT_REQUESTED` → `CANCELLED` (CAS), закрепления `RELEASED`, резерв снят, `TransferCancelled`; из `CONFIRMED` и `TRANSPORT_REQUESTED` ещё `CancelTransport(OBLIGATION_CANCELLED)`. Повтор идемпотентен; из конечных статусов и `DISPATCHED` отмены нет (ADR-0027) |
 
 ## Четыре гонки (обязательные фитнес-тесты)
 
