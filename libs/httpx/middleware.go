@@ -91,6 +91,11 @@ func (w *statusWriter) Flush() {
 	}
 }
 
+// Unwrap отдаёт исходный ответ http.ResponseController: через обёртку становятся доступны
+// SetWriteDeadline (длинный поток SSE в web переживает WriteTimeout сервера) и Hijack
+// (после этого имитатору sim-logistics не нужен свой обход обёртки).
+func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
 // Standard — стандартный набор middleware сервиса.
 func Standard(log *slog.Logger) []Middleware {
 	return []Middleware{CorrelationID(), Recover(log), AccessLog(log)}
