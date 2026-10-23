@@ -31,7 +31,9 @@
 
 ## Данные класса K1
 
-- `patient_case_no` хранится только в `matching` (`clinical_request_patient`, pgcrypto) и в `aist_outbox_message.payload` (`inventory`, до квитанции АИСТ-М, затем затирается).
+- `patient_case_no` шифрует приложение (`libs/k1seal`, ADR-0020). Конверт хранится в `matching` (`clinical_request_patient`)
+  и в `aist_outbox_message.payload` (`inventory`, до квитанции АИСТ-М, затем затирается). Ключ `BS_K1_KEYS` есть только
+  у `matching` и `inventory`; остальные сервисы, Kafka, outbox, аудит и журналы видят только конверт.
 - Не попадает в события (кроме команды `AllocateUnitsToPatient`, которая не логируется телом), логи, трассы, письма, объяснения вариантов.
 - Каждое чтение — `READ_PATIENT_CASE` в аудит (NFR016); каждое изменение заявки — аудит с участником (NFR008).
 - Спецификация замены (фенотип) — квазиидентификатор: не логируется, не уходит в письма.

@@ -5,7 +5,7 @@
 ## Чеклист
 
 ### Данные
-- [ ] Миграции по словарю ПР6 (7 таблиц) + `clinical_request_patient` (pgcrypto) + проекции `unit_projection`, `delivery_estimate_projection`, `obligation_projection` + outbox/inbox/audit_local.
+- [ ] Миграции по словарю ПР6 (7 таблиц) + `clinical_request_patient` (конверт `libs/k1seal`, ADR-0020) + проекции `unit_projection`, `delivery_estimate_projection`, `obligation_projection` + outbox/inbox/audit_local.
 - [ ] Справочник правил O15: сид из `libs/testdata` (10 демо-правил с `basis_document = "ДЕМО…"`, версии, `valid_from/valid_to`); OpenAPI для ИТ-службы: `GET /rules`, `POST /rules/{code}/versions`.
 
 ### Подбор

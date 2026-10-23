@@ -203,7 +203,7 @@ erDiagram
 `request_status_dict`, `clinical_request` (O09, `patient_case_no` K1), `request_constraint` (O08), `variant_offer` (O10, `UNIQUE(clinical_request_id, rank_no)`,
 `explanation`, `stock_watermark`), `variant_offer_unit_link`, `variant_selection`.
 Проекции: `unit_projection` (единицы в наличии по клиникам из `inventory.events`), `delivery_estimate_projection`, `obligation_projection`.
-`patient_case_no` хранится в отдельной таблице `clinical_request_patient` с шифрованием на уровне колонки (`pgcrypto`, ключ из Secret)
+`patient_case_no` хранится в отдельной таблице `clinical_request_patient` в виде конверта, зашифрованного приложением (`libs/k1seal`, AES-256-GCM, AAD = id заявки, ключ из Secret; ADR-0020)
 и отдаётся отдельным эндпоинтом, каждое чтение которого пишет `READ_PATIENT_CASE` в аудит (NFR016).
 
 ## transfer
