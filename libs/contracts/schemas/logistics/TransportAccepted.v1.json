@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/logistics/TransportAccepted.v1.json",
+  "title": "TransportAccepted",
+  "description": "Ответ logistics.replies: перевозчик (C03) принял заказ.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["obligation_id", "shipment_ref"],
+  "properties": {
+    "obligation_id": { "type": "string", "format": "uuid" },
+    "shipment_ref": { "type": "string", "minLength": 1, "maxLength": 64 }
+  }
+}

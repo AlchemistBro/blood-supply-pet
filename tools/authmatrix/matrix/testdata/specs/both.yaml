@@ -1,0 +1,9 @@
+openapi: 3.0.3
+info: { title: both, version: 0.1.0 }
+paths:
+  /records:
+    get:
+      operationId: listRecords
+      x-bs-operation: READ_AUDIT
+      x-bs-public: true
+      responses: { "200": { description: ok } }

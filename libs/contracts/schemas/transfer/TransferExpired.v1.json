@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/transfer/TransferExpired.v1.json",
+  "title": "TransferExpired",
+  "description": "Событие transfer.events: срок подтверждения истёк (PENDING → EXPIRED). next_obligation_id — новое обязательство у следующего источника, если он был.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["obligation_id", "request_id"],
+  "properties": {
+    "obligation_id": { "type": "string", "format": "uuid" },
+    "obligation_version": { "type": "integer", "minimum": 0, "description": "Версия O07 после перехода; проекции применяют событие, только если версия выше сохранённой" },
+    "request_id": { "type": "string", "format": "uuid" },
+    "next_obligation_id": { "type": "string", "format": "uuid" }
+  }
+}

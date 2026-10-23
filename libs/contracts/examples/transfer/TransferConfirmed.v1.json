@@ -1,0 +1,11 @@
+{
+  "obligation_id": "0192f3a1-7b2c-7d4e-8f90-300000000001",
+  "obligation_version": 2,
+  "request_id": "0192f3a1-7b2c-7d4e-8f90-200000000001",
+  "units": [
+    "0192f3a1-7b2c-7d4e-8f90-400000000001",
+    "0192f3a1-7b2c-7d4e-8f90-400000000002"
+  ],
+  "quantity": 2,
+  "operator": "operator-c001"
+}

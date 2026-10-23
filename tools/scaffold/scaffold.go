@@ -30,6 +30,8 @@ type Params struct {
 	Port int
 	// DBName — имя базы и роли: допускает отличие от Name (logistics-gateway использует базу logistics).
 	DBName string
+	// NoDB — сервис без базы (имитаторы смежных систем): без миграций, sqlc и pgx, runtime.Spec.NoDB.
+	NoDB bool
 }
 
 var nameRe = regexp.MustCompile(`^[a-z][a-z0-9-]{1,30}$`)
@@ -67,6 +69,9 @@ func Render(p Params) ([]File, error) {
 	}
 	var out []File
 	for _, t := range templates {
+		if t.dbOnly && p.NoDB {
+			continue
+		}
 		path := strings.ReplaceAll(t.path, "{{name}}", p.Name)
 		tmpl, err := template.New(path).Delims("[[", "]]").Parse(t.body)
 		if err != nil {
@@ -134,7 +139,11 @@ func RegisterInTaskfile(root, name string) (bool, error) {
 	return true, os.WriteFile(path, updated, 0o600)
 }
 
-type tmplFile struct{ path, body string }
+type tmplFile struct {
+	path, body string
+	// dbOnly — файл нужен только сервису с базой (миграции).
+	dbOnly bool
+}
 
 // Разделители шаблонов [[ ]], чтобы не конфликтовать с {{ }} в генерируемых Go-текстах и YAML.
 var templates = []tmplFile{
@@ -146,14 +155,21 @@ import (
 
 	"[[.ModulePath]]/libs/runtime"
 	apispec "[[.ModulePath]]/services/[[.Name]]/api"
+[[- if not .NoDB]]
 	"[[.ModulePath]]/services/[[.Name]]/migrations"
+[[- end]]
 )
 
 func main() {
 	runtime.Run(runtime.Spec{
 		Name:       "[[.Name]]",
 		Module:     "[[.Module]]",
+[[- if .NoDB]]
+		// Сервис без базы: нет миграций, outbox и ретранслятора.
+		NoDB: true,
+[[- else]]
 		Migrations: migrations.FS,
+[[- end]]
 		OpenAPI:    apispec.Spec,
 		Setup: func(_ context.Context, rt *runtime.Runtime) ([]runtime.Worker, error) {
 			// Здесь: собрать адаптеры, приложение, зарегистрировать маршруты на rt.Mux,
@@ -163,7 +179,7 @@ func main() {
 		},
 	})
 }
-`},
+`, false},
 	{"services/{{name}}/api/spec.go", `// Package api хранит контракт OpenAPI сервиса [[.Name]]; сервер генерируется в internal/api/gen.
 package api
 
@@ -173,12 +189,12 @@ import _ "embed"
 //
 //go:embed openapi.yaml
 var Spec []byte
-`},
+`, false},
 	{"services/{{name}}/api/openapi.yaml", `openapi: 3.0.3
 info:
   title: [[.Name]]
   version: 0.1.0
-  description: Контракт сервиса [[.Name]]. Источник истины для HTTP: код сервера генерируется из этого файла.
+  description: "Контракт сервиса [[.Name]]. Источник истины для HTTP: код сервера генерируется из этого файла."
 servers:
   - url: http://localhost:[[.Port]]
 paths: {}
@@ -194,14 +210,14 @@ components:
         detail: { type: string }
         instance: { type: string }
         correlation_id: { type: string }
-`},
+`, false},
 	{"services/{{name}}/api/oapi-codegen.yaml", `package: gen
 output: ../internal/api/gen/api.gen.go
 generate:
   std-http-server: true
   strict-server: true
   models: true
-`},
+`, false},
 	{"services/{{name}}/migrations/migrations.go", `// Package migrations встраивает SQL-миграции сервиса [[.Name]] (goose, версии 00100+; 00001-00099 - платформа).
 package migrations
 
@@ -215,22 +231,26 @@ var files embed.FS
 
 // FS - миграции сервиса в корне файловой системы (так читает goose).
 var FS fs.FS = files
-`},
+`, true},
 	{"services/{{name}}/migrations/00100_init.sql", `-- +goose Up
 -- Схема сервиса [[.Name]] (база [[.DBName]]). Имена сущностей и полей - из словаря данных ПР6 (docs/architecture/data-model.md).
--- Платформенные таблицы (outbox, inbox, audit_local, ref_*) создаются миграциями 00001-00002.
+-- Платформенные таблицы (outbox, inbox, audit_local, ref_*) создаются миграциями 00001-00099.
 
 -- +goose Down
-`},
+`, true},
 	{"services/{{name}}/internal/domain/doc.go", `// Package domain - чистая предметная логика сервиса [[.Name]]: агрегаты, правила, результаты операций.
 // Не зависит от БД, Kafka и HTTP (проверяет tools/archtest и depguard).
 package domain
-`},
-	{"services/{{name}}/internal/app/doc.go", `// Package app - сценарии сервиса [[.Name]]: транзакции, порты, обработчики сообщений.
+`, false},
+	{"services/{{name}}/internal/app/doc.go", `[[if .NoDB]]// Package app - сценарии сервиса [[.Name]]. Базы у сервиса нет: состояние в памяти.
+[[- else]]// Package app - сценарии сервиса [[.Name]]: транзакции, порты, обработчики сообщений.
 // Транзакция бизнес-операции включает изменение агрегата, запись в outbox и аудит; сетевых вызовов внутри нет.
+[[- end]]
 package app
-`},
-	{"services/{{name}}/internal/adapters/doc.go", `// Package adapters - реализации портов app: PostgreSQL (sqlc), Kafka-обработчики, клиенты смежных систем.
+`, false},
+	{"services/{{name}}/internal/adapters/doc.go", `[[if .NoDB]]// Package adapters - реализации портов app: HTTP-обработчики и клиенты смежных систем.
+[[- else]]// Package adapters - реализации портов app: PostgreSQL (sqlc), Kafka-обработчики, клиенты смежных систем.
+[[- end]]
 package adapters
-`},
+`, false},
 }

@@ -63,9 +63,9 @@ sequenceDiagram
     participant C03 as C03
     participant N as notification
 
-    Inv->>K: UnitWithdrawn(unit закреплена за O07)
-    K->>T: UnitWithdrawn
-    T->>T: TX: unit_copy WITHDRAWN; если O07 CONFIRMED/TRANSPORT_REQUESTED и замены нет → CAS → BROKEN, закрепления RELEASED, reserved −k, outbox: TransferBroken, CancelTransport, RequestDeficitRecorded
+    Inv->>K: UnitWithdrawn или UnitUpdated(QUARANTINE) (unit закреплена за O07)
+    K->>T: UnitWithdrawn / UnitUpdated
+    T->>T: TX: lock Остаток → unit_copy; если O07 CONFIRMED/TRANSPORT_REQUESTED → CAS → BROKEN, закрепления RELEASED, reserved −k, outbox: TransferBroken(reason), CancelTransport
     T->>K: logistics.commands: CancelTransport
     K->>LG: CancelTransport
     alt заказ уже создан
@@ -77,6 +77,10 @@ sequenceDiagram
     K->>N: TransferBroken → врач и оператор (FR049)
 ```
 
+`RequestDeficitRecorded` пишет не `transfer`, а `matching` в ответ на `TransferBroken` (по `request_id` из события) и
+предлагает следующий вариант. Замена равноценной единицей делается только **до** выбытия, через `ReplaceUnit`, и разрешена
+в `CONFIRMED` и `TRANSPORT_REQUESTED` (ADR-0011). Карантин закреплённой единицы обрабатывается как выбытие (ADR-0027).
+
 | Сбой | Поведение |
 | --- | --- |
 | Одна команда доставлена трижды | inbox + первичный ключ `transport_request(obligation_id)`: один заказ, один ответ |
@@ -84,18 +88,25 @@ sequenceDiagram
 | Шлюз упал после записи REQUESTING, до вызова C03 | пока аренда жива, никто не трогает; после истечения сверщик создаёт один заказ |
 | Шлюз упал после ответа C03, до записи исхода | сверщик находит заказ, второго нет |
 | Восемь экземпляров шлюза одновременно | аренда строки: один заказ |
-| C03 лежит дольше `max-attempts` | `TransportRejected(OUTCOME_UNKNOWN)`; O07 остаётся CONFIRMED; эскалация дежурному; если сверка позже найдёт заказ — запоздалый `TransportAccepted` |
-| АИСТ-М не ответила за 3 с | `SourceSystemUnavailable`: плановое задание остаётся PENDING, «повторите»; экстренное — решение дежурного (вслепую не закрепляем) |
-| Замена единицы проиграла CAS ответу `TransportAccepted` | `NotAllowed(TRANSPORT_REQUESTED)`; оператор повторяет |
+| C03 лежит дольше `max-attempts` | `TransportRejected(OUTCOME_UNKNOWN)`; O07 остаётся CONFIRMED; `EscalationRaised(TRANSPORT_OUTCOME_UNKNOWN)`; если сверка позже найдёт заказ — запоздалый `TransportAccepted` |
+| АИСТ-М не ответила за 3 с | `SourceSystemUnavailable` для любой срочности: задание остаётся PENDING, «повторите»; для экстренного ещё `EscalationRaised(SOURCE_SYSTEM_UNAVAILABLE)` и аудит. По копии не закрепляем (ADR-0027) |
+| Отмена O07 (`CancelObligation` или API) | `PENDING`/`CONFIRMED`/`TRANSPORT_REQUESTED` → `CANCELLED`, закрепления `RELEASED`, `TransferCancelled`; из `CONFIRMED` и `TRANSPORT_REQUESTED` ещё `CancelTransport` (ADR-0027) |
+| Замена единицы и `TransportAccepted` одновременно меняют O07 | CAS пропускает одного; проигравшая замена не применяется, оператор повторяет её уже в `TRANSPORT_REQUESTED`, где замена разрешена |
 
 ## Долговечный таймер срока
 
 Таблица `obligation` с частичным индексом `(deadline) WHERE status = 'PENDING'`; воркер каждые 5 с берёт просроченные,
-в одной транзакции: `PENDING→EXPIRED`, `EscalationRaised`, новое O07 у следующего источника из `fallback_sources`.
+в одной транзакции: `PENDING→EXPIRED`, новое O07 у следующего источника из `fallback_sources` и `TransferExpired(next_obligation_id)`;
+без запасного источника — `TransferExpired` и `EscalationRaised(EXPIRED_NO_FALLBACK)`.
 Экстренная заявка — окно в минутах (`UrgencyDict.confirm_window_minutes`).
 
 ## BPMN
 
-Процесс «Подтверждение передачи оператором источника» моделируется в BPMN 2.0 (`docs/architecture/diagrams/bpmn/confirm-transfer.bpmn`,
-экспорт SVG рядом): пулы «Оператор источника», «АС (transfer)», «C01 АИСТ-М», «C03 Логистика»; шлюзы «все на месте / часть / все выбыли / нет ответа»,
-таймерное граничное событие на срок подтверждения, компенсационное событие «снять заказ». Файл создаётся на этапе 1, финализируется на этапе 9.
+Процесс «Подтверждение передачи» в BPMN 2.0: [`diagrams/bpmn/confirm-transfer.bpmn`](diagrams/bpmn/confirm-transfer.bpmn).
+Один пул, дорожки «Оператор клиники-источника», «transfer», «inventory → C01 АИСТ-М», «logistics-gateway», «Перевозчик —
+служба перевозки (C03, ADR-0022)». На схеме: проверка статуса O07 и ключа идемпотентности, точечный запрос в АИСТ-М до
+транзакции, транзакция с блокировками, все результаты `ConfirmationResult`, заказ перевозки со сверкой и арендой,
+таймерное граничное событие срока с эскалацией к следующему источнику, отмена из `PENDING` граничным событием,
+событийные подпроцессы компенсаций (выбытие или карантин → `BROKEN` → `CancelTransport`, отмена после подтверждения,
+отказ перевозчика) и отмены перевозки в шлюзе (надгробие). Отправка и доставка помечены как этап 7.
+SVG-экспорт — отдельная задача ([diagrams/README.md](diagrams/README.md)).
