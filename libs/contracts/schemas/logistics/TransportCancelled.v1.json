@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/logistics/TransportCancelled.v1.json",
+  "title": "TransportCancelled",
+  "description": "Ответ logistics.replies: заказ снят или так и не был создан, перевозки по обязательству не будет.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["obligation_id"],
+  "properties": {
+    "obligation_id": { "type": "string", "format": "uuid" }
+  }
+}

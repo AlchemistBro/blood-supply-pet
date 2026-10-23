@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/transfer/TransportRequestFailed.v1.json",
+  "title": "TransportRequestFailed",
+  "description": "Событие transfer.events: заказ перевозки не состоялся; обязательство остаётся CONFIRMED, перевозку организует дежурный.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["obligation_id", "reason"],
+  "properties": {
+    "obligation_id": { "type": "string", "format": "uuid" },
+    "reason": { "type": "string", "enum": ["REFUSED", "OUTCOME_UNKNOWN"] },
+    "details": { "type": "string", "maxLength": 512 }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/transfer/OpenObligation.v1.json",
+  "title": "OpenObligation",
+  "description": "Команда transfer.commands: создать обязательство O07 PENDING у источника (FR048, FR049). Повтор с тем же choice_id не создаёт второе обязательство. Номер случая пациента не передаётся.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["choice_id", "request_id", "origin", "source_clinic_id", "target_clinic_id", "component_kind", "requested_qty", "urgency", "confirm_window_seconds", "spec"],
+  "properties": {
+    "choice_id": { "type": "string", "format": "uuid", "description": "Выбор врача или предложение плана: ключ идемпотентности" },
+    "request_id": { "type": "string", "format": "uuid", "description": "Заявка (matching) или план (planning)" },
+    "origin": { "type": "string", "enum": ["DOCTOR_CHOICE", "PLAN_PROPOSAL"] },
+    "source_clinic_id": { "type": "integer", "minimum": 1 },
+    "target_clinic_id": { "type": "integer", "minimum": 1 },
+    "component_kind": { "type": "string", "enum": ["RBC", "FFP", "PLT", "CRYO"] },
+    "requested_qty": { "type": "integer", "minimum": 1 },
+    "urgency": { "type": "string", "enum": ["PLANNED", "URGENT", "EMERGENCY"] },
+    "confirm_window_seconds": { "type": "integer", "minimum": 1, "description": "Срок подтверждения оператором источника" },
+    "fallback_sources": {
+      "type": "array",
+      "description": "Следующие источники для эскалации по таймеру, по порядку ранжирования",
+      "items": { "type": "integer", "minimum": 1 }
+    },
+    "spec": {
+      "type": "object",
+      "description": "Спецификация допустимой замены единицы (ADR-0011). Фенотип — квазиидентификатор: не логируется.",
+      "additionalProperties": false,
+      "required": ["rule_version"],
+      "properties": {
+        "blood_group": { "type": "string", "enum": ["O+", "O-", "A+", "A-", "B+", "B-", "AB+", "AB-"] },
+        "rh_positive": { "type": "boolean" },
+        "phenotype": { "type": "string", "maxLength": 64 },
+        "min_expires_at": { "type": "string", "format": "date-time" },
+        "rule_version": { "type": "string", "minLength": 1, "maxLength": 64 }
+      }
+    }
+  }
+}

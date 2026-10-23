@@ -1,5 +1,6 @@
-// Package authtest — тестовый поставщик идентификации: генерирует ключ RSA, отдаёт JWKS по HTTP
-// и выпускает токены с нужными ролями и клиникой. Интеграционные тесты сервисов не нуждаются в Keycloak.
+// Package authtest — тестовый поставщик идентификации: генерирует ключ RSA, отдаёт JWKS по HTTP,
+// выпускает токены с нужными ролями и клиникой и обслуживает выдачу служебных токенов по client credentials
+// (как Keycloak: /realms/<realm>/protocol/openid-connect/token). Интеграционные тесты сервисов не нуждаются в Keycloak.
 package authtest
 
 import (
@@ -7,8 +8,10 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,28 +21,44 @@ import (
 	"github.com/AlchemistBro/blood-supply-pet/libs/httpx/auth"
 )
 
+// ServiceAudience — аудитория служебного токена: в Keycloak её добавляет маппер клиента services.
+const ServiceAudience = "blood-supply-api"
+
 // IdP — тестовый поставщик.
 type IdP struct {
 	Issuer string
 	key    *rsa.PrivateKey
 	kid    string
 	server *httptest.Server
+
+	mu      sync.Mutex
+	clients map[string]*serviceClient
+	failing bool
+	hold    chan struct{}
 }
 
-// New поднимает JWKS-сервер; закрывается в t.Cleanup.
+type serviceClient struct {
+	secret string
+	roles  []auth.Role
+	ttl    time.Duration
+	issued int
+}
+
+// New поднимает JWKS-сервер и эндпоинт токенов; закрывается в t.Cleanup.
 func New(t testing.TB) *IdP {
 	t.Helper()
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatal(err)
 	}
-	idp := &IdP{key: key, kid: "test-key-1"}
+	idp := &IdP{key: key, kid: "test-key-1", clients: map[string]*serviceClient{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /jwks", func(w http.ResponseWriter, _ *http.Request) {
 		set := jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: &key.PublicKey, KeyID: idp.kid, Algorithm: string(jose.RS256), Use: "sig"}}}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(set)
 	})
+	mux.HandleFunc("POST /realms/test/protocol/openid-connect/token", idp.serveToken)
 	idp.server = httptest.NewServer(mux)
 	idp.Issuer = idp.server.URL + "/realms/test"
 	t.Cleanup(idp.server.Close)
@@ -59,6 +78,107 @@ func (i *IdP) Verifier(t testing.TB, audience string) auth.Verifier {
 	return v
 }
 
+// RegisterClient заводит конфиденциального клиента с сервисной учётной записью (как services в realm).
+func (i *IdP) RegisterClient(clientID, secret string, roles []auth.Role, ttl time.Duration) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	i.clients[clientID] = &serviceClient{secret: secret, roles: append([]auth.Role(nil), roles...), ttl: ttl}
+}
+
+// IssuedTokens — сколько служебных токенов выдано клиенту (проверка кэша).
+func (i *IdP) IssuedTokens(clientID string) int {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if c, ok := i.clients[clientID]; ok {
+		return c.issued
+	}
+	return 0
+}
+
+// FailTokenRequests включает имитацию недоступности эндпоинта токенов (503).
+func (i *IdP) FailTokenRequests(fail bool) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	i.failing = fail
+}
+
+// HoldTokenRequests имитирует зависший Keycloak: запросы токенов ждут, пока не вызвана release
+// (или пока клиент не оборвёт запрос). release идемпотентна; тест обязан её вызвать, иначе сервер
+// не закроется — удобно отложить её в t.Cleanup.
+func (i *IdP) HoldTokenRequests() (release func()) {
+	ch := make(chan struct{})
+	i.mu.Lock()
+	i.hold = ch
+	i.mu.Unlock()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			i.mu.Lock()
+			if i.hold == ch {
+				i.hold = nil
+			}
+			i.mu.Unlock()
+			close(ch)
+		})
+	}
+}
+
+func (i *IdP) serveToken(w http.ResponseWriter, r *http.Request) {
+	i.mu.Lock()
+	hold := i.hold
+	i.mu.Unlock()
+	if hold != nil {
+		select {
+		case <-hold:
+		case <-r.Context().Done():
+			return
+		}
+	}
+	if err := r.ParseForm(); err != nil {
+		tokenError(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
+	if r.PostForm.Get("grant_type") != "client_credentials" {
+		tokenError(w, http.StatusBadRequest, "unsupported_grant_type")
+		return
+	}
+	id, secret, ok := r.BasicAuth()
+	if !ok {
+		id, secret = r.PostForm.Get("client_id"), r.PostForm.Get("client_secret")
+	}
+	i.mu.Lock()
+	if i.failing {
+		i.mu.Unlock()
+		tokenError(w, http.StatusServiceUnavailable, "temporarily_unavailable")
+		return
+	}
+	c, known := i.clients[id]
+	if !known || c.secret != secret {
+		i.mu.Unlock()
+		tokenError(w, http.StatusUnauthorized, "invalid_client")
+		return
+	}
+	c.issued++
+	roles, ttl := c.roles, c.ttl
+	i.mu.Unlock()
+
+	raw, err := i.sign(TokenOptions{Username: "service-account-" + id, Roles: roles, Audience: ServiceAudience, TTL: ttl})
+	if err != nil {
+		tokenError(w, http.StatusInternalServerError, "server_error")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"access_token": raw, "token_type": "Bearer", "expires_in": int(ttl.Seconds()),
+	})
+}
+
+func tokenError(w http.ResponseWriter, status int, code string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": code})
+}
+
 // TokenOptions — что положить в токен.
 type TokenOptions struct {
 	Subject  string
@@ -73,10 +193,18 @@ type TokenOptions struct {
 // Token выпускает подписанный JWT.
 func (i *IdP) Token(t testing.TB, o TokenOptions) string {
 	t.Helper()
+	raw, err := i.sign(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+func (i *IdP) sign(o TokenOptions) (string, error) {
 	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: i.key},
 		(&jose.SignerOptions{}).WithType("JWT").WithHeader("kid", i.kid))
 	if err != nil {
-		t.Fatal(err)
+		return "", fmt.Errorf("подписант: %w", err)
 	}
 	if o.TTL == 0 {
 		o.TTL = time.Hour
@@ -107,9 +235,9 @@ func (i *IdP) Token(t testing.TB, o TokenOptions) string {
 	}
 	raw, err := jwt.Signed(signer).Claims(std).Claims(private).Serialize()
 	if err != nil {
-		t.Fatal(err)
+		return "", fmt.Errorf("подпись токена: %w", err)
 	}
-	return raw
+	return raw, nil
 }
 
 // Clinic — помощник для указателя на клинику.
