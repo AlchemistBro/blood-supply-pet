@@ -1,0 +1,19 @@
+{
+  "scenario_version": "chs-2026-10-23-v2",
+  "territory": "Демо-город, северный округ",
+  "period_start": "2026-10-23T12:00:00Z",
+  "period_end": "2026-10-26T12:00:00Z",
+  "issued_at": "2026-10-23T09:00:00Z",
+  "lines": [
+    {
+      "clinic_id": 2,
+      "component_kind": "RBC",
+      "blood_group": "O-",
+      "forecast_volume_ml": 3000
+    },
+    {
+      "component_kind": "FFP",
+      "forecast_volume_ml": 1250.5
+    }
+  ]
+}

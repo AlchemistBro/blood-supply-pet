@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/int02/EmergencyForecast.v1.json",
+  "title": "EmergencyForecast",
+  "type": "object",
+  "description": "Входящий ИНТ-02 (тело POST /int/forecast): прогноз ЧС. Белый список полей (NFR010): всё, чего нет в схеме, отвергается; ПДн пострадавших (ФИО, СНИЛС, списки пациентов) не принимаются.",
+  "additionalProperties": false,
+  "required": [
+    "scenario_version",
+    "territory",
+    "period_start",
+    "period_end",
+    "lines"
+  ],
+  "properties": {
+    "scenario_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Версия сценария; повтор не принимается"
+    },
+    "territory": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "period_start": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "period_end": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "lines": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "component_kind",
+          "forecast_volume_ml"
+        ],
+        "properties": {
+          "clinic_id": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "component_kind": {
+            "type": "string",
+            "enum": [
+              "RBC",
+              "FFP",
+              "PLT",
+              "CRYO"
+            ]
+          },
+          "blood_group": {
+            "type": "string",
+            "enum": [
+              "O+",
+              "O-",
+              "A+",
+              "A-",
+              "B+",
+              "B-",
+              "AB+",
+              "AB-"
+            ]
+          },
+          "forecast_volume_ml": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      }
+    }
+  }
+}

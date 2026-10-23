@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/logistics/RefreshDeliveryEstimates.v1.json",
+  "title": "RefreshDeliveryEstimates",
+  "type": "object",
+  "description": "Команда logistics.commands: запросить у C03 свежие оценки доставки (пустой список — по всем клиникам).",
+  "additionalProperties": false,
+  "required": [
+    "request_id",
+    "requested_at"
+  ],
+  "properties": {
+    "request_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "source_clinic_ids": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      }
+    },
+    "requested_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

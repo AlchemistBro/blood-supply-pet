@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/planning/ReplenishmentPlanBuilt.v1.json",
+  "title": "ReplenishmentPlanBuilt",
+  "type": "object",
+  "description": "Событие planning.events: план пополнения построен (O06). Версии входов — NFR009, время построения — NFR002.",
+  "additionalProperties": false,
+  "required": [
+    "replenishment_plan_id",
+    "demand_estimate_id",
+    "demand_estimate_version_no",
+    "stock_watermark",
+    "coverage_ratio",
+    "targets_count",
+    "proposals_count",
+    "elapsed_ms"
+  ],
+  "properties": {
+    "replenishment_plan_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "demand_estimate_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "demand_estimate_version_no": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Версия оценки потребности — вход плана (NFR009)"
+    },
+    "emergency_forecast_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "scenario_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "stock_watermark": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Водяной знак проекции запаса — вход плана (NFR009)"
+    },
+    "stock_synced_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "delivery_estimated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Время оценок доставки, по которым выбирались источники"
+    },
+    "coverage_ratio": {
+      "type": "number",
+      "minimum": 0
+    },
+    "targets_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "proposals_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "deficits_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "elapsed_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Время построения плана (NFR002: не больше 30 с)"
+    }
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/planning/ProtectedVolumeCalculated.v1.json",
+  "title": "ProtectedVolumeCalculated",
+  "type": "object",
+  "description": "Событие planning.events → inventory: защищённый объём источника по виду в ЕДИНИЦАХ (units), не в мл (ADR-0019: volume_units = ceil(volume_ml / typical_volume_ml вида)). Норматив + фон + обязательства (FR025, NFR013).",
+  "additionalProperties": false,
+  "required": [
+    "clinic_id",
+    "component_kind",
+    "volume_units",
+    "version",
+    "reason",
+    "calculated_at"
+  ],
+  "properties": {
+    "clinic_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "component_kind": {
+      "type": "string",
+      "enum": [
+        "RBC",
+        "FFP",
+        "PLT",
+        "CRYO"
+      ]
+    },
+    "volume_units": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "В единицах компонента (units), не в мл: ceil(объём в мл / typical_volume_ml вида), ADR-0019"
+    },
+    "volume_ml": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Исходный расчётный объём в мл, справочно"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "replenishment_plan_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "calculated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "clinic_id": 5,
+  "component_kind": "RBC",
+  "volume_units": 6,
+  "volume_ml": 1650.5,
+  "version": 12,
+  "reason": "NORM_PLUS_BACKGROUND_PLUS_OBLIGATIONS",
+  "replenishment_plan_id": "0192f3a1-7b2c-7d4e-8f90-710000000001",
+  "calculated_at": "2026-10-23T09:30:00Z"
+}

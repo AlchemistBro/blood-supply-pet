@@ -1,0 +1,14 @@
+{
+  "source_clinic_id": 5,
+  "estimates": [
+    {
+      "target_clinic_id": 2,
+      "minutes": 35
+    },
+    {
+      "target_clinic_id": 3,
+      "minutes": 52
+    }
+  ],
+  "estimated_at": "2026-10-23T09:30:00Z"
+}

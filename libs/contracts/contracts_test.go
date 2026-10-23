@@ -45,18 +45,22 @@ func TestExamplesMatchSchemasAndGoTypes(t *testing.T) {
 			}
 
 			typeName := strings.SplitN(filepath.Base(schemaPath), ".", 2)[0]
-			ctor, ok := contracts.Registry[typeName]
-			if !ok {
-				t.Fatalf("тип %s не зарегистрирован в contracts.Registry", typeName)
+			var v any
+			if ctor, ok := contracts.Registry[typeName]; ok {
+				msg := ctor()
+				if msg.MessageType() != typeName {
+					t.Fatalf("MessageType()=%s, имя схемы %s", msg.MessageType(), typeName)
+				}
+				if want := "v" + strconv.Itoa(msg.SchemaVersion()); !strings.Contains(filepath.Base(schemaPath), "."+want+".") {
+					t.Fatalf("SchemaVersion()=%d не совпадает с версией в имени схемы %s", msg.SchemaVersion(), schemaPath)
+				}
+				v = msg
+			} else if ctor, ok := contracts.Inbound[typeName]; ok {
+				v = ctor()
+			} else {
+				t.Fatalf("тип %s не зарегистрирован ни в contracts.Registry, ни в contracts.Inbound", typeName)
 			}
 			seenTypes[typeName] = true
-			v := ctor()
-			if v.MessageType() != typeName {
-				t.Fatalf("MessageType()=%s, имя схемы %s", v.MessageType(), typeName)
-			}
-			if want := "v" + strconv.Itoa(v.SchemaVersion()); !strings.Contains(filepath.Base(schemaPath), "."+want+".") {
-				t.Fatalf("SchemaVersion()=%d не совпадает с версией в имени схемы %s", v.SchemaVersion(), schemaPath)
-			}
 			dec := json.NewDecoder(bytes.NewReader(raw))
 			dec.DisallowUnknownFields()
 			if err := dec.Decode(v); err != nil {
@@ -81,6 +85,11 @@ func TestExamplesMatchSchemasAndGoTypes(t *testing.T) {
 	for name := range contracts.Registry {
 		if !seenTypes[name] {
 			t.Errorf("тип %s зарегистрирован, но схемы и примера нет", name)
+		}
+	}
+	for name := range contracts.Inbound {
+		if !seenTypes[name] {
+			t.Errorf("входящий тип %s зарегистрирован, но схемы и примера нет", name)
 		}
 	}
 }

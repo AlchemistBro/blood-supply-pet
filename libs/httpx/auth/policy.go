@@ -27,6 +27,7 @@ const (
 	OpPublishEstimate    Operation = "PUBLISH_ESTIMATE"
 	OpViewDemand         Operation = "VIEW_DEMAND"
 	OpViewPlan           Operation = "VIEW_PLAN"
+	OpBuildPlan          Operation = "BUILD_PLAN"
 	OpAdjustForecast     Operation = "ADJUST_FORECAST"
 	OpViewTasks          Operation = "VIEW_TASKS"
 	OpOpenObligation     Operation = "OPEN_OBLIGATION"
@@ -60,6 +61,7 @@ var policy = map[Operation][]Role{
 	OpPublishEstimate:    {RoleAnalyst},
 	OpViewDemand:         {RoleAnalyst, RoleDuty},
 	OpViewPlan:           {RoleOperator, RoleAnalyst, RoleDuty},
+	OpBuildPlan:          {RoleAnalyst, RoleDuty},
 	OpAdjustForecast:     {RoleOperator},
 	OpViewTasks:          {RoleOperator, RoleDuty},
 	OpOpenObligation:     {RoleService},
