@@ -8,6 +8,7 @@
   "required": ["obligation_id", "request_id", "reason", "at"],
   "properties": {
     "obligation_id": { "type": "string", "format": "uuid" },
+    "obligation_version": { "type": "integer", "minimum": 0, "description": "Версия O07 после перехода; проекции применяют событие, только если версия выше сохранённой" },
     "request_id": { "type": "string", "format": "uuid" },
     "reason": { "type": "string", "enum": ["EXPIRED_NO_FALLBACK", "TRANSPORT_REFUSED", "TRANSPORT_OUTCOME_UNKNOWN", "SOURCE_SYSTEM_UNAVAILABLE"] },
     "at": { "type": "string", "format": "date-time" }
