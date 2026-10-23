@@ -126,7 +126,9 @@
 | --- | --- |
 | `AuditRecorded` | `occurred_at`, `user_id?`, `role?`, `clinic_id?`, `module`(inventory/demand/planning/matching/transfer/web), `action`, `object_type`, `object_id`, `result`(SUCCESS/DENIED/ERROR), `details` (без ПДн, без `patient_case_no`), `correlation_id` |
 
-Действие `READ_PATIENT_CASE` пишется `web` при каждом показе номера случая (NFR016).
+Действие `READ_PATIENT_CASE` (NFR016) пишет только `matching`, в одной транзакции с выдачей номера случая
+(`GET /requests/{id}/patient-case`, ADR-0020); отказ `matching` — та же запись с `result = DENIED`. `web` пишет
+`LOGIN`, `LOGOUT`, `ACCESS_DENIED` (в том числе свой отказ в чтении номера до запроса к `matching`), ADR-0017.
 
 ## Платформа сообщений (`libs/messaging`)
 
