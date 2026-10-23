@@ -3,6 +3,7 @@ package domain_test
 import (
 	"testing"
 
+	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/logistics"
 	"github.com/AlchemistBro/blood-supply-pet/libs/refdata"
 	"github.com/AlchemistBro/blood-supply-pet/services/transfer/internal/domain"
 )
@@ -77,5 +78,17 @@ func TestAllocatableMatchesUnitStatusDictionary(t *testing.T) {
 		if s.Allocatable() != ref.IsUnitAvailable(string(s)) {
 			t.Errorf("%s: домен %v, справочник %v", s, s.Allocatable(), ref.IsUnitAvailable(string(s)))
 		}
+	}
+}
+
+// Причина CancelTransport берётся из перечисления контракта logistics, своих кодов нет.
+func TestCancelTransportReasonIsContractValue(t *testing.T) {
+	for _, r := range []domain.BreakReason{domain.BreakUnitWithdrawn, domain.BreakUnitQuarantined} {
+		if got := r.CancelTransportReason(); got != logistics.CancelUnitWithdrawn && got != logistics.CancelObligationCancelled {
+			t.Errorf("%s → %q вне перечисления CancelTransport.reason", r, got)
+		}
+	}
+	if string(domain.BreakUnitWithdrawn) != logistics.CancelUnitWithdrawn {
+		t.Errorf("UNIT_WITHDRAWN расходится с контрактом: %s", domain.BreakUnitWithdrawn)
 	}
 }

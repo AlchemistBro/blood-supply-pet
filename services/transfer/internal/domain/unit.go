@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/inventory"
+	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/logistics"
 )
 
 // UnitStatus — статус единицы компонента крови по данным inventory (АИСТ-М, C01). Коды — из контракта
@@ -78,18 +79,26 @@ type UnitCopy struct {
 	Version       int64
 }
 
-// BreakReason — почему обязательство перешло в BROKEN (obligation.status_reason).
+// BreakReason — почему обязательство перешло в BROKEN (obligation.status_reason). Коды совпадают с причинами
+// CancelTransport.reason контракта logistics: своего перечисления нет, это одно и то же решение «снять заказ».
 type BreakReason string
 
 // Причины нарушения.
 const (
-	BreakUnitWithdrawn   BreakReason = "UNIT_WITHDRAWN"
+	BreakUnitWithdrawn BreakReason = logistics.CancelUnitWithdrawn
+	// BreakUnitQuarantined станет logistics.CancelUnitQuarantined после правки контракта (пакет контрактов).
 	BreakUnitQuarantined BreakReason = "UNIT_QUARANTINED"
 )
 
-// BrokenReasonQuarantine — reason события TransferBroken при карантине закреплённой единицы.
-// Перечисление TransferBroken.reason в контракте пока знает только причины выбытия (ISSUED, DISCARDED,
-// TRANSFERRED, EXPIRED); значение QUARANTINE ждёт обратно совместимой правки контракта (пакет контрактов).
+// CancelTransportReason — CancelTransport.reason для нарушения. До появления UNIT_QUARANTINED в перечислении
+// контракта карантин отправляется как UNIT_WITHDRAWN: для перевозчика это одно и то же «единицы не будет».
+func (r BreakReason) CancelTransportReason() string {
+	return logistics.CancelUnitWithdrawn
+}
+
+// BrokenReasonQuarantine — TransferBroken.reason при карантине закреплённой единицы. Для выбытия reason —
+// причина из UnitWithdrawn (inventory.Withdraw*) или код статуса выбытия из UnitUpdated (коды совпадают).
+// Значение QUARANTINE добавляет в перечисление контракта пакет контрактов.
 const BrokenReasonQuarantine = inventory.StatusQuarantine
 
 // BreakReasonFor — нарушает ли новый статус закреплённой единицы обязательство и с какой причиной.

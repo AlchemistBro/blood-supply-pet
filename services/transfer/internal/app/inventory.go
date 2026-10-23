@@ -8,7 +8,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/logistics"
 	"github.com/AlchemistBro/blood-supply-pet/libs/messaging"
 	"github.com/AlchemistBro/blood-supply-pet/services/transfer/internal/domain"
 )
@@ -130,8 +129,7 @@ func (s *Service) breakHolding(ctx context.Context, tx pgx.Tx, unitID uuid.UUID,
 	}); err != nil {
 		return err
 	}
-	// У CancelTransport причин две; карантин — тоже «единица выбыла» с точки зрения перевозки.
-	if err := s.command(ctx, tx, o.ID, CancelTransport{ObligationID: o.ID, Reason: logistics.CancelUnitWithdrawn}); err != nil {
+	if err := s.command(ctx, tx, o.ID, CancelTransport{ObligationID: o.ID, Reason: reason.CancelTransportReason()}); err != nil {
 		return err
 	}
 	return s.audit(ctx, tx, actorSystem, ActionBroken, o, map[string]any{
