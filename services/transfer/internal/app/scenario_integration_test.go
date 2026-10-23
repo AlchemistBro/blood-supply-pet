@@ -267,6 +267,23 @@ func TestReplacementFollowsSpecFromDoctorsChoice(t *testing.T) {
 	h.assertStockConsistent(1, "RBC")
 }
 
+func TestReplacementWithSameUnitChangesNothing(t *testing.T) {
+	h := setup(t)
+	unit := h.registerUnits(1, "RBC", 1)[0]
+	o := h.open(1, "RBC", 1)
+	h.confirm(o, []uuid.UUID{unit}, false)
+	calls := h.aist.callCount
+
+	res := h.replace(o, unit, unit)
+	if !reflect.DeepEqual(res, domain.SpecMismatch{Reason: domain.MismatchSameUnit}) {
+		t.Fatalf("замена на ту же единицу: %#v", res)
+	}
+	if h.aist.callCount != calls {
+		t.Error("замена на ту же единицу не должна вызывать АИСТ-М")
+	}
+	h.expectTypes("события", h.eventTypes(o), "ObligationOpened", "TransferConfirmed")
+}
+
 func TestReplacementIsNotAllowedBeforeConfirmation(t *testing.T) {
 	h := setup(t)
 	units := h.registerUnits(1, "RBC", 2)

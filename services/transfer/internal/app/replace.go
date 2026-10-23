@@ -20,6 +20,10 @@ func (s *Service) Replace(ctx context.Context, c ReplaceUnit) (domain.Replacemen
 	if err != nil {
 		return nil, err
 	}
+	// Замена единицы на неё же — не замена: без события, без вызова АИСТ-М.
+	if c.NewUnitID == c.OldUnitID {
+		return domain.SpecMismatch{Reason: domain.MismatchSameUnit}, nil
+	}
 	if !o.Status.Replaceable() {
 		return domain.NotAllowed{Status: o.Status}, nil
 	}

@@ -82,6 +82,7 @@ type MismatchReason string
 // Причины несоответствия.
 const (
 	MismatchNotAllocated MismatchReason = "NOT_ALLOCATED"
+	MismatchSameUnit     MismatchReason = "SAME_UNIT"
 	MismatchUnknownUnit  MismatchReason = "UNKNOWN_UNIT"
 	MismatchSource       MismatchReason = "SOURCE"
 	MismatchKind         MismatchReason = "KIND"
@@ -96,6 +97,8 @@ func (r MismatchReason) Text() string {
 	switch r {
 	case MismatchNotAllocated:
 		return "заменяемая единица не закреплена за заданием"
+	case MismatchSameUnit:
+		return "новая единица совпадает с заменяемой"
 	case MismatchUnknownUnit:
 		return "единица неизвестна"
 	case MismatchSource:
