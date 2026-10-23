@@ -18,6 +18,8 @@ import (
 
 // OnUnitRegistered — единица появилась в копии запаса; может прийти сразу на карантине (тогда в наличие не входит).
 // Пустой статус — IN_STOCK (событие регистрации без статуса означает «в наличии»).
+// Известное ограничение: если новая версия регистрации переносит единицу в другую клинику или вид, наличие
+// в прежнем Остатке не пересчитывается (блокировка двух строк Остатка потребовала бы своего порядка; этап 3).
 func (s *Service) OnUnitRegistered(ctx context.Context, msg *messaging.Message, e UnitRegistered) error {
 	if e.UnitID == uuid.Nil || e.ComponentKind == "" {
 		return deliveryErr(msg, fmt.Errorf("%w: UnitRegistered без unit_id или вида", ErrInvalidEvent))
