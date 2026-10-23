@@ -179,7 +179,7 @@ func TestChangesReturnsOnlyNewerVersionsInOrder(t *testing.T) {
 	if _, err := s.Withdraw("U-1", state.ReasonIssued); err != nil {
 		t.Fatal(err)
 	}
-	got, more := s.Changes(u2.Version, 100)
+	got, more, _ := s.Changes(u2.Version, 100)
 	if more {
 		t.Fatal("лишний признак продолжения")
 	}
@@ -196,29 +196,50 @@ func TestChangesReturnsOnlyNewerVersionsInOrder(t *testing.T) {
 	if len(codes) != 2 || codes[0] != "U-3" || codes[1] != "U-1" {
 		t.Fatalf("ожидали U-3, U-1, получили %v", codes)
 	}
-	page, more := s.Changes(0, 2)
+	page, more, _ := s.Changes(0, 2)
 	if len(page) != 2 || !more {
 		t.Fatalf("лимит: %d единиц, продолжение %v", len(page), more)
 	}
-	if rest, _ := s.Changes(s.Version(), 10); len(rest) != 0 {
+	if rest, _, _ := s.Changes(s.Version(), 10); len(rest) != 0 {
 		t.Fatalf("после последней версии изменений нет, получили %d", len(rest))
+	}
+}
+
+func TestChangesReportsCurrentVersionOfSameSnapshot(t *testing.T) {
+	s, _, ref := newStore(t)
+	mustCreate(t, s, newUnit(ref, "U-1"))
+	mustCreate(t, s, newUnit(ref, "U-2"))
+	mustCreate(t, s, newUnit(ref, "U-3"))
+	if _, err := s.Withdraw("U-1", state.ReasonIssued); err != nil {
+		t.Fatal(err)
+	}
+	page, more, current := s.Changes(0, 2)
+	if !more || current != 4 || len(page) != 2 {
+		t.Fatalf("первая страница: %d единиц, продолжение %v, текущая версия %d", len(page), more, current)
+	}
+	rest, more, current := s.Changes(page[len(page)-1].Version, 10)
+	if more || current != 4 || len(rest) != 1 || rest[0].Version != current {
+		t.Fatalf("последняя страница должна дойти до текущей версии: %+v, продолжение %v, текущая %d", rest, more, current)
+	}
+	if _, _, current := s.Changes(math.MaxInt64, 10); current != 4 {
+		t.Fatalf("текущая версия при since за пределами: %d", current)
 	}
 }
 
 func TestChangesSinceBeyondCurrentVersionIsEmpty(t *testing.T) {
 	s, _, ref := newStore(t)
-	if got, more := s.Changes(math.MaxInt64, 10); len(got) != 0 || more {
+	if got, more, _ := s.Changes(math.MaxInt64, 10); len(got) != 0 || more {
 		t.Fatalf("пустое состояние, since=MaxInt64: %d единиц, продолжение %v", len(got), more)
 	}
 	mustCreate(t, s, newUnit(ref, "U-1"))
 	mustCreate(t, s, newUnit(ref, "U-2"))
 	for _, since := range []int64{s.Version(), s.Version() + 1, 1 << 40, math.MaxInt64} {
-		if got, more := s.Changes(since, 10); len(got) != 0 || more {
+		if got, more, _ := s.Changes(since, 10); len(got) != 0 || more {
 			t.Fatalf("since=%d: %d единиц, продолжение %v", since, len(got), more)
 		}
 	}
 	// Отрицательный since равен нулю: все единицы.
-	if got, _ := s.Changes(-5, 10); len(got) != 2 {
+	if got, _, _ := s.Changes(-5, 10); len(got) != 2 {
 		t.Fatalf("since=-5: %d единиц, ожидали 2", len(got))
 	}
 }

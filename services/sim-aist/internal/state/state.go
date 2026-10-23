@@ -300,29 +300,32 @@ func isWithdrawn(status string) bool {
 }
 
 // Changes возвращает единицы с версией больше since по возрастанию версии, не больше limit.
-// more = true, если за пределами лимита есть ещё изменения.
-func (s *Store) Changes(since int64, limit int) (units []Unit, more bool) {
+// more = true, если за пределами лимита есть ещё изменения. current — последняя выданная версия
+// на момент того же снимка: читается под той же блокировкой, поэтому more = false означает,
+// что страница дошла до current и новее в этом ответе ничего нет.
+func (s *Store) Changes(since int64, limit int) (units []Unit, more bool, current int64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	units = []Unit{}
+	current = s.version
 	// since >= версии — изменений нет. Ранний выход заодно исключает переполнение since+1 при MaxInt64.
-	if since >= s.version {
-		return units, false
+	if since >= current {
+		return units, false, current
 	}
 	if since < 0 {
 		since = 0
 	}
-	for v := since + 1; v <= s.version; v++ {
+	for v := since + 1; v <= current; v++ {
 		u := s.units[s.byVersion[v-1]]
 		if u.Version != v {
 			continue // единица с тех пор изменилась, её свежая версия встретится дальше
 		}
 		if len(units) == limit {
-			return units, true
+			return units, true, current
 		}
 		units = append(units, *u)
 	}
-	return units, false
+	return units, false, current
 }
 
 // Statuses возвращает найденные единицы в порядке запроса и коды, которых нет.
