@@ -22,3 +22,4 @@
 | [0015](0015-service-runtime.md) | Единый запуск сервиса `libs/runtime` и порядок миграций | принят |
 | [0016](0016-test-infrastructure.md) | Тестовая инфраструктура: Testcontainers, общие контейнеры, база на тест | принят |
 | [0017](0017-web-audit-over-http.md) | Сервис web пишет аудит по HTTP | принят |
+| [0018](0018-web-stateless-session.md) | Сервис web без базы: сессия в cookie (AES-GCM), CSRF, CSP | принят |
