@@ -62,6 +62,12 @@ kubectl kustomize deploy/k8s/overlays/ci
 
 Удалённых ресурсов в kustomization нет, сборка работает офлайн.
 
+Стандарт сервиса и ссылки на ConfigMap/Secret проверяет `tools/k8scheck` (тоже без кластера):
+
+```
+kubectl kustomize deploy/k8s/overlays/local | go run ./tools/k8scheck
+```
+
 ## Порядок развёртывания
 
 Выполняется автоматизацией `task k8s:up` (её ещё нет); вручную:
