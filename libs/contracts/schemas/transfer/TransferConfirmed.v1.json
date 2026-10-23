@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/transfer/TransferConfirmed.v1.json",
+  "title": "TransferConfirmed",
+  "description": "Событие transfer.events: оператор источника подтвердил передачу, единицы закреплены (PENDING → CONFIRMED, NFR004).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["obligation_id", "request_id", "units", "quantity", "operator"],
+  "properties": {
+    "obligation_id": { "type": "string", "format": "uuid" },
+    "request_id": { "type": "string", "format": "uuid" },
+    "units": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "format": "uuid" }
+    },
+    "quantity": { "type": "integer", "minimum": 1 },
+    "operator": { "type": "string", "minLength": 1, "maxLength": 128, "description": "Учётная запись оператора из токена, не ФИО" }
+  }
+}

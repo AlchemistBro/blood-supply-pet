@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/transfer/TransportRequested.v1.json",
+  "title": "TransportRequested",
+  "description": "Событие transfer.events: перевозчик принял заказ (CONFIRMED → TRANSPORT_REQUESTED).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["obligation_id", "shipment_ref"],
+  "properties": {
+    "obligation_id": { "type": "string", "format": "uuid" },
+    "shipment_ref": { "type": "string", "minLength": 1, "maxLength": 64 }
+  }
+}
