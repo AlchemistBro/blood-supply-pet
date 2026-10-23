@@ -79,12 +79,16 @@ func ValidKeyID(kid string) bool {
 		return false
 	}
 	for _, r := range kid {
-		ok := r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_' || r == '-'
-		if !ok {
+		if !isURLSafe(r) {
 			return false
 		}
 	}
 	return true
+}
+
+// isURLSafe — символ алфавита base64url и идентификатора ключа: [A-Za-z0-9_-].
+func isURLSafe(r rune) bool {
+	return r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_' || r == '-'
 }
 
 // Parts разбирает конверт на kid и шифротекст nonce|ciphertext|tag (без расшифровки).
@@ -103,6 +107,11 @@ func (s Sealed) Parts() (kid string, ciphertext []byte, err error) {
 	kid, payload, ok := strings.Cut(rest, ".")
 	if !ok || !ValidKeyID(kid) {
 		return "", nil, fmt.Errorf("%w: неверный идентификатор ключа", ErrMalformed)
+	}
+	// Декодер base64 пропускает \r и \n, поэтому алфавит проверяется явно: Go-тип совпадает с pattern
+	// схемы контрактов ^v1\.[A-Za-z0-9_-]{1,32}\.[A-Za-z0-9_-]+$.
+	if payload == "" || strings.IndexFunc(payload, func(r rune) bool { return !isURLSafe(r) }) >= 0 {
+		return "", nil, fmt.Errorf("%w: шифротекст не в base64url", ErrMalformed)
 	}
 	data, err := base64.RawURLEncoding.Strict().DecodeString(payload)
 	if err != nil {

@@ -96,6 +96,9 @@ func TestKeyringFromEnv(t *testing.T) {
 
 var envelopeRe = regexp.MustCompile(`^v1\.cur\.[A-Za-z0-9_-]+$`)
 
+// schemaRe — pattern поля patient_case_sealed в JSON Schema контрактов (ADR-0020, п. 10).
+var schemaRe = regexp.MustCompile(`^v1\.[A-Za-z0-9_-]{1,32}\.[A-Za-z0-9_-]+$`)
+
 func TestSealEnvelopeFormat(t *testing.T) {
 	kr := mustRing(t, "cur:"+key(1)+",old:"+key(2))
 	s, err := kr.Seal(plainCase, requestID)
@@ -173,6 +176,14 @@ func TestParseSealedRejectsMalformed(t *testing.T) {
 		"не base64url":        "v1.cur.+/+/",
 		"короткий шифротекст": "v1.cur." + base64.RawURLEncoding.EncodeToString(make([]byte, 28)),
 		"слишком длинный":     "v1.cur." + strings.Repeat("A", 2048),
+		// base64 в Go пропускает \r и \n; конверт обязан совпадать с pattern схемы контрактов.
+		"перевод строки":       "v1.cur." + payload[:10] + "\n" + payload[10:],
+		"CRLF в конце":         "v1.cur." + payload + "\r\n",
+		"возврат каретки":      "v1.cur." + payload[:5] + "\r" + payload[5:],
+		"пробел":               "v1.cur." + payload[:5] + " " + payload[5:],
+		"дополнение =":         "v1.cur." + payload + "=",
+		"кириллица":            "v1.cur." + payload + "ё",
+		"перевод строки в kid": "v1.c\nur." + payload,
 	}
 	for name, s := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -318,7 +329,7 @@ func FuzzParseSealed(f *testing.F) {
 	if err != nil {
 		f.Fatal(err)
 	}
-	for _, seed := range []string{"", "v1", "v1.", "v1..", "v1.cur.", "v1.cur.AAAA", string(good), string(good) + ".", "v2" + string(good)[2:], plainCase, "v1.\xff.\x00"} {
+	for _, seed := range []string{"", "v1", "v1.", "v1..", "v1.cur.", "v1.cur.AAAA", string(good), string(good) + ".", "v2" + string(good)[2:], plainCase, "v1.\xff.\x00", string(good) + "\n", "v1.cur.\r\n" + string(good)[7:]} {
 		f.Add(seed)
 	}
 	f.Fuzz(func(t *testing.T, in string) {
@@ -333,6 +344,9 @@ func FuzzParseSealed(f *testing.F) {
 		}
 		if s.KeyID() == "" {
 			t.Fatalf("принятый конверт без kid")
+		}
+		if !schemaRe.MatchString(string(s)) {
+			t.Fatalf("принятый конверт не совпадает с pattern схемы: %q", string(s))
 		}
 		raw, err := json.Marshal(s)
 		if err != nil {
