@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -52,10 +54,44 @@ type StatusPage struct {
 }
 
 // AistClient — порт АИСТ-М (C01). Реализация ходит по HTTP с таймаутом и предохранителем.
+// Ошибки вызова АИСТ-М возвращаются как *AistFailure: только вид отказа и код ответа, без адреса запроса.
 type AistClient interface {
 	Changes(ctx context.Context, since int64, limit int) (ChangesPage, error)
 	// Statuses спрашивает статусы по кодам АИСТ-М; длинный список делится на пачки по ограничению источника.
 	Statuses(ctx context.Context, codes []string) (StatusPage, error)
+}
+
+// Виды отказа АИСТ-М.
+const (
+	AistTimeout     = "timeout"
+	AistUnavailable = "unavailable"
+	AistCircuitOpen = "circuit_open"
+	AistHTTPStatus  = "status"
+	AistBadResponse = "bad_response"
+)
+
+// AistFailure — отказ АИСТ-М. Текст ошибки не содержит адреса запроса: в адресе точечного статуса
+// стоят исходные коды единиц, которые не должны попадать в логи и sync_run (ADR-0010).
+type AistFailure struct {
+	Kind       string
+	Operation  string
+	HTTPStatus int
+}
+
+func (e *AistFailure) Error() string {
+	if e.HTTPStatus != 0 {
+		return fmt.Sprintf("АИСТ-М: %s, отказ %s, ответ %d", e.Operation, e.Kind, e.HTTPStatus)
+	}
+	return fmt.Sprintf("АИСТ-М: %s, отказ %s", e.Operation, e.Kind)
+}
+
+// FailureKind — вид отказа для логов и метрик; для ошибок не из АИСТ-М — "internal".
+func FailureKind(err error) string {
+	var f *AistFailure
+	if errors.As(err, &f) {
+		return f.Kind
+	}
+	return "internal"
 }
 
 // SyncRun — сеанс обмена с АИСТ-М.

@@ -42,6 +42,12 @@ type env struct {
 
 func setup(t *testing.T, pageLimit int) env {
 	t.Helper()
+	return setupWith(t, app.Config{PageLimit: pageLimit}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+}
+
+// setupWith собирает сервис с заданной конфигурацией и логгером (например, буфером для проверки логов).
+func setupWith(t *testing.T, cfg app.Config, log *slog.Logger) env {
+	t.Helper()
 	ctx := context.Background()
 	pool, err := bspgx.Connect(ctx, testinfra.Postgres(t))
 	if err != nil {
@@ -59,10 +65,8 @@ func setup(t *testing.T, pageLimit int) env {
 	aist := fakeaist.New(t, t0)
 	journal := messaging.NewJournal("inventory", auditc.ModuleInventory, clk)
 	svc := app.New(app.Deps{
-		Pool: pool, Store: postgres.New(pool), Aist: aistclient.New(aist.URL, aistclient.Options{StatusTimeout: 3 * time.Second}),
-		Publisher: events.New(journal), Journal: journal, Ref: ref, Clock: clk,
-		Log:    slog.New(slog.NewTextHandler(io.Discard, nil)),
-		Config: app.Config{PageLimit: pageLimit, StatusTimeout: 3 * time.Second},
+		Pool: pool, Store: postgres.New(pool), Aist: aistclient.New(aist.URL, aistclient.Options{StatusTimeout: 2 * time.Second}),
+		Publisher: events.New(journal), Journal: journal, Ref: ref, Clock: clk, Log: log, Config: cfg,
 	})
 	return env{svc: svc, pool: pool, aist: aist, clock: clk}
 }
@@ -408,14 +412,35 @@ func TestPagesAdvanceCursor(t *testing.T) {
 	}
 }
 
-// Некорректная запись источника отбрасывается и не стопорит опрос остальных.
-func TestMalformedSourceRecordIsSkipped(t *testing.T) {
+// Некорректная запись источника отбрасывается и не стопорит опрос остальных, но сеанс — PARTIAL:
+// число отброшенных записано в sync_run, водяной знак не двигается.
+func TestMalformedSourceRecordIsSkippedAndRunIsPartial(t *testing.T) {
 	e := setup(t, 500)
 	e.aist.Add(fakeaist.Unit{AistUnitCode: "U-BAD", ClinicCode: "C999"})
 	e.aist.Add(fakeaist.Unit{AistUnitCode: "U-1"})
 	res := e.sync(t)
-	if res.Applied != 1 || res.Rejected != 1 || res.To != 2 {
+	if res.Applied != 1 || res.Rejected != 1 || res.To != 2 || res.Result != app.SyncPartial {
 		t.Fatalf("опрос с некорректной записью: %+v", res)
+	}
+	var note *string
+	var result string
+	if err := e.pool.QueryRow(context.Background(), `SELECT sync_result, error_text FROM sync_run WHERE sync_run_id = $1`, res.RunID).
+		Scan(&result, &note); err != nil {
+		t.Fatal(err)
+	}
+	if result != app.SyncPartial || note == nil || !strings.Contains(*note, "отброшено записей источника: 1") {
+		t.Fatalf("sync_run: %s %v", result, note)
+	}
+	if strings.Contains(*note, "U-BAD") {
+		t.Fatalf("код единицы АИСТ-М в sync_run: %s", *note)
+	}
+	u := unitByCode(t, e.pool, "U-1")
+	rep, err := e.svc.UnitStatuses(context.Background(), []uuid.UUID{u.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Watermark != nil {
+		t.Fatalf("PARTIAL сдвинул водяной знак: %v", rep.Watermark)
 	}
 }
 

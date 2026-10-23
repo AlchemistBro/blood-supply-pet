@@ -42,21 +42,43 @@ type SyncResult struct {
 	Result   string
 }
 
-// RunSync — фоновый воркер: опрос АИСТ-М каждые PollInterval до отмены контекста.
-// Ошибка сеанса не останавливает воркер: она записана в sync_run, следующий сеанс повторит.
+// RunSync — фоновый воркер опроса АИСТ-М до отмены контекста. Расписание — таймер процесса (time.Timer):
+// libs/clock даёт только «который час» для бизнес-времени, а не планировщик; тесты вызывают SyncOnce напрямую.
+// Ошибка сеанса не останавливает воркер: она записана в sync_run. Пока АИСТ-М недоступна, пауза между
+// сеансами удваивается до MaxPollBackoff, чтобы не плодить FAILED каждые PollInterval; после успеха — снова PollInterval.
 func (s *Service) RunSync(ctx context.Context) error {
-	ticker := time.NewTicker(s.cfg.PollInterval)
-	defer ticker.Stop()
+	delay := s.cfg.PollInterval
+	timer := time.NewTimer(0)
+	defer timer.Stop()
 	for {
-		if _, err := s.SyncOnce(ctx); err != nil && ctx.Err() == nil {
-			s.log.WarnContext(ctx, "опрос АИСТ-М не удался", "err", err)
-		}
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-ticker.C:
+		case <-timer.C:
 		}
+		_, err := s.SyncOnce(ctx)
+		if err != nil && ctx.Err() == nil {
+			s.log.WarnContext(ctx, "опрос АИСТ-М не удался", "failure", FailureKind(err), "err", err)
+		}
+		delay = NextPollDelay(delay, s.cfg.PollInterval, s.cfg.MaxPollBackoff, err != nil)
+		timer.Reset(delay)
 	}
+}
+
+// NextPollDelay — пауза до следующего сеанса: после отказа удвоенная предыдущая (не больше max),
+// после успеха — обычный интервал.
+func NextPollDelay(prev, interval, maxDelay time.Duration, failed bool) time.Duration {
+	if !failed {
+		return interval
+	}
+	next := prev * 2
+	if next < interval {
+		next = interval
+	}
+	if next > maxDelay {
+		next = maxDelay
+	}
+	return next
 }
 
 // SyncOnce — один сеанс CHANGES: страницы изменений от курсора, каждая страница — одна транзакция
@@ -96,6 +118,11 @@ func (s *Service) SyncOnce(ctx context.Context) (SyncResult, error) {
 		if p.CurrentVersion < since {
 			// АИСТ-М (имитатор без базы) перезапущена: версии снова с 1. Опрос с 0 безопасен —
 			// записи, которые уже есть в копии с большей версией, не перезапишут её.
+			// Ограничение: перезапуск замечается, только пока источник не успел набрать версий больше
+			// нашего курсора. Если до опроса он сделал больше изменений, чем было до перезапуска, курсор
+			// выглядит правдоподобно, ранние версии нового источника пропускаются, а единицы со «старыми»
+			// версиями (меньше сохранённых) не обновятся до суточной сверки (этап 3, DAILY_SNAPSHOT).
+			// Настоящая АИСТ-М версий не сбрасывает; это защита демо-стенда.
 			msg := fmt.Sprintf("АИСТ-М потеряла состояние: current_version %d меньше курсора %d, пересинхронизация с 0", p.CurrentVersion, since)
 			s.log.WarnContext(ctx, msg, "sync_run_id", runID)
 			note = &msg
@@ -124,6 +151,18 @@ func (s *Service) SyncOnce(ctx context.Context) (SyncResult, error) {
 	if !complete {
 		// Не догнали источник за сеанс: копия ещё отстаёт, водяной знак не двигаем.
 		res.Result = SyncPartial
+	}
+	if res.Rejected > 0 {
+		// Часть записей источника не принята (неизвестная клиника, вид, группа, статус): копия неполна,
+		// сеанс PARTIAL и водяной знак не двигается. Курсор при этом идёт дальше, иначе одна плохая
+		// запись остановила бы опрос всех остальных; расхождение исправит суточная сверка.
+		res.Result = SyncPartial
+		msg := fmt.Sprintf("отброшено записей источника: %d", res.Rejected)
+		if note != nil {
+			msg = *note + "; " + msg
+		}
+		note = &msg
+		s.metrics.rejected.Add(ctx, int64(res.Rejected))
 	}
 	if err := s.store.FinishSyncRun(ctx, runID, s.clock.Now(), res.Result, note); err != nil {
 		return res, err

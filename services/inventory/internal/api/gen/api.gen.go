@@ -367,7 +367,8 @@ type UnitStatusReport struct {
 	// NotFound Единицы, которых нет ни в копии, ни в АИСТ-М.
 	NotFound []openapi_types.UUID `json:"not_found"`
 
-	// Source aist — ответ АИСТ-М в этом запросе; copy — АИСТ-М недоступна, статус из копии inventory.
+	// Source aist — ответ АИСТ-М в этом запросе (или ни одной единицы нет в копии и спрашивать было не о чем);
+	// copy — АИСТ-М не ответила (ошибка, таймаут, предохранитель), статус из копии inventory.
 	Source UnitStatusReportSource `json:"source"`
 	Units  []UnitStatus           `json:"units"`
 
@@ -375,7 +376,8 @@ type UnitStatusReport struct {
 	Watermark *time.Time `json:"watermark,omitempty"`
 }
 
-// UnitStatusReportSource aist — ответ АИСТ-М в этом запросе; copy — АИСТ-М недоступна, статус из копии inventory.
+// UnitStatusReportSource aist — ответ АИСТ-М в этом запросе (или ни одной единицы нет в копии и спрашивать было не о чем);
+// copy — АИСТ-М не ответила (ошибка, таймаут, предохранитель), статус из копии inventory.
 type UnitStatusReportSource string
 
 // ClinicID defines model for ClinicID.

@@ -18,8 +18,9 @@ type Config struct {
 	PollInterval time.Duration `env:"BS_AIST_POLL_INTERVAL" envDefault:"5s"`
 	// PageLimit — размер страницы изменений (АИСТ-М принимает от 1 до 5000).
 	PageLimit int `env:"BS_AIST_PAGE_LIMIT" envDefault:"500"`
-	// StatusTimeout — таймаут точечного статуса (ADR-0004: 3 с).
-	StatusTimeout time.Duration `env:"BS_AIST_STATUS_TIMEOUT" envDefault:"3s"`
+	// StatusTimeout — предел вызова АИСТ-М в точечном статусе; меньше 3 с бюджета transfer → inventory
+	// (ADR-0004): остаток нужен на ответ из копии.
+	StatusTimeout time.Duration `env:"BS_AIST_STATUS_TIMEOUT" envDefault:"2s"`
 	// StaleAfter — порог актуальности копии запаса (NFR015): параметр, согласуемый с заказчиком; здесь демо-значение.
 	StaleAfter time.Duration `env:"BS_STOCK_STALE_AFTER" envDefault:"10m"`
 }
