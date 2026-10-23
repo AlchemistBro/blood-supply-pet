@@ -15,5 +15,5 @@ resources:
   - platform
   # Сервисы приложения: services/<svc>/ — Deployment, Service, HPA, PDB.
   - services
-  # Вход: ingress, NetworkPolicy по сегментам.
-  # - ingress
+  # Вход: Ingress (ingress-nginx); NetworkPolicy по сегментам.
+  - ingress

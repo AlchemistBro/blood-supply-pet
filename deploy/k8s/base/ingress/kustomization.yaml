@@ -1,0 +1,7 @@
+# Вход (ingress-nginx, класс nginx). Хост localhost; prod-example подменяет его своим доменом.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ingress-app.yaml
+  - ingress-edge.yaml
