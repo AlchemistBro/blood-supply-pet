@@ -3,6 +3,7 @@
 #
 # Хеш-суффикс отключён: на секреты ссылаются ресурсы CloudNativePG (Cluster.managed.roles,
 # barmanObjectStore), а kustomize не умеет переписывать имена в чужих CRD.
+# Метка cnpg.io/reload: оператор применяет смену пароля роли без перезапуска кластера.
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
 
@@ -12,3 +13,73 @@ generatorOptions:
     blood-supply.io/demo: "true"
   annotations:
     blood-supply.io/note: "демо-значения, не для реального развёртывания"
+
+secretGenerator:
+  # ---------------------------------------------------------------- bs-data: роли PostgreSQL
+  - name: pg-role-inventory
+    namespace: bs-data
+    type: kubernetes.io/basic-auth
+    literals: [username=inventory, password=inventory]
+    options:
+      labels: { cnpg.io/reload: "true" }
+  - name: pg-role-demand
+    namespace: bs-data
+    type: kubernetes.io/basic-auth
+    literals: [username=demand, password=demand]
+    options:
+      labels: { cnpg.io/reload: "true" }
+  - name: pg-role-planning
+    namespace: bs-data
+    type: kubernetes.io/basic-auth
+    literals: [username=planning, password=planning]
+    options:
+      labels: { cnpg.io/reload: "true" }
+  - name: pg-role-matching
+    namespace: bs-data
+    type: kubernetes.io/basic-auth
+    literals: [username=matching, password=matching]
+    options:
+      labels: { cnpg.io/reload: "true" }
+  - name: pg-role-transfer
+    namespace: bs-data
+    type: kubernetes.io/basic-auth
+    literals: [username=transfer, password=transfer]
+    options:
+      labels: { cnpg.io/reload: "true" }
+  - name: pg-role-logistics
+    namespace: bs-data
+    type: kubernetes.io/basic-auth
+    literals: [username=logistics, password=logistics]
+    options:
+      labels: { cnpg.io/reload: "true" }
+  - name: pg-role-notification
+    namespace: bs-data
+    type: kubernetes.io/basic-auth
+    literals: [username=notification, password=notification]
+    options:
+      labels: { cnpg.io/reload: "true" }
+  - name: pg-role-audit
+    namespace: bs-data
+    type: kubernetes.io/basic-auth
+    literals: [username=audit, password=audit]
+    options:
+      labels: { cnpg.io/reload: "true" }
+  - name: pg-role-keycloak
+    namespace: bs-data
+    type: kubernetes.io/basic-auth
+    literals: [username=keycloak, password=keycloak]
+    options:
+      labels: { cnpg.io/reload: "true" }
+
+  # ---------------------------------------------------------------- bs-data: MinIO
+  - name: minio-root
+    namespace: bs-data
+    literals:
+      - MINIO_ROOT_USER=minio-admin
+      - MINIO_ROOT_PASSWORD=minio-demo-password
+  # Учётная запись CloudNativePG: доступ только к бакету pg-backups (создаёт Job minio-setup).
+  - name: pg-backup-s3
+    namespace: bs-data
+    literals:
+      - ACCESS_KEY_ID=pg-backup
+      - ACCESS_SECRET_KEY=pg-backup-demo-password
