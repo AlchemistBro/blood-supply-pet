@@ -20,5 +20,10 @@ func init() {
 		func() Payload { return &transfer.TransportRequested{} },
 		func() Payload { return &transfer.TransportRequestFailed{} },
 		func() Payload { return &transfer.EscalationRaised{} },
+		// этап 7: перевозка, ручная перевозка, закрытие эскалации
+		func() Payload { return &transfer.TransferDispatched{} },
+		func() Payload { return &transfer.TransferDelivered{} },
+		func() Payload { return &transfer.ManualTransportAssigned{} },
+		func() Payload { return &transfer.EscalationClosed{} },
 	)
 }

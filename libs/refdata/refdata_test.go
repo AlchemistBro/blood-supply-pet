@@ -26,8 +26,8 @@ func TestLoadIsConsistent(t *testing.T) {
 	}
 }
 
-// Для закрепления доступна только единица в наличии: карантин, выдача, списание и передача её исключают
-// (ПП РФ № 641, п. 62 — единица на карантине не выдаётся).
+// Для закрепления доступна только единица в наличии (решение проекта, ADR-0027); статус «на карантине»
+// есть в базе по ПП РФ № 641, п. 62 а.
 func TestUnitStatusesAvailability(t *testing.T) {
 	s := refdata.MustLoad()
 	want := map[string]bool{"IN_STOCK": true, "QUARANTINE": false, "ISSUED": false, "DISCARDED": false, "TRANSFERRED": false}

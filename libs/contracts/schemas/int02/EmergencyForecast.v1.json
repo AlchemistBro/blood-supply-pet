@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/int02/EmergencyForecast.v1.json",
+  "title": "EmergencyForecast",
+  "type": "object",
+  "description": "Входящий ИНТ-02 (тело POST /int/forecast): агрегированный прогноз ЧС. Белый список полей (NFR010): схема описывает только то, что planning хранит; ПДн пострадавших (ФИО, СНИЛС, списки пациентов) не принимаются — адаптер отбрасывает их до проверки.",
+  "additionalProperties": false,
+  "required": [
+    "scenario_version",
+    "territory",
+    "period_start",
+    "period_end",
+    "lines"
+  ],
+  "properties": {
+    "scenario_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Версия сценария; повтор не принимается"
+    },
+    "scenario_kind": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "scenario_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "demo": {
+      "type": "boolean",
+      "description": "Прогноз синтетический (ADR-0010)"
+    },
+    "territory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "districts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "district_code",
+              "weight"
+            ],
+            "properties": {
+              "district_code": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 32
+              },
+              "weight": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "period_start": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "period_end": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "lines": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "component_kind",
+          "volume_ml"
+        ],
+        "properties": {
+          "clinic_code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          },
+          "component_kind": {
+            "type": "string",
+            "enum": [
+              "RBC",
+              "FFP",
+              "PLT",
+              "CRYO"
+            ]
+          },
+          "blood_group": {
+            "type": "string",
+            "enum": [
+              "O+",
+              "O-",
+              "A+",
+              "A-",
+              "B+",
+              "B-",
+              "AB+",
+              "AB-"
+            ]
+          },
+          "volume_ml": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "share": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      }
+    }
+  }
+}

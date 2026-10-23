@@ -1,0 +1,9 @@
+{
+  "emergency_forecast_id": "0192f3a1-7b2c-7d4e-8f90-700000000001",
+  "scenario_version": "chs-2026-10-23-v2",
+  "territory": "Демо-город, северный округ",
+  "period_start": "2026-10-23T12:00:00Z",
+  "period_end": "2026-10-26T12:00:00Z",
+  "is_rough_estimate": true,
+  "lines_count": 8
+}

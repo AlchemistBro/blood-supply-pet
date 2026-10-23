@@ -1,0 +1,10 @@
+{
+  "clinic_id": 1,
+  "component_kind": "RBC",
+  "blood_group": "A+",
+  "unit_count": 12,
+  "volume_ml": 3480,
+  "nearest_expiry": "2026-11-02T08:00:00Z",
+  "watermark": 1042,
+  "synced_at": "2026-10-23T09:30:00Z"
+}

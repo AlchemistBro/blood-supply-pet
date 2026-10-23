@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://blood-supply.dev/schemas/logistics/TransportDelivered.v1.json",
   "title": "TransportDelivered",
-  "description": "Ответ logistics.replies: перевозчик доставил груз. Температура при отправке и при приёме необязательна (ПП РФ № 641: регистрация температуры при перевозке).",
+  "description": "Ответ logistics.replies: перевозчик доставил груз. Температура при отправке и по прибытии (ПП РФ № 641, п. 69 е: обязательна при перевозке дольше 30 минут) в контракте необязательна: пропуск показывается как нарушение данных (ADR-0022). Этап 7 добавляет длительность (п. 69 в), целостность контейнера (п. 69 г), признак выхода температуры за режим и идентификатор работника (п. 73) — все необязательные.",
   "type": "object",
   "additionalProperties": false,
   "required": ["obligation_id", "delivered_at"],
@@ -10,6 +10,11 @@
     "obligation_id": { "type": "string", "format": "uuid" },
     "delivered_at": { "type": "string", "format": "date-time" },
     "temperature_at_dispatch_c": { "type": "number", "minimum": -80, "maximum": 60 },
-    "temperature_at_arrival_c": { "type": "number", "minimum": -80, "maximum": 60 }
+    "temperature_at_arrival_c": { "type": "number", "minimum": -80, "maximum": 60 },
+    "departed_at": { "type": "string", "format": "date-time", "description": "Время выдачи груза службе перевозки (ПП РФ № 641, п. 69 в)" },
+    "duration_min": { "type": "integer", "minimum": 0, "description": "Длительность от выдачи до места назначения, минут (п. 69 в)" },
+    "container_intact": { "type": "boolean", "description": "Контейнер цел при приёме (п. 69 г)" },
+    "temp_excursion": { "type": "boolean", "description": "Температура выходила за режим перевозки (п. 69 е, приложение 3); при нарушении компонент к использованию не допускается (п. 98)" },
+    "courier_ref": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[A-Za-z0-9._:-]{1,64}$", "description": "Служебный идентификатор уполномоченного работника службы перевозки, без ФИО (п. 73; ADR-0022)" }
   }
 }
