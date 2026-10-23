@@ -199,22 +199,40 @@ func (s *Service) LastSync(ctx context.Context) (SyncOverview, error) {
 // SyncKinds — виды сеансов обмена (sync_run.sync_kind).
 var SyncKinds = []string{SyncKindChanges, "DAILY_SNAPSHOT", "ON_DEMAND", "UNIT_CHECK"}
 
+// SyncRunPage — страница журнала сеансов; NextBefore — курсор следующей страницы, nil — страница последняя.
+type SyncRunPage struct {
+	Runs       []SyncRunView
+	NextBefore *uuid.UUID
+}
+
 // SyncRuns — журнал сеансов обмена, новые первыми; курсор — before (sync_run_id последней строки страницы).
-func (s *Service) SyncRuns(ctx context.Context, f SyncRunFilter) ([]SyncRunView, error) {
+func (s *Service) SyncRuns(ctx context.Context, f SyncRunFilter) (SyncRunPage, error) {
 	if f.Kind != "" {
 		known := false
 		for _, k := range SyncKinds {
 			known = known || k == f.Kind
 		}
 		if !known {
-			return nil, fmt.Errorf("%w: неизвестный вид сеанса %q", ErrInvalid, f.Kind)
+			return SyncRunPage{}, fmt.Errorf("%w: неизвестный вид сеанса %q", ErrInvalid, f.Kind)
 		}
 	}
 	switch {
 	case f.Limit == 0:
 		f.Limit = defaultRunLimit
 	case f.Limit < 0 || f.Limit > maxRunLimit:
-		return nil, fmt.Errorf("%w: limit от 1 до %d", ErrInvalid, maxRunLimit)
+		return SyncRunPage{}, fmt.Errorf("%w: limit от 1 до %d", ErrInvalid, maxRunLimit)
 	}
-	return s.store.ListSyncRuns(ctx, f)
+	want := f.Limit
+	f.Limit++
+	runs, err := s.store.ListSyncRuns(ctx, f)
+	if err != nil {
+		return SyncRunPage{}, err
+	}
+	page := SyncRunPage{Runs: runs}
+	if len(runs) > want {
+		page.Runs = runs[:want]
+		next := page.Runs[want-1].ID
+		page.NextBefore = &next
+	}
+	return page, nil
 }

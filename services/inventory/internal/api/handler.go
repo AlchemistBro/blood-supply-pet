@@ -21,6 +21,19 @@ const (
 	routeProtectedVolume = "POST /dev/protected-volume"
 )
 
+// operations — операция матрицы прав для каждого маршрута; совпадает с x-bs-operation в openapi.yaml
+// (проверяет TestEveryOperationHasPolicy).
+var operations = map[string]auth.Operation{
+	routeUnitStatus:           auth.OpInternalUnitStatus,
+	routeProtectedVolume:      auth.OpDevPanel,
+	"GET /clinics/{id}/stock": auth.OpViewStock,
+	"GET /clinics/{id}/units": auth.OpViewStock,
+	"GET /units/{id}":         auth.OpViewStock,
+	"GET /units/{id}/history": auth.OpViewStock,
+	"GET /sync/last":          auth.OpViewStock,
+	"GET /sync/runs":          auth.OpViewStock,
+}
+
 // Options — что включено.
 type Options struct {
 	// DevEnabled — демо-маршруты /dev/* (только BS_ENV=local); иначе они отвечают 404.
@@ -29,12 +42,13 @@ type Options struct {
 
 // Handler реализует gen.StrictServerInterface.
 type Handler struct {
-	svc *app.Service
+	svc      *app.Service
+	onDenied auth.Denied
 }
 
 // Mount регистрирует маршруты на mux с проверкой прав по операции.
 func Mount(mux *http.ServeMux, svc *app.Service, onDenied auth.Denied, o Options) {
-	h := &Handler{svc: svc}
+	h := &Handler{svc: svc, onDenied: onDenied}
 	strict := gen.NewStrictHandlerWithOptions(h, nil, gen.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
 			httpx.WriteProblem(w, r, http.StatusBadRequest, "Неверный запрос", err.Error())
@@ -54,25 +68,31 @@ func Mount(mux *http.ServeMux, svc *app.Service, onDenied auth.Denied, o Options
 
 // authorize выбирает операцию матрицы прав по шаблону маршрута. Демо-маршрут вне BS_ENV=local
 // отвечает 404 до проверки прав: в рабочем окружении его как будто нет.
+// Запрос и операция кладутся в контекст: проверка клиники в обработчике пишет отказ в аудит тем же
+// auth.Denied, что и матрица прав, а ему нужен *http.Request.
 func authorize(onDenied auth.Denied, o Options) gen.MiddlewareFunc {
-	ops := map[string]auth.Operation{
-		routeUnitStatus:      auth.OpInternalUnitStatus,
-		routeProtectedVolume: auth.OpDevPanel,
-	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Pattern == routeProtectedVolume && !o.DevEnabled {
 				httpx.WriteProblem(w, r, http.StatusNotFound, "Не найдено", "Демо-маршрут доступен только на локальном стенде.")
 				return
 			}
-			op, ok := ops[r.Pattern]
+			op, ok := operations[r.Pattern]
 			if !ok {
 				httpx.WriteProblem(w, r, http.StatusForbidden, "Недостаточно прав", "Маршрут не описан в матрице прав.")
 				return
 			}
+			r = r.WithContext(context.WithValue(r.Context(), requestKey{}, requestInfo{r: r, op: op}))
 			auth.Require(op, onDenied)(next).ServeHTTP(w, r)
 		})
 	}
+}
+
+type requestKey struct{}
+
+type requestInfo struct {
+	r  *http.Request
+	op auth.Operation
 }
 
 // GetUnitStatuses — GET /internal/units/status (ADR-0004).

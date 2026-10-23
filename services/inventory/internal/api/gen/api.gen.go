@@ -18,27 +18,126 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for SyncRunSyncKind.
+const (
+	SyncRunSyncKindCHANGES       SyncRunSyncKind = "CHANGES"
+	SyncRunSyncKindDAILYSNAPSHOT SyncRunSyncKind = "DAILY_SNAPSHOT"
+	SyncRunSyncKindONDEMAND      SyncRunSyncKind = "ON_DEMAND"
+	SyncRunSyncKindUNITCHECK     SyncRunSyncKind = "UNIT_CHECK"
+)
+
+// Valid indicates whether the value is a known member of the SyncRunSyncKind enum.
+func (e SyncRunSyncKind) Valid() bool {
+	switch e {
+	case SyncRunSyncKindCHANGES:
+		return true
+	case SyncRunSyncKindDAILYSNAPSHOT:
+		return true
+	case SyncRunSyncKindONDEMAND:
+		return true
+	case SyncRunSyncKindUNITCHECK:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SyncRunSyncResult.
+const (
+	FAILED  SyncRunSyncResult = "FAILED"
+	PARTIAL SyncRunSyncResult = "PARTIAL"
+	SUCCESS SyncRunSyncResult = "SUCCESS"
+)
+
+// Valid indicates whether the value is a known member of the SyncRunSyncResult enum.
+func (e SyncRunSyncResult) Valid() bool {
+	switch e {
+	case FAILED:
+		return true
+	case PARTIAL:
+		return true
+	case SUCCESS:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UnitCardStatus.
+const (
+	UnitCardStatusDISCARDED   UnitCardStatus = "DISCARDED"
+	UnitCardStatusINSTOCK     UnitCardStatus = "IN_STOCK"
+	UnitCardStatusISSUED      UnitCardStatus = "ISSUED"
+	UnitCardStatusQUARANTINE  UnitCardStatus = "QUARANTINE"
+	UnitCardStatusTRANSFERRED UnitCardStatus = "TRANSFERRED"
+)
+
+// Valid indicates whether the value is a known member of the UnitCardStatus enum.
+func (e UnitCardStatus) Valid() bool {
+	switch e {
+	case UnitCardStatusDISCARDED:
+		return true
+	case UnitCardStatusINSTOCK:
+		return true
+	case UnitCardStatusISSUED:
+		return true
+	case UnitCardStatusQUARANTINE:
+		return true
+	case UnitCardStatusTRANSFERRED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for UnitStatusStatus.
 const (
-	DISCARDED   UnitStatusStatus = "DISCARDED"
-	INSTOCK     UnitStatusStatus = "IN_STOCK"
-	ISSUED      UnitStatusStatus = "ISSUED"
-	QUARANTINE  UnitStatusStatus = "QUARANTINE"
-	TRANSFERRED UnitStatusStatus = "TRANSFERRED"
+	UnitStatusStatusDISCARDED   UnitStatusStatus = "DISCARDED"
+	UnitStatusStatusINSTOCK     UnitStatusStatus = "IN_STOCK"
+	UnitStatusStatusISSUED      UnitStatusStatus = "ISSUED"
+	UnitStatusStatusQUARANTINE  UnitStatusStatus = "QUARANTINE"
+	UnitStatusStatusTRANSFERRED UnitStatusStatus = "TRANSFERRED"
 )
 
 // Valid indicates whether the value is a known member of the UnitStatusStatus enum.
 func (e UnitStatusStatus) Valid() bool {
 	switch e {
-	case DISCARDED:
+	case UnitStatusStatusDISCARDED:
 		return true
-	case INSTOCK:
+	case UnitStatusStatusINSTOCK:
 		return true
-	case ISSUED:
+	case UnitStatusStatusISSUED:
 		return true
-	case QUARANTINE:
+	case UnitStatusStatusQUARANTINE:
 		return true
-	case TRANSFERRED:
+	case UnitStatusStatusTRANSFERRED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for UnitStatusChangeStatus.
+const (
+	UnitStatusChangeStatusDISCARDED   UnitStatusChangeStatus = "DISCARDED"
+	UnitStatusChangeStatusINSTOCK     UnitStatusChangeStatus = "IN_STOCK"
+	UnitStatusChangeStatusISSUED      UnitStatusChangeStatus = "ISSUED"
+	UnitStatusChangeStatusQUARANTINE  UnitStatusChangeStatus = "QUARANTINE"
+	UnitStatusChangeStatusTRANSFERRED UnitStatusChangeStatus = "TRANSFERRED"
+)
+
+// Valid indicates whether the value is a known member of the UnitStatusChangeStatus enum.
+func (e UnitStatusChangeStatus) Valid() bool {
+	switch e {
+	case UnitStatusChangeStatusDISCARDED:
+		return true
+	case UnitStatusChangeStatusINSTOCK:
+		return true
+	case UnitStatusChangeStatusISSUED:
+		return true
+	case UnitStatusChangeStatusQUARANTINE:
+		return true
+	case UnitStatusChangeStatusTRANSFERRED:
 		return true
 	default:
 		return false
@@ -61,6 +160,44 @@ func (e UnitStatusReportSource) Valid() bool {
 	default:
 		return false
 	}
+}
+
+// Defines values for ListSyncRunsParamsKind.
+const (
+	ListSyncRunsParamsKindCHANGES       ListSyncRunsParamsKind = "CHANGES"
+	ListSyncRunsParamsKindDAILYSNAPSHOT ListSyncRunsParamsKind = "DAILY_SNAPSHOT"
+	ListSyncRunsParamsKindONDEMAND      ListSyncRunsParamsKind = "ON_DEMAND"
+	ListSyncRunsParamsKindUNITCHECK     ListSyncRunsParamsKind = "UNIT_CHECK"
+)
+
+// Valid indicates whether the value is a known member of the ListSyncRunsParamsKind enum.
+func (e ListSyncRunsParamsKind) Valid() bool {
+	switch e {
+	case ListSyncRunsParamsKindCHANGES:
+		return true
+	case ListSyncRunsParamsKindDAILYSNAPSHOT:
+		return true
+	case ListSyncRunsParamsKindONDEMAND:
+		return true
+	case ListSyncRunsParamsKindUNITCHECK:
+		return true
+	default:
+		return false
+	}
+}
+
+// ClinicStock defines model for ClinicStock.
+type ClinicStock struct {
+	// AsOf Момент
+	AsOf     time.Time `json:"as_of"`
+	ClinicId int64     `json:"clinic_id"`
+
+	// IsStale Обновление старше порога актуальности — показать предупреждение (NFR015)
+	IsStale bool        `json:"is_stale"`
+	Lines   []StockLine `json:"lines"`
+
+	// Watermark Время последнего успешного обновления из АИСТ-М (NFR015); null, если обновлений не было.
+	Watermark *time.Time `json:"watermark,omitempty"`
 }
 
 // Problem defines model for Problem.
@@ -90,6 +227,106 @@ type ProtectedVolumeInput struct {
 	VolumeUnits   int64   `json:"volume_units"`
 }
 
+// StockLine defines model for StockLine.
+type StockLine struct {
+	BloodGroup    string    `json:"blood_group"`
+	ComponentKind string    `json:"component_kind"`
+	NearestExpiry time.Time `json:"nearest_expiry"`
+
+	// UnitCount Число доступных единиц (FR010)
+	UnitCount int64 `json:"unit_count"`
+
+	// VolumeL Объём в литрах
+	VolumeL  float64 `json:"volume_l"`
+	VolumeMl int64   `json:"volume_ml"`
+}
+
+// SyncOverview defines model for SyncOverview.
+type SyncOverview struct {
+	AsOf        time.Time  `json:"as_of"`
+	IsStale     bool       `json:"is_stale"`
+	LastRun     *SyncRun   `json:"last_run,omitempty"`
+	LastSuccess *SyncRun   `json:"last_success,omitempty"`
+	Watermark   *time.Time `json:"watermark,omitempty"`
+}
+
+// SyncRun defines model for SyncRun.
+type SyncRun struct {
+	ChangesCount int `json:"changes_count"`
+
+	// ErrorText Ошибка сеанса или примечание (например
+	ErrorText   *string    `json:"error_text,omitempty"`
+	FinishedAt  *time.Time `json:"finished_at,omitempty"`
+	RequestedBy string     `json:"requested_by"`
+
+	// SourceVersion Курсор опроса — последняя применённая версия АИСТ-М
+	SourceVersion int64              `json:"source_version"`
+	StartedAt     time.Time          `json:"started_at"`
+	SyncKind      SyncRunSyncKind    `json:"sync_kind"`
+	SyncResult    *SyncRunSyncResult `json:"sync_result,omitempty"`
+	SyncRunId     openapi_types.UUID `json:"sync_run_id"`
+}
+
+// SyncRunSyncKind defines model for SyncRun.SyncKind.
+type SyncRunSyncKind string
+
+// SyncRunSyncResult defines model for SyncRun.SyncResult.
+type SyncRunSyncResult string
+
+// SyncRunPage defines model for SyncRunPage.
+type SyncRunPage struct {
+	Items []SyncRun `json:"items"`
+
+	// NextBefore Курсор следующей страницы
+	NextBefore *openapi_types.UUID `json:"next_before,omitempty"`
+}
+
+// UnitCard Единица компонента крови. Исходный код АИСТ-М не отдаётся (ADR-0010).
+type UnitCard struct {
+	// Available Входит в фактический запас — доступный статус и неистёкший срок
+	Available     bool      `json:"available"`
+	BloodGroup    string    `json:"blood_group"`
+	ClinicId      int64     `json:"clinic_id"`
+	ComponentKind string    `json:"component_kind"`
+	ExpiresAt     time.Time `json:"expires_at"`
+	IsExpired     bool      `json:"is_expired"`
+
+	// Phenotype Известные характеристики фенотипа без изменений (FR006)
+	Phenotype  *string        `json:"phenotype,omitempty"`
+	RhPositive bool           `json:"rh_positive"`
+	Status     UnitCardStatus `json:"status"`
+
+	// StatusReceivedAt Когда получено текущее состояние (FR008)
+	StatusReceivedAt time.Time `json:"status_received_at"`
+
+	// StorageLocation Точка хранения (FR009)
+	StorageLocation string             `json:"storage_location"`
+	UnitId          openapi_types.UUID `json:"unit_id"`
+
+	// Version Версия записи в АИСТ-М
+	Version  int64 `json:"version"`
+	VolumeMl int64 `json:"volume_ml"`
+}
+
+// UnitCardStatus defines model for UnitCard.Status.
+type UnitCardStatus string
+
+// UnitHistory defines model for UnitHistory.
+type UnitHistory struct {
+	Items  []UnitStatusChange `json:"items"`
+	UnitId openapi_types.UUID `json:"unit_id"`
+}
+
+// UnitPage defines model for UnitPage.
+type UnitPage struct {
+	AsOf      time.Time  `json:"as_of"`
+	ClinicId  int64      `json:"clinic_id"`
+	HasMore   bool       `json:"has_more"`
+	IsStale   bool       `json:"is_stale"`
+	Units     []UnitCard `json:"units"`
+	Watermark *time.Time `json:"watermark,omitempty"`
+}
+
 // UnitStatus defines model for UnitStatus.
 type UnitStatus struct {
 	// Available Единицу можно закрепить и передать (ref_unit_status.is_available).
@@ -107,6 +344,20 @@ type UnitStatus struct {
 
 // UnitStatusStatus defines model for UnitStatus.Status.
 type UnitStatusStatus string
+
+// UnitStatusChange defines model for UnitStatusChange.
+type UnitStatusChange struct {
+	// ChangedAt Время изменения в АИСТ-М
+	ChangedAt time.Time `json:"changed_at"`
+
+	// ReceivedAt Время получения системой
+	ReceivedAt    time.Time              `json:"received_at"`
+	SourceVersion int64                  `json:"source_version"`
+	Status        UnitStatusChangeStatus `json:"status"`
+}
+
+// UnitStatusChangeStatus defines model for UnitStatusChange.Status.
+type UnitStatusChangeStatus string
 
 // UnitStatusReport defines model for UnitStatusReport.
 type UnitStatusReport struct {
@@ -127,6 +378,12 @@ type UnitStatusReport struct {
 // UnitStatusReportSource aist — ответ АИСТ-М в этом запросе; copy — АИСТ-М недоступна, статус из копии inventory.
 type UnitStatusReportSource string
 
+// ClinicID defines model for ClinicID.
+type ClinicID = int64
+
+// UnitID defines model for UnitID.
+type UnitID = openapi_types.UUID
+
 // BadRequest defines model for BadRequest.
 type BadRequest = Problem
 
@@ -139,23 +396,66 @@ type NotFound = Problem
 // Unauthorized defines model for Unauthorized.
 type Unauthorized = Problem
 
+// ListClinicUnitsParams defines parameters for ListClinicUnits.
+type ListClinicUnitsParams struct {
+	Fefo *bool `form:"fefo,omitempty" json:"fefo,omitempty"`
+
+	// Kind Код вида компонента
+	Kind *string `form:"kind,omitempty" json:"kind,omitempty"`
+
+	// Group Код группы крови, например O- или A+
+	Group  *string `form:"group,omitempty" json:"group,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int    `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
 // GetUnitStatusesParams defines parameters for GetUnitStatuses.
 type GetUnitStatusesParams struct {
 	// Ids Идентификаторы единиц (unit_id) через запятую, от 1 до 1000.
 	Ids []openapi_types.UUID `form:"ids" json:"ids"`
 }
 
+// ListSyncRunsParams defines parameters for ListSyncRuns.
+type ListSyncRunsParams struct {
+	Kind *ListSyncRunsParamsKind `form:"kind,omitempty" json:"kind,omitempty"`
+
+	// Before Курсор — sync_run_id последней строки предыдущей страницы
+	Before *openapi_types.UUID `form:"before,omitempty" json:"before,omitempty"`
+	Limit  *int                `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListSyncRunsParamsKind defines parameters for ListSyncRuns.
+type ListSyncRunsParamsKind string
+
 // PublishProtectedVolumeJSONRequestBody defines body for PublishProtectedVolume for application/json ContentType.
 type PublishProtectedVolumeJSONRequestBody = ProtectedVolumeInput
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// GetClinicStock Фактический запас клиники по виду и группе (FR010, FR011) с водяным знаком (NFR015)
+	// (GET /clinics/{id}/stock)
+	GetClinicStock(w http.ResponseWriter, r *http.Request, id ClinicID)
+	// ListClinicUnits Единицы фактического запаса клиники, по умолчанию FEFO (FR015)
+	// (GET /clinics/{id}/units)
+	ListClinicUnits(w http.ResponseWriter, r *http.Request, id ClinicID, params ListClinicUnitsParams)
 	// PublishProtectedVolume ДЕМО: опубликовать защищённый объём источника (только BS_ENV=local, иначе 404)
 	// (POST /dev/protected-volume)
 	PublishProtectedVolume(w http.ResponseWriter, r *http.Request)
 	// GetUnitStatuses Статус единиц для подтверждения обязательства (служебный токен, роль SERVICE)
 	// (GET /internal/units/status)
 	GetUnitStatuses(w http.ResponseWriter, r *http.Request, params GetUnitStatusesParams)
+	// GetLastSync Последний сеанс опроса АИСТ-М и последний успешный (время и результат обновления, NFR015)
+	// (GET /sync/last)
+	GetLastSync(w http.ResponseWriter, r *http.Request)
+	// ListSyncRuns Журнал сеансов обмена с АИСТ-М, новые первыми
+	// (GET /sync/runs)
+	ListSyncRuns(w http.ResponseWriter, r *http.Request, params ListSyncRunsParams)
+	// GetUnit Карточка единицы (FR002–FR009) в любом статусе
+	// (GET /units/{id})
+	GetUnit(w http.ResponseWriter, r *http.Request, id UnitID)
+	// GetUnitHistory История состояний единицы по данным АИСТ-М (FR008)
+	// (GET /units/{id}/history)
+	GetUnitHistory(w http.ResponseWriter, r *http.Request, id UnitID)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -166,6 +466,126 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GetClinicStock operation middleware
+func (siw *ServerInterfaceWrapper) GetClinicStock(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ClinicID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetClinicStock(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListClinicUnits operation middleware
+func (siw *ServerInterfaceWrapper) ListClinicUnits(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ClinicID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListClinicUnitsParams
+
+	// ------------- Optional query parameter "fefo" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "fefo", r.URL.Query(), &params.Fefo, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "fefo"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fefo", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "kind" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "kind", r.URL.Query(), &params.Kind, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "kind"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "group" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "group", r.URL.Query(), &params.Group, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "group"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "group", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListClinicUnits(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // PublishProtectedVolume operation middleware
 func (siw *ServerInterfaceWrapper) PublishProtectedVolume(w http.ResponseWriter, r *http.Request) {
@@ -205,6 +625,131 @@ func (siw *ServerInterfaceWrapper) GetUnitStatuses(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetUnitStatuses(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetLastSync operation middleware
+func (siw *ServerInterfaceWrapper) GetLastSync(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetLastSync(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSyncRuns operation middleware
+func (siw *ServerInterfaceWrapper) ListSyncRuns(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListSyncRunsParams
+
+	// ------------- Optional query parameter "kind" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "kind", r.URL.Query(), &params.Kind, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "kind"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "before" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "before", r.URL.Query(), &params.Before, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "before"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "before", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSyncRuns(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetUnit operation middleware
+func (siw *ServerInterfaceWrapper) GetUnit(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id UnitID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetUnit(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetUnitHistory operation middleware
+func (siw *ServerInterfaceWrapper) GetUnitHistory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id UnitID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetUnitHistory(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -334,6 +879,12 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/clinics/{id}/stock", wrapper.GetClinicStock)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/clinics/{id}/units", wrapper.ListClinicUnits)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/units/{id}", wrapper.GetUnit)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/units/{id}/history", wrapper.GetUnitHistory)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/sync/last", wrapper.GetLastSync)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/sync/runs", wrapper.ListSyncRuns)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/internal/units/status", wrapper.GetUnitStatuses)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/dev/protected-volume", wrapper.PublishProtectedVolume)
 
@@ -347,6 +898,163 @@ type ForbiddenApplicationProblemPlusJSONResponse Problem
 type NotFoundApplicationProblemPlusJSONResponse Problem
 
 type UnauthorizedApplicationProblemPlusJSONResponse Problem
+
+type GetClinicStockRequestObject struct {
+	Id ClinicID `json:"id"`
+}
+
+type GetClinicStockResponseObject interface {
+	VisitGetClinicStockResponse(w http.ResponseWriter) error
+}
+
+type GetClinicStock200JSONResponse ClinicStock
+
+func (response GetClinicStock200JSONResponse) VisitGetClinicStockResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetClinicStock401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response GetClinicStock401ApplicationProblemPlusJSONResponse) VisitGetClinicStockResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetClinicStock403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetClinicStock403ApplicationProblemPlusJSONResponse) VisitGetClinicStockResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetClinicStock404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetClinicStock404ApplicationProblemPlusJSONResponse) VisitGetClinicStockResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListClinicUnitsRequestObject struct {
+	Id     ClinicID `json:"id"`
+	Params ListClinicUnitsParams
+}
+
+type ListClinicUnitsResponseObject interface {
+	VisitListClinicUnitsResponse(w http.ResponseWriter) error
+}
+
+type ListClinicUnits200JSONResponse UnitPage
+
+func (response ListClinicUnits200JSONResponse) VisitListClinicUnitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListClinicUnits400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListClinicUnits400ApplicationProblemPlusJSONResponse) VisitListClinicUnitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListClinicUnits401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response ListClinicUnits401ApplicationProblemPlusJSONResponse) VisitListClinicUnitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListClinicUnits403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListClinicUnits403ApplicationProblemPlusJSONResponse) VisitListClinicUnitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListClinicUnits404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ListClinicUnits404ApplicationProblemPlusJSONResponse) VisitListClinicUnitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type PublishProtectedVolumeRequestObject struct {
 	Body *PublishProtectedVolumeJSONRequestBody
@@ -504,14 +1212,295 @@ func (response GetUnitStatuses403ApplicationProblemPlusJSONResponse) VisitGetUni
 	return err
 }
 
+type GetLastSyncRequestObject struct {
+}
+
+type GetLastSyncResponseObject interface {
+	VisitGetLastSyncResponse(w http.ResponseWriter) error
+}
+
+type GetLastSync200JSONResponse SyncOverview
+
+func (response GetLastSync200JSONResponse) VisitGetLastSyncResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetLastSync401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response GetLastSync401ApplicationProblemPlusJSONResponse) VisitGetLastSyncResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetLastSync403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetLastSync403ApplicationProblemPlusJSONResponse) VisitGetLastSyncResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSyncRunsRequestObject struct {
+	Params ListSyncRunsParams
+}
+
+type ListSyncRunsResponseObject interface {
+	VisitListSyncRunsResponse(w http.ResponseWriter) error
+}
+
+type ListSyncRuns200JSONResponse SyncRunPage
+
+func (response ListSyncRuns200JSONResponse) VisitListSyncRunsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSyncRuns400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ListSyncRuns400ApplicationProblemPlusJSONResponse) VisitListSyncRunsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSyncRuns401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response ListSyncRuns401ApplicationProblemPlusJSONResponse) VisitListSyncRunsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSyncRuns403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response ListSyncRuns403ApplicationProblemPlusJSONResponse) VisitListSyncRunsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUnitRequestObject struct {
+	Id UnitID `json:"id"`
+}
+
+type GetUnitResponseObject interface {
+	VisitGetUnitResponse(w http.ResponseWriter) error
+}
+
+type GetUnit200JSONResponse UnitCard
+
+func (response GetUnit200JSONResponse) VisitGetUnitResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUnit401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response GetUnit401ApplicationProblemPlusJSONResponse) VisitGetUnitResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUnit403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetUnit403ApplicationProblemPlusJSONResponse) VisitGetUnitResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUnit404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetUnit404ApplicationProblemPlusJSONResponse) VisitGetUnitResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUnitHistoryRequestObject struct {
+	Id UnitID `json:"id"`
+}
+
+type GetUnitHistoryResponseObject interface {
+	VisitGetUnitHistoryResponse(w http.ResponseWriter) error
+}
+
+type GetUnitHistory200JSONResponse UnitHistory
+
+func (response GetUnitHistory200JSONResponse) VisitGetUnitHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUnitHistory401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response GetUnitHistory401ApplicationProblemPlusJSONResponse) VisitGetUnitHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUnitHistory403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetUnitHistory403ApplicationProblemPlusJSONResponse) VisitGetUnitHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUnitHistory404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetUnitHistory404ApplicationProblemPlusJSONResponse) VisitGetUnitHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// GetClinicStock Фактический запас клиники по виду и группе (FR010, FR011) с водяным знаком (NFR015)
+	// (GET /clinics/{id}/stock)
+	GetClinicStock(ctx context.Context, request GetClinicStockRequestObject) (GetClinicStockResponseObject, error)
+	// ListClinicUnits Единицы фактического запаса клиники, по умолчанию FEFO (FR015)
+	// (GET /clinics/{id}/units)
+	ListClinicUnits(ctx context.Context, request ListClinicUnitsRequestObject) (ListClinicUnitsResponseObject, error)
 	// PublishProtectedVolume ДЕМО: опубликовать защищённый объём источника (только BS_ENV=local, иначе 404)
 	// (POST /dev/protected-volume)
 	PublishProtectedVolume(ctx context.Context, request PublishProtectedVolumeRequestObject) (PublishProtectedVolumeResponseObject, error)
 	// GetUnitStatuses Статус единиц для подтверждения обязательства (служебный токен, роль SERVICE)
 	// (GET /internal/units/status)
 	GetUnitStatuses(ctx context.Context, request GetUnitStatusesRequestObject) (GetUnitStatusesResponseObject, error)
+	// GetLastSync Последний сеанс опроса АИСТ-М и последний успешный (время и результат обновления, NFR015)
+	// (GET /sync/last)
+	GetLastSync(ctx context.Context, request GetLastSyncRequestObject) (GetLastSyncResponseObject, error)
+	// ListSyncRuns Журнал сеансов обмена с АИСТ-М, новые первыми
+	// (GET /sync/runs)
+	ListSyncRuns(ctx context.Context, request ListSyncRunsRequestObject) (ListSyncRunsResponseObject, error)
+	// GetUnit Карточка единицы (FR002–FR009) в любом статусе
+	// (GET /units/{id})
+	GetUnit(ctx context.Context, request GetUnitRequestObject) (GetUnitResponseObject, error)
+	// GetUnitHistory История состояний единицы по данным АИСТ-М (FR008)
+	// (GET /units/{id}/history)
+	GetUnitHistory(ctx context.Context, request GetUnitHistoryRequestObject) (GetUnitHistoryResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -551,6 +1540,59 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// GetClinicStock operation middleware
+func (sh *strictHandler) GetClinicStock(w http.ResponseWriter, r *http.Request, id ClinicID) {
+	var request GetClinicStockRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetClinicStock(ctx, request.(GetClinicStockRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetClinicStock")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetClinicStockResponseObject); ok {
+		if err := validResponse.VisitGetClinicStockResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListClinicUnits operation middleware
+func (sh *strictHandler) ListClinicUnits(w http.ResponseWriter, r *http.Request, id ClinicID, params ListClinicUnitsParams) {
+	var request ListClinicUnitsRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListClinicUnits(ctx, request.(ListClinicUnitsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListClinicUnits")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListClinicUnitsResponseObject); ok {
+		if err := validResponse.VisitListClinicUnitsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // PublishProtectedVolume operation middleware
@@ -603,6 +1645,108 @@ func (sh *strictHandler) GetUnitStatuses(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetUnitStatusesResponseObject); ok {
 		if err := validResponse.VisitGetUnitStatusesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetLastSync operation middleware
+func (sh *strictHandler) GetLastSync(w http.ResponseWriter, r *http.Request) {
+	var request GetLastSyncRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetLastSync(ctx, request.(GetLastSyncRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetLastSync")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetLastSyncResponseObject); ok {
+		if err := validResponse.VisitGetLastSyncResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListSyncRuns operation middleware
+func (sh *strictHandler) ListSyncRuns(w http.ResponseWriter, r *http.Request, params ListSyncRunsParams) {
+	var request ListSyncRunsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListSyncRuns(ctx, request.(ListSyncRunsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListSyncRuns")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListSyncRunsResponseObject); ok {
+		if err := validResponse.VisitListSyncRunsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetUnit operation middleware
+func (sh *strictHandler) GetUnit(w http.ResponseWriter, r *http.Request, id UnitID) {
+	var request GetUnitRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetUnit(ctx, request.(GetUnitRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetUnit")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetUnitResponseObject); ok {
+		if err := validResponse.VisitGetUnitResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetUnitHistory operation middleware
+func (sh *strictHandler) GetUnitHistory(w http.ResponseWriter, r *http.Request, id UnitID) {
+	var request GetUnitHistoryRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetUnitHistory(ctx, request.(GetUnitHistoryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetUnitHistory")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetUnitHistoryResponseObject); ok {
+		if err := validResponse.VisitGetUnitHistoryResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
