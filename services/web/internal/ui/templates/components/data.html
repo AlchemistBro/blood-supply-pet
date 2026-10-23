@@ -10,13 +10,15 @@
 {{- end}}
 
 {{/*
-  Таблица. Сортировка и страницы — обычные ссылки; при заданном ID заголовок и пагинация получают hx-boost
+  Таблица. Заголовок липкий внутри области прокрутки .table-scroll, пагинация — под ней.
+  Сортировка и страницы — обычные ссылки; при заданном ID заголовок и пагинация получают hx-boost
   с подменой только обёртки таблицы (hx-select из полной страницы), адрес попадает в историю.
 */}}
 {{define "table" -}}
 {{$id := .ID}}
 <div class="table-wrap"{{with $id}} id="{{.}}"{{end}}>
 {{if .Rows}}
+<div class="table-scroll">
 <table class="table">
 {{with .Caption}}<caption>{{.}}</caption>{{end}}
 <thead{{template "hx_boost" $id}}>
@@ -38,6 +40,7 @@
 {{end}}
 </tbody>
 </table>
+</div>
 {{else}}
 {{template "empty" .Empty}}
 {{end}}
