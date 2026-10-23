@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
@@ -57,6 +58,8 @@ type parsed struct {
 	profiles []domain.DistrictProfile
 	history  *domain.ConsumptionHistoryFile
 	shares   *domain.ClinicShareFile
+	// replace — записи истории прежних файлов, которые заменяет этот файл.
+	replace []uuid.UUID
 }
 
 func (s *Service) parse(kind domain.FileKind, content []byte) (parsed, error) {
@@ -99,10 +102,11 @@ func (s *Service) Upload(ctx context.Context, in UploadInput) (UploadResult, err
 			return err
 		}
 		if p.history != nil {
-			if err := s.rejectStoredPeriods(ctx, tx, p.history); err != nil {
+			replace, err := s.reconcileHistory(ctx, tx, p.history)
+			if err != nil {
 				return err
 			}
-			p.check = p.history.Check
+			p.check, p.replace = p.history.Check, replace
 		}
 		check := p.check
 		info := FileInfo{
@@ -146,6 +150,9 @@ func (s *Service) Upload(ctx context.Context, in UploadInput) (UploadResult, err
 		if res.ShareVersionNo > 0 {
 			details["clinic_share_version_no"] = res.ShareVersionNo
 		}
+		if len(p.replace) > 0 && check.Status != domain.StatusRejected {
+			details["replaced_history_rows"] = len(p.replace)
+		}
 		return s.journal.Audit(ctx, tx, messaging.AuditEntry{
 			UserID: in.Actor.UserID, Role: in.Actor.Role, Action: action, ObjectType: objectTypeFile,
 			ObjectID: id.String(), Result: auditc.ResultSuccess, Details: details,
@@ -162,32 +169,57 @@ func (s *Service) Upload(ctx context.Context, in UploadInput) (UploadResult, err
 	return res, nil
 }
 
-// rejectStoredPeriods отклоняет строки истории, чей период пересекается с уже загруженной из файлов
-// историей того же вида: иначе расход вошёл бы в базу B(k, p) дважды (FR019).
-func (s *Service) rejectStoredPeriods(ctx context.Context, tx pgx.Tx, f *domain.ConsumptionHistoryFile) error {
+// reconcileHistory сверяет строки истории с уже загруженной из файлов историей того же вида (FR019, FR020):
+//   - тот же вид и точно тот же период, прежняя запись не вошла в оценку — замена (исправленный файл);
+//   - тот же период, но прежняя запись вошла в версию оценки — отказ: оценка должна воспроизводиться;
+//   - частичное пересечение — отказ: иначе расход вошёл бы в базу B(k, p) дважды.
+//
+// Возвращает идентификаторы заменяемых записей.
+func (s *Service) reconcileHistory(ctx context.Context, tx pgx.Tx, f *domain.ConsumptionHistoryFile) ([]uuid.UUID, error) {
 	stored, err := s.store.HistoryPeriods(ctx, tx, domain.HistorySourceFile)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if len(stored) == 0 {
-		return nil
+		return nil, nil
 	}
+	byKind := map[string][]StoredPeriod{}
+	for _, p := range stored {
+		byKind[p.KindCode] = append(byKind[p.KindCode], p)
+	}
+	var replace []uuid.UUID
 	f.RejectRecords(func(r domain.ConsumptionRecord) (string, string, bool) {
-		for _, p := range stored {
-			if p.KindCode == r.KindCode && p.Period.Overlaps(r.Period) {
-				return "period_start", fmt.Sprintf("период пересекается с уже загруженным периодом %s – %s (файл «%s»)",
-					p.Period.Start.Format("2006-01-02"), p.Period.End.Format("2006-01-02"), p.FileName), true
+		var same *StoredPeriod
+		for i := range byKind[r.KindCode] {
+			p := &byKind[r.KindCode][i]
+			if !p.Period.Overlaps(r.Period) {
+				continue
 			}
+			if !p.Period.Start.Equal(r.Period.Start) || !p.Period.End.Equal(r.Period.End) {
+				return "period_start", fmt.Sprintf("период частично пересекается с уже загруженным периодом %s – %s (файл «%s»): "+
+					"загрузите историю за те же периоды или за непересекающиеся", formatDate(p.Period.Start), formatDate(p.Period.End), p.FileName), true
+			}
+			same = p
 		}
+		if same == nil {
+			return "", "", false
+		}
+		if same.Used {
+			return "period_start", fmt.Sprintf("история за %s – %s уже вошла в версию оценки (файл «%s») и не заменяется",
+				formatDate(same.Period.Start), formatDate(same.Period.End), same.FileName), true
+		}
+		replace = append(replace, same.ID)
 		return "", "", false
 	})
-	return nil
+	return replace, nil
 }
+
+func formatDate(t time.Time) string { return t.Format("2006-01-02") }
 
 func (s *Service) storeRows(ctx context.Context, tx pgx.Tx, id uuid.UUID, p parsed) (int64, error) {
 	switch {
 	case p.history != nil:
-		return 0, s.store.InsertHistory(ctx, tx, id, p.history.Records)
+		return 0, s.store.InsertHistory(ctx, tx, id, p.history.Records, p.replace)
 	case p.shares != nil:
 		return s.store.InsertShareVersion(ctx, tx, id, p.shares.Basis, p.shares.ValidFrom, p.shares.Shares)
 	default:

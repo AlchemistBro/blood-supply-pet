@@ -17,10 +17,10 @@ import (
 	"github.com/AlchemistBro/blood-supply-pet/services/demand/internal/domain"
 )
 
-// Ограничения загрузки: файл аналитика — до 5 МиБ (районов и клиник сотни строк, история — тысячи);
-// тело запроса чуть больше на заголовки частей multipart.
+// Ограничения загрузки: файл — не больше предела домена (docs/ui/csv-formats.md); тело запроса чуть больше
+// на заголовки частей multipart. Лимит тела не даёт читать в память гигантский запрос.
 const (
-	MaxFileBytes    = 5 << 20
+	MaxFileBytes    = domain.MaxFileBytes
 	maxRequestBytes = MaxFileBytes + 64<<10
 	maxKindBytes    = 64
 )

@@ -77,6 +77,18 @@ func (q *Queries) CurrentClinicShares(ctx context.Context) ([]CurrentClinicShare
 	return items, nil
 }
 
+const deleteConsumptionHistory = `-- name: DeleteConsumptionHistory :exec
+DELETE FROM consumption_history
+WHERE consumption_history_id = ANY($1::uuid[])
+  AND NOT EXISTS (SELECT 1 FROM estimate_history_link l WHERE l.consumption_history_id = consumption_history.consumption_history_id)
+`
+
+// Замена истории исправленным файлом: удаляются только записи, не вошедшие в оценки (проверено выше).
+func (q *Queries) DeleteConsumptionHistory(ctx context.Context, ids []uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteConsumptionHistory, ids)
+	return err
+}
+
 const fileIDByChecksum = `-- name: FileIDByChecksum :one
 SELECT statistics_file_id FROM statistics_file WHERE file_checksum = $1
 `
@@ -115,20 +127,24 @@ func (q *Queries) GetFile(ctx context.Context, statisticsFileID uuid.UUID) (Stat
 }
 
 const historyPeriods = `-- name: HistoryPeriods :many
-SELECT h.component_kind_code, h.period_start, h.period_end, h.history_source, f.file_name
+SELECT h.consumption_history_id, h.component_kind_code, h.period_start, h.period_end, f.file_name,
+       EXISTS (SELECT 1 FROM estimate_history_link l WHERE l.consumption_history_id = h.consumption_history_id) AS used
 FROM consumption_history h
 LEFT JOIN statistics_file f ON f.statistics_file_id = h.statistics_file_id
 WHERE h.history_source = $1
+ORDER BY h.component_kind_code, h.period_start
 `
 
 type HistoryPeriodsRow struct {
-	ComponentKindCode string
-	PeriodStart       pgtype.Date
-	PeriodEnd         pgtype.Date
-	HistorySource     string
-	FileName          *string
+	ConsumptionHistoryID uuid.UUID
+	ComponentKindCode    string
+	PeriodStart          pgtype.Date
+	PeriodEnd            pgtype.Date
+	FileName             *string
+	Used                 bool
 }
 
+// used: запись вошла хотя бы в одну версию оценки и не может быть заменена (FR020: воспроизводимость).
 func (q *Queries) HistoryPeriods(ctx context.Context, historySource string) ([]HistoryPeriodsRow, error) {
 	rows, err := q.db.Query(ctx, historyPeriods, historySource)
 	if err != nil {
@@ -139,11 +155,12 @@ func (q *Queries) HistoryPeriods(ctx context.Context, historySource string) ([]H
 	for rows.Next() {
 		var i HistoryPeriodsRow
 		if err := rows.Scan(
+			&i.ConsumptionHistoryID,
 			&i.ComponentKindCode,
 			&i.PeriodStart,
 			&i.PeriodEnd,
-			&i.HistorySource,
 			&i.FileName,
+			&i.Used,
 		); err != nil {
 			return nil, err
 		}

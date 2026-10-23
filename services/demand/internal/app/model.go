@@ -80,10 +80,13 @@ type HistoryRecord struct {
 }
 
 // StoredPeriod — период уже сохранённой истории, против которого проверяется новый файл.
+// Used — запись вошла в версию оценки и не заменяется.
 type StoredPeriod struct {
+	ID       uuid.UUID
 	KindCode string
 	Period   domain.Period
 	FileName string
+	Used     bool
 }
 
 // ShareVersion — версия долей район → клиника (O16).
@@ -110,7 +113,8 @@ type Store interface {
 	InsertFile(ctx context.Context, tx pgx.Tx, f FileInfo) (bool, error)
 	InsertRowErrors(ctx context.Context, tx pgx.Tx, fileID uuid.UUID, reasons []domain.RowReason) error
 	InsertProfiles(ctx context.Context, tx pgx.Tx, fileID uuid.UUID, profiles []domain.DistrictProfile) error
-	InsertHistory(ctx context.Context, tx pgx.Tx, fileID uuid.UUID, records []domain.ConsumptionRecord) error
+	// InsertHistory удаляет заменяемые записи replace и сохраняет новые.
+	InsertHistory(ctx context.Context, tx pgx.Tx, fileID uuid.UUID, records []domain.ConsumptionRecord, replace []uuid.UUID) error
 	// InsertShareVersion создаёт следующую версию долей и возвращает её номер.
 	InsertShareVersion(ctx context.Context, tx pgx.Tx, fileID uuid.UUID, basis string, validFrom time.Time, shares []domain.ClinicShare) (int64, error)
 

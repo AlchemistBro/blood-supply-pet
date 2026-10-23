@@ -31,10 +31,19 @@ INSERT INTO consumption_history (
 ) VALUES ($1, $2, $3, $4, $5, $6, $7);
 
 -- name: HistoryPeriods :many
-SELECT h.component_kind_code, h.period_start, h.period_end, h.history_source, f.file_name
+-- used: запись вошла хотя бы в одну версию оценки и не может быть заменена (FR020: воспроизводимость).
+SELECT h.consumption_history_id, h.component_kind_code, h.period_start, h.period_end, f.file_name,
+       EXISTS (SELECT 1 FROM estimate_history_link l WHERE l.consumption_history_id = h.consumption_history_id) AS used
 FROM consumption_history h
 LEFT JOIN statistics_file f ON f.statistics_file_id = h.statistics_file_id
-WHERE h.history_source = sqlc.arg(history_source);
+WHERE h.history_source = sqlc.arg(history_source)
+ORDER BY h.component_kind_code, h.period_start;
+
+-- name: DeleteConsumptionHistory :exec
+-- Замена истории исправленным файлом: удаляются только записи, не вошедшие в оценки (проверено выше).
+DELETE FROM consumption_history
+WHERE consumption_history_id = ANY(sqlc.arg(ids)::uuid[])
+  AND NOT EXISTS (SELECT 1 FROM estimate_history_link l WHERE l.consumption_history_id = consumption_history.consumption_history_id);
 
 -- name: NextClinicShareVersionNo :one
 SELECT (COALESCE(MAX(version_no), 0) + 1)::bigint AS version_no FROM clinic_share_version;

@@ -45,7 +45,8 @@ func (s *Store) HistoryPeriods(ctx context.Context, tx pgx.Tx, source domain.His
 	}
 	out := make([]app.StoredPeriod, 0, len(rows))
 	for _, r := range rows {
-		p := app.StoredPeriod{KindCode: r.ComponentKindCode, Period: fromDates(r.PeriodStart, r.PeriodEnd)}
+		p := app.StoredPeriod{ID: r.ConsumptionHistoryID, KindCode: r.ComponentKindCode,
+			Period: fromDates(r.PeriodStart, r.PeriodEnd), Used: r.Used}
 		if r.FileName != nil {
 			p.FileName = *r.FileName
 		}
@@ -117,8 +118,14 @@ func (s *Store) InsertProfiles(ctx context.Context, tx pgx.Tx, fileID uuid.UUID,
 	return nil
 }
 
-// InsertHistory сохраняет историю расхода из файла (O17).
-func (s *Store) InsertHistory(ctx context.Context, tx pgx.Tx, fileID uuid.UUID, records []domain.ConsumptionRecord) error {
+// InsertHistory сохраняет историю расхода из файла (O17); заменяемые записи прежних файлов удаляются
+// той же транзакцией (UNIQUE ПР6 по виду, периоду и источнику не даёт держать обе).
+func (s *Store) InsertHistory(ctx context.Context, tx pgx.Tx, fileID uuid.UUID, records []domain.ConsumptionRecord, replace []uuid.UUID) error {
+	if len(replace) > 0 {
+		if err := gen.New(tx).DeleteConsumptionHistory(ctx, replace); err != nil {
+			return fmt.Errorf("замена истории расхода: %w", err)
+		}
+	}
 	if len(records) == 0 {
 		return nil
 	}
