@@ -84,7 +84,7 @@ FROM clinic_share_version
 ORDER BY version_no DESC;
 
 -- name: CurrentClinicShares :many
-SELECT v.clinic_share_version_id, v.version_no, v.basis, v.valid_from, s.district_id, s.clinic_id, s.clinic_share
+SELECT v.clinic_share_version_id, v.version_no, v.statistics_file_id, v.basis, v.valid_from, s.district_id, s.clinic_id, s.clinic_share
 FROM clinic_share s
 JOIN clinic_share_version v ON v.clinic_share_version_id = s.clinic_share_version_id
 WHERE v.version_no = (SELECT MAX(version_no) FROM clinic_share_version)

@@ -214,6 +214,31 @@ func TestParseConsumptionHistory(t *testing.T) {
 	requireRowError(t, f.Check, 12, "data_source", "не заполнено")
 }
 
+func TestConsumptionHistoryFile_RejectRecords(t *testing.T) {
+	f := ParseConsumptionHistory(csvOf(
+		historyHeader,
+		"RBC;2025-01-01;2025-12-31;100;ДЕМО",
+		"FFP;2025-01-01;2025-12-31;100;ДЕМО",
+	), testRef(t))
+	if f.Status != StatusAccepted {
+		t.Fatalf("статус %s", f.Status)
+	}
+	f.RejectRecords(func(r ConsumptionRecord) (string, string, bool) {
+		return columnStart, "период уже загружен", r.KindCode == "RBC"
+	})
+	if f.Status != StatusPartial || len(f.Records) != 1 || f.Records[0].KindCode != "FFP" || f.AcceptedRows != 1 {
+		t.Fatalf("после отклонения: %s, %+v", f.Status, f.Records)
+	}
+	requireRowError(t, f.Check, 2, "period_start", "уже загружен")
+	if f.DataSource != "ДЕМО" || f.Period.Start != date(2025, 1, 1) {
+		t.Fatalf("сводка потеряна: %q %+v", f.DataSource, f.Period)
+	}
+	f.RejectRecords(func(ConsumptionRecord) (string, string, bool) { return columnStart, "уже загружен", true })
+	if f.Status != StatusRejected || f.RejectedRows() != 2 {
+		t.Fatalf("все строки отклонены: %s, %d", f.Status, f.RejectedRows())
+	}
+}
+
 const shareHeader = "district_code;clinic_code;clinic_share;basis;data_source;period_start;period_end"
 
 func shareRow(district, clinic, share string) string {

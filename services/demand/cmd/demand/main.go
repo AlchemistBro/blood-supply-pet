@@ -1,4 +1,4 @@
-// demand - сервис АС распределения компонентов донорской крови.
+// demand — сервис территориальной потребности (ФП2): приём CSV аналитика, история расхода, доли район → клиника.
 package main
 
 import (
@@ -6,6 +6,9 @@ import (
 
 	"github.com/AlchemistBro/blood-supply-pet/libs/runtime"
 	apispec "github.com/AlchemistBro/blood-supply-pet/services/demand/api"
+	"github.com/AlchemistBro/blood-supply-pet/services/demand/internal/adapters/postgres"
+	"github.com/AlchemistBro/blood-supply-pet/services/demand/internal/api"
+	"github.com/AlchemistBro/blood-supply-pet/services/demand/internal/app"
 	"github.com/AlchemistBro/blood-supply-pet/services/demand/migrations"
 )
 
@@ -16,9 +19,12 @@ func main() {
 		Migrations: migrations.FS,
 		OpenAPI:    apispec.Spec,
 		Setup: func(_ context.Context, rt *runtime.Runtime) ([]runtime.Worker, error) {
-			// Здесь: собрать адаптеры, приложение, зарегистрировать маршруты на rt.Mux,
-			// вернуть фоновых воркеров (consumer, таймеры).
-			_ = rt
+			ref, err := app.ReferenceFrom(rt.Refdata)
+			if err != nil {
+				return nil, err
+			}
+			svc := app.New(rt.Pool, postgres.New(rt.Pool), rt.Journal, rt.Clock, ref, rt.Log)
+			api.Mount(rt.Mux, svc, rt.Deny())
 			return nil, nil
 		},
 	})

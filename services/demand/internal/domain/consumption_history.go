@@ -87,3 +87,23 @@ func ParseConsumptionHistory(data []byte, ref *Reference) ConsumptionHistoryFile
 	finish(&out.Check, len(rows), len(out.Records), errs, sum)
 	return out
 }
+
+// RejectRecords отклоняет принятые строки, для которых reject возвращает причину, и пересчитывает статус.
+// Нужна приложению: строку, чей период уже загружен другим файлом, видно только по сохранённой истории.
+func (f *ConsumptionHistoryFile) RejectRecords(reject func(ConsumptionRecord) (field, msg string, bad bool)) {
+	kept := f.Records[:0]
+	errs := append([]RowError(nil), f.RowErrors...)
+	for _, r := range f.Records {
+		if field, msg, bad := reject(r); bad {
+			errs = append(errs, RowError{Row: r.Row, Field: field, Message: msg})
+			continue
+		}
+		kept = append(kept, r)
+	}
+	f.Records = kept
+	sum := summary{period: f.Period}
+	if f.DataSource != "" {
+		sum.sources = []string{f.DataSource}
+	}
+	finish(&f.Check, f.TotalRows, len(kept), errs, sum)
+}

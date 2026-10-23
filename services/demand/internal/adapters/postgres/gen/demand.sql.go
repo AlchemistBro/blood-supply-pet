@@ -30,7 +30,7 @@ func (q *Queries) CountFileRows(ctx context.Context, fileID uuid.UUID) (int64, e
 }
 
 const currentClinicShares = `-- name: CurrentClinicShares :many
-SELECT v.clinic_share_version_id, v.version_no, v.basis, v.valid_from, s.district_id, s.clinic_id, s.clinic_share
+SELECT v.clinic_share_version_id, v.version_no, v.statistics_file_id, v.basis, v.valid_from, s.district_id, s.clinic_id, s.clinic_share
 FROM clinic_share s
 JOIN clinic_share_version v ON v.clinic_share_version_id = s.clinic_share_version_id
 WHERE v.version_no = (SELECT MAX(version_no) FROM clinic_share_version)
@@ -40,6 +40,7 @@ ORDER BY s.district_id, s.clinic_id
 type CurrentClinicSharesRow struct {
 	ClinicShareVersionID uuid.UUID
 	VersionNo            int64
+	StatisticsFileID     uuid.UUID
 	Basis                string
 	ValidFrom            pgtype.Date
 	DistrictID           int64
@@ -59,6 +60,7 @@ func (q *Queries) CurrentClinicShares(ctx context.Context) ([]CurrentClinicShare
 		if err := rows.Scan(
 			&i.ClinicShareVersionID,
 			&i.VersionNo,
+			&i.StatisticsFileID,
 			&i.Basis,
 			&i.ValidFrom,
 			&i.DistrictID,

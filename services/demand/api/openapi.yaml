@@ -2,11 +2,187 @@ openapi: 3.0.3
 info:
   title: demand
   version: 0.1.0
-  description: Контракт сервиса demand. Источник истины для HTTP: код сервера генерируется из этого файла.
+  description: |
+    Территориальная потребность (ФП2). Приём CSV территориального аналитика с проверкой и построчными ошибками
+    (FR016, FR017, FR045, FR046), чтение истории расхода и действующих долей район -> клиника.
+    Формат файлов - docs/ui/csv-formats.md. Данные демонстрационные (ADR-0010).
+    Каждая операция помечена x-bs-operation - операцией матрицы прав libs/httpx/auth/policy.go.
 servers:
   - url: http://localhost:8102
-paths: {}
+paths:
+  /files:
+    post:
+      operationId: uploadFile
+      x-bs-operation: UPLOAD_STATISTICS
+      summary: Загрузить файл CSV и получить результат проверки
+      description: |
+        Файл проверяется построчно; принятые строки сохраняются, отклонённые возвращаются с причинами.
+        Повторная загрузка того же содержимого (SHA-256) отклоняется с кодом 409. Размер файла - не больше 5 МиБ.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file_kind, file]
+              properties:
+                file_kind: { $ref: "#/components/schemas/FileKind" }
+                file: { type: string, format: binary }
+      responses:
+        "201":
+          description: Файл проверен и сохранён (в том числе со статусом REJECTED)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UploadResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409":
+          description: Этот файл уже загружен
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/DuplicateProblem" }
+        "413":
+          description: Файл больше допустимого размера
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+    get:
+      operationId: listFiles
+      x-bs-operation: UPLOAD_STATISTICS
+      summary: Загруженные файлы, новые первыми
+      parameters:
+        - { name: file_kind, in: query, schema: { $ref: "#/components/schemas/FileKind" } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
+      responses:
+        "200":
+          description: Список файлов
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/FileSummary" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /files/{id}:
+    get:
+      operationId: getFile
+      x-bs-operation: UPLOAD_STATISTICS
+      summary: Файл и итог его проверки
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Файл
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FileDetails" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /files/{id}/errors:
+    get:
+      operationId: listFileErrors
+      x-bs-operation: UPLOAD_STATISTICS
+      summary: Отклонённые строки файла с причинами
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Отклонённые строки; ошибка всего файла - строка 1
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/RowError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /history:
+    get:
+      operationId: listHistory
+      x-bs-operation: UPLOAD_STATISTICS
+      summary: История расхода по видам и периодам (O17)
+      parameters:
+        - { name: component_kind_code, in: query, schema: { type: string, maxLength: 16 } }
+      responses:
+        "200":
+          description: Записи истории
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/HistoryRecord" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /shares/versions:
+    get:
+      operationId: listShareVersions
+      x-bs-operation: UPLOAD_STATISTICS
+      summary: Версии долей район -> клиника с основанием (O16), новые первыми
+      responses:
+        "200":
+          description: Версии
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/ShareVersion" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /shares/current:
+    get:
+      operationId: getCurrentShares
+      x-bs-operation: UPLOAD_STATISTICS
+      summary: Действующая (последняя) версия долей со строками
+      responses:
+        "200":
+          description: Действующие доли
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CurrentShares" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 components:
+  responses:
+    BadRequest:
+      description: Неверный запрос
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Unauthorized:
+      description: Требуется вход
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Forbidden:
+      description: Недостаточно прав
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    NotFound:
+      description: Не найдено
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
   schemas:
     Problem:
       type: object
@@ -18,3 +194,88 @@ components:
         detail: { type: string }
         instance: { type: string }
         correlation_id: { type: string }
+    DuplicateProblem:
+      allOf:
+        - $ref: "#/components/schemas/Problem"
+        - type: object
+          properties:
+            existing_file_id: { type: string, format: uuid, description: Ранее загруженный файл с тем же содержимым }
+    FileKind:
+      type: string
+      enum: [DISTRICT_PROFILE, CONSUMPTION_HISTORY, CLINIC_SHARE]
+    CheckStatus:
+      type: string
+      enum: [ACCEPTED, PARTIAL, REJECTED]
+    FileSummary:
+      type: object
+      required: [id, file_kind, file_name, file_checksum, check_status, rejected_rows, uploaded_by, uploaded_at]
+      properties:
+        id: { type: string, format: uuid }
+        file_kind: { $ref: "#/components/schemas/FileKind" }
+        file_name: { type: string }
+        file_checksum: { type: string, description: SHA-256 содержимого в hex }
+        data_source: { type: string, description: "Источник по строкам файла; нет у файла, отклонённого целиком" }
+        period_start: { type: string, format: date }
+        period_end: { type: string, format: date }
+        check_status: { $ref: "#/components/schemas/CheckStatus" }
+        rejected_rows: { type: integer }
+        uploaded_by: { type: string }
+        uploaded_at: { type: string, format: date-time }
+    FileDetails:
+      allOf:
+        - $ref: "#/components/schemas/FileSummary"
+        - type: object
+          required: [accepted_rows]
+          properties:
+            accepted_rows: { type: integer }
+    RowError:
+      type: object
+      required: [row_no, reason]
+      properties:
+        row_no: { type: integer, description: Номер строки файла; заголовок - строка 1 }
+        reason: { type: string, description: Причины через «; » в виде «поле - сообщение» }
+    UploadResult:
+      type: object
+      required: [file, row_errors]
+      properties:
+        file: { $ref: "#/components/schemas/FileDetails" }
+        file_error: { type: string, description: "Причина отклонения всего файла (кодировка, заголовок)" }
+        row_errors:
+          type: array
+          items: { $ref: "#/components/schemas/RowError" }
+        share_version_no: { type: integer, format: int64, description: Номер созданной версии долей (только CLINIC_SHARE) }
+    HistoryRecord:
+      type: object
+      required: [id, history_source, component_kind_code, period_start, period_end, consumed_volume_ml]
+      properties:
+        id: { type: string, format: uuid }
+        statistics_file_id: { type: string, format: uuid }
+        history_source: { type: string, enum: [FILE, C01] }
+        component_kind_code: { type: string }
+        period_start: { type: string, format: date }
+        period_end: { type: string, format: date }
+        consumed_volume_ml: { type: integer, format: int64 }
+    ShareVersion:
+      type: object
+      required: [id, version_no, statistics_file_id, basis, valid_from]
+      properties:
+        id: { type: string, format: uuid }
+        version_no: { type: integer, format: int64 }
+        statistics_file_id: { type: string, format: uuid }
+        basis: { type: string }
+        valid_from: { type: string, format: date }
+    ClinicShareLine:
+      type: object
+      required: [district_id, clinic_id, clinic_share]
+      properties:
+        district_id: { type: integer, format: int64 }
+        clinic_id: { type: integer, format: int64 }
+        clinic_share: { type: number, format: double, description: "Доля от 0 до 1, 4 знака" }
+    CurrentShares:
+      type: object
+      required: [version, shares]
+      properties:
+        version: { $ref: "#/components/schemas/ShareVersion" }
+        shares:
+          type: array
+          items: { $ref: "#/components/schemas/ClinicShareLine" }
