@@ -15,8 +15,23 @@ components:
   - ../../components/demo-secrets
   - ../../components/sims
 
+configMapGenerator:
+  - name: platform-env
+    namespace: bs-app
+    behavior: merge
+    literals:
+      - BS_ENV=ci
+
 patches:
   - path: patch-resources.yaml
+  # Одна реплика на сервис с HPA: на раннере не хватит CPU на два экземпляра каждого.
+  - target:
+      group: autoscaling
+      kind: HorizontalPodAutoscaler
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
   - target:
       group: postgresql.cnpg.io
       kind: Cluster

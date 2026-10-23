@@ -1,0 +1,13 @@
+# maxUnavailable: 1 — при одной реплике не блокирует обслуживание узла, при двух и более держит хотя бы одну.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: matching
+  namespace: bs-app
+  labels:
+    app.kubernetes.io/name: matching
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: matching

@@ -1,0 +1,53 @@
+# notification — письма оператору и эскалации дежурному через почтовый шлюз C04 (ADR-0021).
+# На стенде шлюз — Mailpit в bs-sims.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification
+  namespace: bs-app
+  labels:
+    app.kubernetes.io/name: notification
+    app.kubernetes.io/component: service
+    blood-supply.io/runtime: go-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: notification
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: notification
+        app.kubernetes.io/component: service
+        blood-supply.io/runtime: go-service
+      annotations:
+        prometheus.io/port: "8107"
+    spec:
+      containers:
+        - name: app
+          image: ghcr.io/alchemistbro/blood-supply-notification:edge
+          ports:
+            - name: http
+              containerPort: 8107
+          envFrom:
+            - configMapRef:
+                name: platform-env
+          env:
+            - name: BS_HTTP_ADDR
+              value: ":8107"
+            - name: BS_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: notification-db
+                  key: BS_DB_URL
+            - name: BS_SMTP_ADDR
+              valueFrom:
+                configMapKeyRef:
+                  name: external-systems
+                  key: BS_SMTP_ADDR
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi

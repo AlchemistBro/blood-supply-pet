@@ -1,0 +1,64 @@
+# transfer — обязательства на передачу O07 и сага подтверждения. Единственный синхронный вызов между
+# сервисами: transfer → inventory, статус единиц (ADR-0004), служебным токеном (client credentials).
+# Масштабирование допустимо (аренда и CAS), HPA не задан: нагрузка мала, одна реплика.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transfer
+  namespace: bs-app
+  labels:
+    app.kubernetes.io/name: transfer
+    app.kubernetes.io/component: service
+    blood-supply.io/runtime: go-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: transfer
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: transfer
+        app.kubernetes.io/component: service
+        blood-supply.io/runtime: go-service
+      annotations:
+        prometheus.io/port: "8105"
+    spec:
+      containers:
+        - name: app
+          image: ghcr.io/alchemistbro/blood-supply-transfer:edge
+          ports:
+            - name: http
+              containerPort: 8105
+          envFrom:
+            - configMapRef:
+                name: platform-env
+          env:
+            - name: BS_HTTP_ADDR
+              value: ":8105"
+            - name: BS_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: transfer-db
+                  key: BS_DB_URL
+            - name: BS_INVENTORY_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: service-endpoints
+                  key: BS_INVENTORY_URL
+            - name: BS_SERVICE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: service-client
+                  key: BS_SERVICE_CLIENT_ID
+            - name: BS_SERVICE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: service-client
+                  key: BS_SERVICE_CLIENT_SECRET
+          resources:
+            requests:
+              cpu: 100m
+              memory: 96Mi
+            limits:
+              memory: 256Mi

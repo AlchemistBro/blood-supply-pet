@@ -1,0 +1,110 @@
+# web — BFF с серверным рендерингом (ADR-0007), без базы (ADR-0018): сессия в зашифрованной cookie.
+# Ходит в API сервисов и пишет аудит в audit по HTTP служебным токеном (ADR-0017).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: bs-app
+  labels:
+    app.kubernetes.io/name: web
+    app.kubernetes.io/component: service
+    blood-supply.io/runtime: go-service
+spec:
+  # Число реплик ведёт HPA (hpa.yaml), поле replicas не задаётся, чтобы apply его не сбрасывал.
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: web
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: web
+        app.kubernetes.io/component: service
+        blood-supply.io/runtime: go-service
+      annotations:
+        prometheus.io/port: "8080"
+    spec:
+      containers:
+        - name: app
+          image: ghcr.io/alchemistbro/blood-supply-web:edge
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: platform-env
+          env:
+            - name: BS_HTTP_ADDR
+              value: ":8080"
+            - name: BS_PUBLIC_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: service-endpoints
+                  key: BS_PUBLIC_URL
+            - name: BS_OIDC_CLIENT_ID
+              value: web
+            - name: BS_OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: web-secrets
+                  key: BS_OIDC_CLIENT_SECRET
+            - name: BS_SESSION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: web-secrets
+                  key: BS_SESSION_KEY
+            - name: BS_SERVICE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: service-client
+                  key: BS_SERVICE_CLIENT_ID
+            - name: BS_SERVICE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: service-client
+                  key: BS_SERVICE_CLIENT_SECRET
+            - name: BS_INVENTORY_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: service-endpoints
+                  key: BS_INVENTORY_URL
+            - name: BS_DEMAND_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: service-endpoints
+                  key: BS_DEMAND_URL
+            - name: BS_PLANNING_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: service-endpoints
+                  key: BS_PLANNING_URL
+            - name: BS_MATCHING_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: service-endpoints
+                  key: BS_MATCHING_URL
+            - name: BS_TRANSFER_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: service-endpoints
+                  key: BS_TRANSFER_URL
+            - name: BS_LOGISTICS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: service-endpoints
+                  key: BS_LOGISTICS_URL
+            - name: BS_NOTIFICATION_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: service-endpoints
+                  key: BS_NOTIFICATION_URL
+            - name: BS_AUDIT_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: service-endpoints
+                  key: BS_AUDIT_URL
+          resources:
+            requests:
+              cpu: 100m
+              memory: 96Mi
+            limits:
+              memory: 256Mi

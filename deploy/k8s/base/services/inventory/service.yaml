@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: inventory
+  namespace: bs-app
+  labels:
+    app.kubernetes.io/name: inventory
+spec:
+  selector:
+    app.kubernetes.io/name: inventory
+  ports:
+    - name: http
+      port: 8101
+      targetPort: http

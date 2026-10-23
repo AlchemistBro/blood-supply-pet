@@ -1,0 +1,47 @@
+# demand — оценки годового расхода и загрузка CSV (ФП2).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demand
+  namespace: bs-app
+  labels:
+    app.kubernetes.io/name: demand
+    app.kubernetes.io/component: service
+    blood-supply.io/runtime: go-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: demand
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: demand
+        app.kubernetes.io/component: service
+        blood-supply.io/runtime: go-service
+      annotations:
+        prometheus.io/port: "8102"
+    spec:
+      containers:
+        - name: app
+          image: ghcr.io/alchemistbro/blood-supply-demand:edge
+          ports:
+            - name: http
+              containerPort: 8102
+          envFrom:
+            - configMapRef:
+                name: platform-env
+          env:
+            - name: BS_HTTP_ADDR
+              value: ":8102"
+            - name: BS_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: demand-db
+                  key: BS_DB_URL
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi

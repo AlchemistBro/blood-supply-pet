@@ -14,3 +14,10 @@ resources:
 components:
   - ../../components/demo-secrets
   - ../../components/sims
+
+configMapGenerator:
+  - name: platform-env
+    namespace: bs-app
+    behavior: merge
+    literals:
+      - BS_ENV=local
