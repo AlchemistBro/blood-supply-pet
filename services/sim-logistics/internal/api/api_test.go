@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -291,19 +292,23 @@ func TestSubmitValidation(t *testing.T) {
 	f.mustDo(t, http.MethodGet, "/shipments", nil, http.StatusBadRequest, nil)
 }
 
-func TestSlowMsDelaysSubmit(t *testing.T) {
+// Пульт принимает задержку и отвергает недопустимую. Само ожидание проверяет carrier
+// (TestSlowSubmitHonoursContext, TestFindActiveAnswersDuringSlowSubmit) без реального времени.
+func TestSlowMsIsSetAndValidated(t *testing.T) {
 	f := newFixture(t)
 	var faults api.FaultsState
 	f.mustDo(t, http.MethodPost, "/dev/faults", map[string]any{"slowMs": 150}, http.StatusOK, &faults)
 	if faults.SlowMs != 150 {
 		t.Fatalf("состояние сбоев: %+v", faults)
 	}
-	began := time.Now()
-	f.mustDo(t, http.MethodPost, "/shipments", orderBody("o07-k"), http.StatusCreated, nil)
-	if elapsed := time.Since(began); elapsed < 150*time.Millisecond {
-		t.Fatalf("заказ без задержки: %v", elapsed)
-	}
 	f.mustDo(t, http.MethodPost, "/dev/faults", map[string]any{"slowMs": -1}, http.StatusBadRequest, nil)
+	f.mustDo(t, http.MethodPost, "/dev/faults", map[string]any{"slowMs": 30_001}, http.StatusBadRequest, nil)
+	// Перевод в Duration переполнился бы и дал отрицательную задержку, прошедшую проверку.
+	f.mustDo(t, http.MethodPost, "/dev/faults", map[string]any{"slowMs": int64(math.MaxInt64)}, http.StatusBadRequest, nil)
+	f.mustDo(t, http.MethodPost, "/dev/faults", map[string]any{"slowMs": 0}, http.StatusOK, &faults)
+	if faults.SlowMs != 0 {
+		t.Fatalf("задержка не снята: %+v", faults)
+	}
 }
 
 func TestResetClearsShipmentsAndFaults(t *testing.T) {

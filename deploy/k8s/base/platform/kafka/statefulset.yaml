@@ -1,0 +1,162 @@
+# Kafka одним брокером в режиме KRaft (ADR-0009: без Strimzi). Брокер и контроллер в одном процессе.
+# Клиенты подключаются к kafka.bs-app.svc:9092; брокер объявляет себя по имени пода в headless-сервисе.
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-headless
+  namespace: bs-app
+  labels:
+    app.kubernetes.io/name: kafka
+spec:
+  clusterIP: None
+  # Имя пода должно разрешаться до готовности: брокер объявляет его в метаданных.
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/name: kafka
+  ports:
+    - name: client
+      port: 9092
+      targetPort: client
+    - name: controller
+      port: 9093
+      targetPort: controller
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  namespace: bs-app
+  labels:
+    app.kubernetes.io/name: kafka
+spec:
+  selector:
+    app.kubernetes.io/name: kafka
+  ports:
+    - name: client
+      port: 9092
+      targetPort: client
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka
+  namespace: bs-app
+  labels:
+    app.kubernetes.io/name: kafka
+    app.kubernetes.io/component: message-broker
+spec:
+  serviceName: kafka-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kafka
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kafka
+        app.kubernetes.io/component: message-broker
+    spec:
+      automountServiceAccountToken: false
+      # Образ превращает каждую переменную KAFKA_* в настройку брокера, а ссылки на сервисы
+      # (KAFKA_PORT=tcp://…, KAFKA_SERVICE_HOST) сломали бы конфигурацию.
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: kafka
+          # Тот же образ и тег, что в deploy/compose/compose.yaml.
+          image: apache/kafka-native:3.9.1
+          env:
+            # Постоянный идентификатор кластера: данные на томе привязаны к нему.
+            - name: CLUSTER_ID
+              value: "Ymxvb2Qtc3VwcGx5LWthZg"
+            - name: KAFKA_NODE_ID
+              value: "1"
+            - name: KAFKA_PROCESS_ROLES
+              value: broker,controller
+            - name: KAFKA_LISTENERS
+              value: PLAINTEXT://:9092,CONTROLLER://:9093
+            - name: KAFKA_ADVERTISED_LISTENERS
+              value: PLAINTEXT://kafka-0.kafka-headless.bs-app.svc.cluster.local:9092
+            - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+              value: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+            - name: KAFKA_INTER_BROKER_LISTENER_NAME
+              value: PLAINTEXT
+            - name: KAFKA_CONTROLLER_LISTENER_NAMES
+              value: CONTROLLER
+            # Единственный голосующий — сам брокер; localhost не зависит от DNS при старте.
+            - name: KAFKA_CONTROLLER_QUORUM_VOTERS
+              value: 1@localhost:9093
+            - name: KAFKA_LOG_DIRS
+              value: /var/lib/kafka/data
+            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+              value: "1"
+            - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+              value: "1"
+            - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
+              value: "1"
+            - name: KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS
+              value: "0"
+            # Топики создаёт только Job kafka-topics по списку из libs/contracts.
+            - name: KAFKA_AUTO_CREATE_TOPICS_ENABLE
+              value: "false"
+            - name: KAFKA_LOG_RETENTION_HOURS
+              value: "168"
+          ports:
+            - name: client
+              containerPort: 9092
+            - name: controller
+              containerPort: 9093
+          startupProbe:
+            tcpSocket:
+              port: client
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            tcpSocket:
+              port: client
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            tcpSocket:
+              port: client
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            # Скрипт запуска образа пишет server.properties в /opt/kafka/config из переменных
+            # окружения, поэтому корень ФС оставлен записываемым.
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/kafka/data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app.kubernetes.io/name: kafka
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi

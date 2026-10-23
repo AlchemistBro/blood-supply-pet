@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://blood-supply.dev/schemas/logistics/RequestTransport.v1.json",
   "title": "RequestTransport",
-  "description": "Команда logistics.commands: заказать перевозку по подтверждённому обязательству. Номеров единиц нет: маршрут, вид, число контейнеров, температурный режим (ПП РФ № 641; диапазоны демо).",
+  "description": "Команда logistics.commands: заказать перевозку по подтверждённому обязательству. Номеров единиц нет: маршрут, вид, число контейнеров, температурный режим (ПП РФ № 641, п. 67–69; п. 68 в — раздельно по температуре). Код режима — метка; предельные значения при перевозке — приложение 3 ПП 641: эритроцитсодержащие не выше +10 °C, плазма и криопреципитат не выше −18 °C, тромбоциты +20…+24 °C.",
   "type": "object",
   "additionalProperties": false,
   "required": ["obligation_id", "request_id", "source_clinic_id", "target_clinic_id", "component_kind", "quantity", "temperature_regime"],
