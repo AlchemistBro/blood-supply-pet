@@ -5,8 +5,9 @@ package aistclient
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -33,7 +34,8 @@ var _ app.AistClient = (*Client)(nil)
 
 // Options — таймауты вызовов.
 type Options struct {
-	// StatusTimeout — таймаут точечного статуса (ADR-0004: 3 с).
+	// StatusTimeout — верхний предел точечного статуса. Меньше 3 с бюджета transfer → inventory (ADR-0004):
+	// остаток нужен на ответ из копии. Фактический дедлайн задаёт приложение контекстом.
 	StatusTimeout time.Duration
 	// ChangesTimeout — таймаут страницы изменений.
 	ChangesTimeout time.Duration
@@ -43,7 +45,7 @@ type Options struct {
 // не должен мешать ответу transfer, и наоборот.
 func New(baseURL string, o Options) *Client {
 	if o.StatusTimeout <= 0 {
-		o.StatusTimeout = 3 * time.Second
+		o.StatusTimeout = 2 * time.Second
 	}
 	if o.ChangesTimeout <= 0 {
 		o.ChangesTimeout = 10 * time.Second
@@ -51,7 +53,7 @@ func New(baseURL string, o Options) *Client {
 	return &Client{
 		base:    strings.TrimRight(baseURL, "/"),
 		changes: httpx.NewClient(httpx.ClientConfig{Name: "aist-changes", Timeout: o.ChangesTimeout, Retries: 1}),
-		// Без повторов: весь бюджет вызова transfer → inventory — 3 с.
+		// Без повторов: бюджет вызова transfer → inventory — 3 с вместе с ответом из копии.
 		status: httpx.NewClient(httpx.ClientConfig{Name: "aist-status", Timeout: o.StatusTimeout}),
 	}
 }
@@ -130,23 +132,46 @@ func (c *Client) Statuses(ctx context.Context, codes []string) (app.StatusPage, 
 	return out, nil
 }
 
+// get выполняет запрос. Ошибка — всегда *app.AistFailure без исходной причины: *url.Error из net/http
+// содержит полный адрес, а в адресе точечного статуса — исходные коды единиц (ADR-0010).
 func (c *Client) get(ctx context.Context, hc *httpx.Client, path string, v any) error {
+	op := strings.SplitN(path, "?", 2)[0]
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+path, nil)
 	if err != nil {
-		return fmt.Errorf("запрос АИСТ-М: %w", err)
+		return &app.AistFailure{Kind: app.AistUnavailable, Operation: op}
 	}
 	req.Header.Set("Accept", "application/json")
 	resp, err := hc.Do(req)
 	if err != nil {
-		return fmt.Errorf("АИСТ-М недоступна: %w", err)
+		return &app.AistFailure{Kind: classify(ctx, err), Operation: op}
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
-		return fmt.Errorf("АИСТ-М ответила %d на %s", resp.StatusCode, strings.SplitN(path, "?", 2)[0])
+		return &app.AistFailure{Kind: app.AistHTTPStatus, Operation: op, HTTPStatus: resp.StatusCode}
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, maxResponseBytes)).Decode(v); err != nil {
-		return fmt.Errorf("разбор ответа АИСТ-М: %w", err)
+		return &app.AistFailure{Kind: classifyBody(ctx, err), Operation: op}
 	}
 	return nil
+}
+
+func classify(ctx context.Context, err error) string {
+	var ne net.Error
+	switch {
+	case errors.Is(err, httpx.ErrCircuitOpen):
+		return app.AistCircuitOpen
+	case errors.Is(err, context.DeadlineExceeded), ctx.Err() != nil, errors.As(err, &ne) && ne.Timeout():
+		return app.AistTimeout
+	default:
+		return app.AistUnavailable
+	}
+}
+
+func classifyBody(ctx context.Context, err error) string {
+	var ne net.Error
+	if errors.Is(err, context.DeadlineExceeded) || ctx.Err() != nil || errors.As(err, &ne) && ne.Timeout() {
+		return app.AistTimeout
+	}
+	return app.AistBadResponse
 }

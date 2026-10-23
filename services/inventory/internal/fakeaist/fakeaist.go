@@ -40,6 +40,8 @@ type Server struct {
 	version     int64
 	units       map[string]*Unit
 	down        bool
+	slow        time.Duration
+	silent      map[string]bool
 	statusCalls int
 	srv         *httptest.Server
 }
@@ -47,7 +49,7 @@ type Server struct {
 // New поднимает сервер; закрывается в t.Cleanup.
 func New(t testing.TB, now time.Time) *Server {
 	t.Helper()
-	s := &Server{now: now.UTC(), units: map[string]*Unit{}}
+	s := &Server{now: now.UTC(), units: map[string]*Unit{}, silent: map[string]bool{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /units/changes", s.changes)
 	mux.HandleFunc("GET /units/status", s.status)
@@ -130,6 +132,38 @@ func (s *Server) SetDown(down bool) {
 	s.down = down
 }
 
+// SetSlow задаёт задержку ответа (slowMs имитатора). Задержку прерывает отмена запроса клиентом.
+func (s *Server) SetSlow(d time.Duration) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.slow = d
+}
+
+// SetSilent заставляет точечный статус «промолчать» о единице: её нет ни в units, ни в not_found.
+func (s *Server) SetSilent(code string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.silent[code] = true
+}
+
+// wait выполняет задержку вне блокировки; false — клиент ушёл.
+func (s *Server) wait(r *http.Request) bool {
+	s.mu.Lock()
+	d := s.slow
+	s.mu.Unlock()
+	if d <= 0 {
+		return true
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-t.C:
+		return true
+	case <-r.Context().Done():
+		return false
+	}
+}
+
 // StatusCalls — сколько раз спрашивали точечный статус.
 func (s *Server) StatusCalls() int {
 	s.mu.Lock()
@@ -147,15 +181,22 @@ func (s *Server) unavailable(w http.ResponseWriter) bool {
 }
 
 func (s *Server) changes(w http.ResponseWriter, r *http.Request) {
+	if !s.wait(r) {
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.unavailable(w) {
 		return
 	}
 	since, _ := strconv.ParseInt(r.URL.Query().Get("since"), 10, 64)
-	limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
-	if err != nil || limit <= 0 {
-		limit = 500
+	limit := 500
+	if v := r.URL.Query().Get("limit"); v != "" {
+		var err error
+		if limit, err = strconv.Atoi(v); err != nil || limit < 1 || limit > 5000 {
+			http.Error(w, `{"title":"Некорректный параметр limit","status":400}`, http.StatusBadRequest)
+			return
+		}
 	}
 	var out []Unit
 	for _, u := range s.units {
@@ -180,8 +221,13 @@ func (s *Server) changes(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.statusCalls++
+	s.mu.Unlock()
+	if !s.wait(r) {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.unavailable(w) {
 		return
 	}
@@ -195,15 +241,24 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	}
 	units := []status{}
 	missing := []string{}
+	var ids []string
 	for _, v := range r.URL.Query()["ids"] {
-		for _, id := range strings.Split(v, ",") {
-			u, ok := s.units[id]
-			if !ok {
-				missing = append(missing, id)
-				continue
-			}
-			units = append(units, status{u.AistUnitCode, u.Status, u.WithdrawalReason, u.ClinicCode, u.Version, u.ChangedAt})
+		ids = append(ids, strings.Split(v, ",")...)
+	}
+	if len(ids) == 0 || len(ids) > 1000 {
+		http.Error(w, `{"title":"Некорректный параметр ids","status":400}`, http.StatusBadRequest)
+		return
+	}
+	for _, id := range ids {
+		if s.silent[id] {
+			continue
 		}
+		u, ok := s.units[id]
+		if !ok {
+			missing = append(missing, id)
+			continue
+		}
+		units = append(units, status{u.AistUnitCode, u.Status, u.WithdrawalReason, u.ClinicCode, u.Version, u.ChangedAt})
 	}
 	writeJSON(w, map[string]any{"units": units, "not_found": missing, "checked_at": s.now})
 }
