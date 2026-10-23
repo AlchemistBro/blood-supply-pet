@@ -20,17 +20,14 @@ const (
 	otherID   = "0192f0c1-7a2b-7c3d-8e4f-5a6b7c8d9e10"
 )
 
-func setup(t *testing.T, spec string) (*k1seal.Keyring, *opener.Opener) {
+// setup возвращает связку дважды: kr шифрует, op расшифровывает (в сервисах это одна и та же связка).
+func setup(t *testing.T, spec string) (*opener.Keyring, *opener.Keyring) {
 	t.Helper()
-	kr, err := k1seal.ParseKeyring(spec)
+	kr, err := opener.ParseKeyring(spec)
 	if err != nil {
 		t.Fatalf("ParseKeyring: %v", err)
 	}
-	op, err := opener.New(kr)
-	if err != nil {
-		t.Fatalf("opener.New: %v", err)
-	}
-	return kr, op
+	return kr, kr
 }
 
 func TestRoundTrip(t *testing.T) {
@@ -177,8 +174,12 @@ func TestMalformedEnvelopeFails(t *testing.T) {
 	}
 }
 
-func TestNewRejectsNilKeyring(t *testing.T) {
-	if _, err := opener.New(nil); !errors.Is(err, k1seal.ErrKeyring) {
-		t.Fatalf("ожидалась ErrKeyring, получено %v", err)
+func TestNilKeyringFails(t *testing.T) {
+	var kr *opener.Keyring
+	if _, err := kr.Open(k1seal.Sealed("v1.cur.AAAA"), requestID); !errors.Is(err, k1seal.ErrKeyring) {
+		t.Fatalf("Open: ожидалась ErrKeyring, получено %v", err)
+	}
+	if _, err := kr.Seal(plainCase, requestID); !errors.Is(err, k1seal.ErrKeyring) {
+		t.Fatalf("Seal: ожидалась ErrKeyring, получено %v", err)
 	}
 }

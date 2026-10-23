@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/AlchemistBro/blood-supply-pet/libs/k1seal"
+	"github.com/AlchemistBro/blood-supply-pet/libs/k1seal/opener"
 )
 
 // Демо-ключи для тестов, не для эксплуатации.
@@ -22,9 +23,9 @@ const (
 	requestID = "0192f0c1-7a2b-7c3d-8e4f-5a6b7c8d9e0f"
 )
 
-func mustRing(t *testing.T, spec string) *k1seal.Keyring {
+func mustRing(t *testing.T, spec string) *opener.Keyring {
 	t.Helper()
-	kr, err := k1seal.ParseKeyring(spec)
+	kr, err := opener.ParseKeyring(spec)
 	if err != nil {
 		t.Fatalf("ParseKeyring: %v", err)
 	}
@@ -61,7 +62,7 @@ func TestParseKeyringRejects(t *testing.T) {
 	}
 	for name, spec := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := k1seal.ParseKeyring(spec)
+			_, err := opener.ParseKeyring(spec)
 			if !errors.Is(err, k1seal.ErrKeyring) {
 				t.Fatalf("ожидалась ErrKeyring, получено %v", err)
 			}
@@ -80,7 +81,7 @@ func TestParseKeyringRejects(t *testing.T) {
 
 func TestKeyringFromEnv(t *testing.T) {
 	t.Setenv(k1seal.EnvKeys, "demo:"+key(5))
-	kr, err := k1seal.KeyringFromEnv()
+	kr, err := opener.KeyringFromEnv()
 	if err != nil {
 		t.Fatalf("KeyringFromEnv: %v", err)
 	}
@@ -88,7 +89,7 @@ func TestKeyringFromEnv(t *testing.T) {
 		t.Fatalf("текущий ключ %q", kr.CurrentKeyID())
 	}
 	t.Setenv(k1seal.EnvKeys, "")
-	if _, err := k1seal.KeyringFromEnv(); !errors.Is(err, k1seal.ErrKeyring) {
+	if _, err := opener.KeyringFromEnv(); !errors.Is(err, k1seal.ErrKeyring) {
 		t.Fatalf("пустая переменная: ожидалась ErrKeyring, получено %v", err)
 	}
 }
@@ -137,6 +138,7 @@ func TestSealRejectsBadInput(t *testing.T) {
 		"номер из пробелов":     {" \t\n ", requestID},
 		"пустая заявка":         {plainCase, ""},
 		"слишком длинный номер": {strings.Repeat("9", 129), requestID},
+		"номер не в UTF-8":      {"ИБ-\xff\xfe-17", requestID},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -149,7 +151,7 @@ func TestSealRejectsBadInput(t *testing.T) {
 			}
 		})
 	}
-	var nilRing *k1seal.Keyring
+	var nilRing *opener.Keyring
 	if _, err := nilRing.Seal(plainCase, requestID); !errors.Is(err, k1seal.ErrKeyring) {
 		t.Fatalf("nil-связка: ожидалась ErrKeyring, получено %v", err)
 	}
@@ -205,12 +207,18 @@ func TestSealedDoesNotLeak(t *testing.T) {
 		if out := fmt.Sprintf(verb, holder{s}); leaks(out) {
 			t.Errorf("fmt %s структуры раскрывает конверт: %q", verb, out)
 		}
-		if out := fmt.Sprintf(verb, &s); leaks(out) && verb != "%p" {
+		if out := fmt.Sprintf(verb, &s); leaks(out) {
 			t.Errorf("fmt %s указателя раскрывает конверт: %q", verb, out)
 		}
 	}
 	if out := fmt.Sprint(s); leaks(out) {
 		t.Errorf("Sprint раскрывает конверт: %q", out)
+	}
+	// %p к строке не применим: fmt печатает значение рефлексией, минуя Format, и выводит конверт (шифротекст).
+	// Это известное ограничение (go vet ловит такие вызовы); открытый номер не утекает и здесь.
+	pVerb := "%p"
+	if out := fmt.Sprintf(pVerb, s); strings.Contains(out, plainCase) {
+		t.Errorf("fmt %%p раскрывает номер: %q", out)
 	}
 	if out := s.String(); leaks(out) {
 		t.Errorf("String раскрывает конверт: %q", out)
@@ -297,4 +305,46 @@ func TestKeyringDoesNotLeak(t *testing.T) {
 			t.Fatalf("вывод связки раскрывает ключ: %q", out)
 		}
 	}
+}
+
+// FuzzParseSealed: разбор любого входа не паникует; принятый конверт проходит JSON туда и обратно,
+// а его вывод в fmt не содержит шифротекста.
+func FuzzParseSealed(f *testing.F) {
+	kr, err := opener.ParseKeyring("cur:" + key(1))
+	if err != nil {
+		f.Fatal(err)
+	}
+	good, err := kr.Seal(plainCase, requestID)
+	if err != nil {
+		f.Fatal(err)
+	}
+	for _, seed := range []string{"", "v1", "v1.", "v1..", "v1.cur.", "v1.cur.AAAA", string(good), string(good) + ".", "v2" + string(good)[2:], plainCase, "v1.\xff.\x00"} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, in string) {
+		s, err := k1seal.ParseSealed(in)
+		_ = k1seal.Sealed(in).String()
+		_ = k1seal.Sealed(in).KeyID()
+		if err != nil {
+			if !errors.Is(err, k1seal.ErrMalformed) {
+				t.Fatalf("ошибка не ErrMalformed: %v", err)
+			}
+			return
+		}
+		if s.KeyID() == "" {
+			t.Fatalf("принятый конверт без kid")
+		}
+		raw, err := json.Marshal(s)
+		if err != nil {
+			t.Fatalf("Marshal: %v", err)
+		}
+		var back k1seal.Sealed
+		if err := json.Unmarshal(raw, &back); err != nil || back != s {
+			t.Fatalf("JSON туда и обратно: %v", err)
+		}
+		_, payload, _ := strings.Cut(strings.TrimPrefix(in, "v1."), ".")
+		if out := fmt.Sprintf("%v", s); strings.Contains(out, payload) {
+			t.Fatalf("fmt раскрывает шифротекст: %q", out)
+		}
+	})
 }

@@ -3,7 +3,8 @@
 //   - services/<a>/** не импортирует services/<b>/** (строже, чем правило internal компилятора);
 //   - internal/domain не зависит от pgx, Kafka, HTTP и SQL;
 //   - клиент Kafka (franz-go) импортируется только в libs/messaging, libs/testinfra, tools и tests;
-//   - расшифровку номера случая libs/k1seal/opener импортируют только matching, inventory и libs/k1seal (ADR-0020).
+//   - код с ключом номера случая (libs/k1seal/opener) прямо или транзитивно достижим только из matching,
+//     inventory и libs/k1seal; список подпакетов libs/k1seal закрыт (ADR-0020).
 package archtest
 
 import (
@@ -61,23 +62,85 @@ func serviceOf(path string) string {
 	return rest
 }
 
-// k1OpenerViolation возвращает текст нарушения, если importer импортирует расшифровку номера случая
-// (libs/k1seal/opener) без права на ключ K1 (ADR-0020). Пустая строка — нарушения нет.
-// Внутренний пакет libs/k1seal/internal/... ограничивает сам компилятор.
-func k1OpenerViolation(importer, imported string) string {
-	if imported != module+"/libs/k1seal/opener" {
-		return ""
+// k1sealAllowed — подпакеты libs/k1seal. Список закрыт: новый подпакет без правки правила — нарушение,
+// иначе в него можно вынести расшифровку в обход opener.
+var k1sealAllowed = map[string]bool{
+	module + "/libs/k1seal":        true, // тип конверта Sealed, без ключей и криптографии
+	module + "/libs/k1seal/opener": true, // связка ключей, шифрование и расшифровка
+}
+
+// k1sealViolations проверяет правило ADR-0020 для пакета pkg с транзитивными импортами deps: код с ключом
+// номера случая (любой подпакет libs/k1seal, кроме корня) достижим только из services/matching,
+// services/inventory и самой libs/k1seal. Внешние тесты (…_test) и тестовые main (….test) проверяются как
+// пакет, к которому относятся.
+func k1sealViolations(pkg string, deps map[string]bool) []string {
+	const root = module + "/libs/k1seal"
+	norm := strings.TrimSuffix(strings.TrimSuffix(pkg, ".test"), "_test")
+	if norm == root || strings.HasPrefix(norm, root+"/") {
+		if !k1sealAllowed[norm] {
+			return []string{fmt.Sprintf("%s: неизвестный подпакет libs/k1seal; список закрыт правилом archtest (ADR-0020)", pkg)}
+		}
+		return nil
 	}
-	// Внешний тестовый пакет (…_test) проверяется как пакет, который он тестирует.
-	path := strings.TrimSuffix(importer, "_test")
-	switch serviceOf(path) {
+	switch serviceOf(norm) {
 	case "matching", "inventory":
-		return ""
+		return nil
 	}
-	if path == module+"/libs/k1seal" || strings.HasPrefix(path, module+"/libs/k1seal/") {
-		return ""
+	var out []string
+	for dep := range deps {
+		if strings.HasPrefix(dep, root+"/") {
+			out = append(out, fmt.Sprintf("%s прямо или транзитивно импортирует %s: код с ключом номера случая разрешён только matching и inventory (ADR-0020)", pkg, dep))
+		}
 	}
-	return fmt.Sprintf("%s импортирует расшифровку номера случая %s; разрешено только matching и inventory (ADR-0020)", importer, imported)
+	return out
+}
+
+// closure — транзитивное замыкание импортов start (без самого start); циклы не мешают обходу.
+func closure(start string, next func(string) []string) map[string]bool {
+	seen := map[string]bool{}
+	stack := append([]string(nil), next(start)...)
+	for len(stack) > 0 {
+		n := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if seen[n] || n == start {
+			continue
+		}
+		seen[n] = true
+		stack = append(stack, next(n)...)
+	}
+	return seen
+}
+
+// TestK1SealDependencies применяет правило ADR-0020 к реальному дереву пакетов.
+func TestK1SealDependencies(t *testing.T) {
+	pkgs := loadAll(t)
+	byID := map[string]*packages.Package{}
+	packages.Visit(pkgs, nil, func(p *packages.Package) { byID[p.ID] = p })
+	next := func(id string) []string {
+		p := byID[id]
+		if p == nil {
+			return nil
+		}
+		ids := make([]string, 0, len(p.Imports))
+		for _, imp := range p.Imports {
+			ids = append(ids, imp.ID)
+		}
+		return ids
+	}
+	for _, p := range pkgs {
+		if !strings.HasPrefix(p.PkgPath, module) {
+			continue
+		}
+		deps := map[string]bool{}
+		for id := range closure(p.ID, next) {
+			if d := byID[id]; d != nil {
+				deps[d.PkgPath] = true
+			}
+		}
+		for _, msg := range k1sealViolations(p.PkgPath, deps) {
+			t.Error(msg)
+		}
+	}
 }
 
 func TestDependencyRules(t *testing.T) {
@@ -113,9 +176,6 @@ func TestDependencyRules(t *testing.T) {
 			}
 			if strings.HasPrefix(imp, "github.com/twmb/franz-go") && !kafkaAllowed(p.PkgPath) {
 				t.Errorf("%s импортирует Kafka напрямую; разрешено только через libs/messaging", p.PkgPath)
-			}
-			if msg := k1OpenerViolation(p.PkgPath, imp); msg != "" {
-				t.Error(msg)
 			}
 		}
 	}
