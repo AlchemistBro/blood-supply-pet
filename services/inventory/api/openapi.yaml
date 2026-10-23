@@ -1,0 +1,165 @@
+openapi: 3.0.3
+info:
+  title: inventory
+  version: 0.1.0
+  description: |
+    Копия единиц компонентов крови из АИСТ-М (O01) и единственный синхронный межсервисный вызов —
+    точечный статус единиц для transfer (ADR-0004). Исходный код единицы АИСТ-М наружу не отдаётся:
+    единица называется только суррогатом unit_id (ADR-0010). Номера случая пациента здесь нет.
+servers:
+  - url: http://localhost:8101
+# x-bs-operation у каждой операции — операция матрицы прав (libs/httpx/auth/policy.go), которую проверяет сервер.
+# Служебные маршруты (/healthz, /readyz, /metrics, /openapi.yaml) здесь не описаны: их отдаёт libs/runtime без токена.
+paths:
+  /internal/units/status:
+    get:
+      operationId: getUnitStatuses
+      x-bs-operation: INTERNAL_UNIT_STATUS
+      summary: Статус единиц для подтверждения обязательства (служебный токен, роль SERVICE)
+      description: |
+        Сначала спрашивается АИСТ-М с предохранителем. Ожидание ограничено BS_AIST_STATUS_TIMEOUT (2 с) и
+        дедлайном запроса минус 300 мс резерва (без дедлайна — 3 с, ADR-0004). Если АИСТ-М не ответила
+        (ошибка, таймаут, предохранитель), статус отдаётся из копии inventory с source = copy и водяным знаком —
+        временем окончания последнего успешного опроса. Если ни одной единицы нет в копии, АИСТ-М не
+        спрашивается, ответ source = aist и все единицы в not_found. Единица, о которой АИСТ-М промолчала,
+        тоже в not_found. Доступна только единица в статусе IN_STOCK; карантин недоступен (ПП РФ № 641, п. 62).
+      parameters:
+        - name: ids
+          in: query
+          required: true
+          description: Идентификаторы единиц (unit_id) через запятую, от 1 до 1000.
+          style: form
+          explode: false
+          schema:
+            type: array
+            minItems: 1
+            maxItems: 1000
+            items: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Статусы единиц
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UnitStatusReport" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /dev/protected-volume:
+    post:
+      operationId: publishProtectedVolume
+      x-bs-operation: DEV_PANEL
+      summary: "ДЕМО: опубликовать защищённый объём источника (только BS_ENV=local, иначе 404)"
+      description: |
+        До появления planning защищённый объём (NFR013) задаётся вручную и публикуется событием
+        ProtectedVolumePublished в inventory.events. Версия растёт только вперёд. Действие пишется в аудит.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProtectedVolumeInput" }
+      responses:
+        "202":
+          description: Событие записано в outbox
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProtectedVolume" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+components:
+  responses:
+    BadRequest:
+      description: Неверный запрос
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Unauthorized:
+      description: Требуется вход
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Forbidden:
+      description: Недостаточно прав
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    NotFound:
+      description: Не найдено
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+  schemas:
+    UnitStatusReport:
+      type: object
+      required: [source, checked_at, units, not_found]
+      properties:
+        source:
+          type: string
+          enum: [aist, copy]
+          description: |
+            aist — ответ АИСТ-М в этом запросе (или ни одной единицы нет в копии и спрашивать было не о чем);
+            copy — АИСТ-М не ответила (ошибка, таймаут, предохранитель), статус из копии inventory.
+        checked_at:
+          type: string
+          format: date-time
+          description: Когда получен статус (время АИСТ-М или время ответа из копии).
+        watermark:
+          type: string
+          format: date-time
+          nullable: true
+          description: Водяной знак копии — окончание последнего успешного опроса АИСТ-М; null, если опроса ещё не было.
+        units:
+          type: array
+          items: { $ref: "#/components/schemas/UnitStatus" }
+        not_found:
+          type: array
+          description: Единицы, которых нет ни в копии, ни в АИСТ-М.
+          items: { type: string, format: uuid }
+    UnitStatus:
+      type: object
+      required: [unit_id, clinic_id, component_kind, status, available, version, changed_at, expires_at]
+      properties:
+        unit_id: { type: string, format: uuid }
+        clinic_id: { type: integer, format: int64 }
+        component_kind: { type: string }
+        status:
+          type: string
+          enum: [IN_STOCK, QUARANTINE, ISSUED, DISCARDED, TRANSFERRED]
+        available:
+          type: boolean
+          description: Единицу можно закрепить и передать (ref_unit_status.is_available).
+        version:
+          type: integer
+          format: int64
+          description: Версия записи в АИСТ-М.
+        changed_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+    ProtectedVolumeInput:
+      type: object
+      required: [clinic_id, component_kind, volume_units]
+      additionalProperties: false
+      properties:
+        clinic_id: { type: integer, format: int64, minimum: 1 }
+        component_kind: { type: string }
+        volume_units: { type: integer, format: int64, minimum: 0 }
+        reason: { type: string, maxLength: 256 }
+    ProtectedVolume:
+      type: object
+      required: [clinic_id, component_kind, volume_units, version, reason]
+      properties:
+        clinic_id: { type: integer, format: int64 }
+        component_kind: { type: string }
+        volume_units: { type: integer, format: int64 }
+        version: { type: integer, format: int64 }
+        reason: { type: string }
+    Problem:
+      type: object
+      required: [title, status]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        correlation_id: { type: string }
