@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/transfer/TransportRequested.v1.json",
+  "title": "TransportRequested",
+  "description": "Событие transfer.events: перевозчик принял заказ (CONFIRMED → TRANSPORT_REQUESTED).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["obligation_id", "shipment_ref"],
+  "properties": {
+    "obligation_id": { "type": "string", "format": "uuid" },
+    "obligation_version": { "type": "integer", "minimum": 0, "description": "Версия O07 после перехода; проекции применяют событие, только если версия выше сохранённой" },
+    "source_clinic_id": { "type": "integer", "minimum": 1, "description": "Клиника-источник обязательства; для фильтра живых статусов без запроса к transfer" },
+    "target_clinic_id": { "type": "integer", "minimum": 1, "description": "Клиника-получатель обязательства; для фильтра живых статусов без запроса к transfer" },
+    "shipment_ref": { "type": "string", "minLength": 1, "maxLength": 64 }
+  }
+}

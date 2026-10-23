@@ -1,0 +1,10 @@
+{
+  "obligation_id": "0192f3a1-7b2c-7d4e-8f90-300000000001",
+  "obligation_version": 5,
+  "source_clinic_id": 1,
+  "target_clinic_id": 2,
+  "request_id": "0192f3a1-7b2c-7d4e-8f90-200000000001",
+  "transport_ref": "MANUAL-2026-10-23-007",
+  "assigned_by": "duty1",
+  "at": "2026-10-23T10:20:00Z"
+}

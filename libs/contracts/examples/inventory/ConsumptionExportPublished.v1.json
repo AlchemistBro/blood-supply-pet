@@ -1,0 +1,7 @@
+{
+  "component_kind": "FFP",
+  "clinic_id": 1,
+  "period_start": "2026-09-01T00:00:00Z",
+  "period_end": "2026-10-01T00:00:00Z",
+  "consumed_volume_ml": 152500
+}

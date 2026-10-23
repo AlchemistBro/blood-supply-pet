@@ -1,0 +1,14 @@
+{
+  "proposal_id": "0192f3a1-7b2c-7d4e-8f90-720000000001",
+  "replenishment_plan_id": "0192f3a1-7b2c-7d4e-8f90-710000000001",
+  "source_clinic_id": 5,
+  "target_clinic_id": 2,
+  "component_kind": "RBC",
+  "blood_group": "O-",
+  "units": 4,
+  "delivery_minutes": 35,
+  "fallback_sources": [
+    7,
+    9
+  ]
+}

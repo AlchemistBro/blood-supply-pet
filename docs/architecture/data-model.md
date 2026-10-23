@@ -89,7 +89,7 @@ erDiagram
         uuid idempotency_key UK
         uuid transfer_obligation_id
         varchar message_type "ALLOCATE_TO_PATIENT | RELEASE_ALLOCATION"
-        jsonb payload "id единиц, номер случая, клиника; без ФИО/СНИЛС"
+        jsonb payload "id единиц, request_id, конверт номера случая (ADR-0020), клиника; без ФИО/СНИЛС"
         timestamptz created_at
         integer attempt_count
         timestamptz next_attempt_at
@@ -203,7 +203,7 @@ erDiagram
 `request_status_dict`, `clinical_request` (O09, `patient_case_no` K1), `request_constraint` (O08), `variant_offer` (O10, `UNIQUE(clinical_request_id, rank_no)`,
 `explanation`, `stock_watermark`), `variant_offer_unit_link`, `variant_selection`.
 Проекции: `unit_projection` (единицы в наличии по клиникам из `inventory.events`), `delivery_estimate_projection`, `obligation_projection`.
-`patient_case_no` хранится в отдельной таблице `clinical_request_patient` с шифрованием на уровне колонки (`pgcrypto`, ключ из Secret)
+`patient_case_no` хранится в отдельной таблице `clinical_request_patient` в виде конверта, зашифрованного приложением (`libs/k1seal`, AES-256-GCM, AAD = id заявки, ключ из Secret; ADR-0020)
 и отдаётся отдельным эндпоинтом, каждое чтение которого пишет `READ_PATIENT_CASE` в аудит (NFR016).
 
 ## transfer
@@ -214,7 +214,7 @@ erDiagram
 | --- | --- | --- |
 | `source_stock` | Остаток источника: `clinic_id bigint, component_kind_code, available_units, reserved_units, protected_volume, protected_version, protected_reason` | PK (clinic, kind); блокируется `FOR UPDATE` первой |
 | `unit_copy` | Проекция единиц из `inventory.events` с версией: `unit_id, clinic_id bigint, component_kind_code, blood_group_code, rh_positive, phenotype, volume_ml, expires_at, unit_status_code, version` | `version` растёт только вперёд; закрепляется только `IN_STOCK` |
-| `obligation` | O07: `obligation_id, choice_id UK, request_id, origin, source_clinic_id bigint, target_clinic_id bigint, component_kind_code, blood_group_code, requested_qty, confirmed_qty, status, urgency_code, deadline, confirm_window_seconds, fallback_sources bigint[], spec_* (группа, резус, фенотип, min_expires_at, rule_version), confirm_key, transport_ref, status_reason, version, created_at, updated_at` | `CHECK (source ≠ target)`; индекс `(deadline) WHERE status='PENDING'`; индекс `(request_id)` |
+| `obligation` | O07: `obligation_id, choice_id UK, request_id, origin, source_clinic_id bigint, target_clinic_id bigint, component_kind_code, blood_group_code, requested_qty, confirmed_qty, status, urgency_code, deadline, confirm_window_seconds, fallback_sources bigint[], spec_* (группа, резус, фенотип, min_expires_at, rule_version), patient_case_sealed text NULL, confirm_key, transport_ref, status_reason, version, created_at, updated_at` | `CHECK (source ≠ target)`; индекс `(deadline) WHERE status='PENDING'`; индекс `(request_id)`. `patient_case_sealed` — конверт номера случая (ADR-0020), ключа у `transfer` нет; затирается в конечных статусах (S6-WP4) |
 | `allocation` | O18: `allocation_id, unit_id, obligation_id, status (CONFIRMED/RELEASED/CONSUMED), created_at, closed_at` | `UNIQUE (unit_id) WHERE status = 'CONFIRMED'` — NFR004; индексы `(obligation_id)` и `(unit_id, created_at)`. Строки не удаляются, `DELETE` запрещён триггером: история «куда уходила единица» (ПП РФ № 641, п. 17–18, 54; ADR-0027) |
 | `outbox`, `inbox`, `audit_local` | платформа | см. `events.md` |
 
