@@ -73,6 +73,8 @@ type Server struct {
 	log      *slog.Logger
 	pages    *pages
 	csp      string
+	// mux — маршруты web: белый список адресов возврата после входа (safeNext).
+	mux *http.ServeMux
 }
 
 // New собирает сервер.
@@ -102,6 +104,7 @@ func (s *Server) Guard() *authz.Guard { return s.guard }
 
 // Register регистрирует маршруты входа, выхода и главной страницы.
 func (s *Server) Register(mux *http.ServeMux) {
+	s.mux = mux
 	mux.HandleFunc("GET /login", s.loginPage)
 	mux.HandleFunc("GET /auth/login", s.startLogin)
 	mux.HandleFunc("GET /auth/callback", s.callback)

@@ -234,6 +234,12 @@ func TestLoginRedirectsToNextOnlyLocally(t *testing.T) {
 		"//evil.example/x":      "/",
 		"https://evil.example/": "/",
 		"/\\evil.example":       "/",
+		"/x/../\\evil.example":  "/",
+		"/%5C":                  "/",
+		"/..%2F%5C":             "/",
+		"/\t/evil.example":      "/",
+		"/∕evil.example":        "/",
+		"/unknown-page":         "/",
 		"":                      "/",
 	} {
 		e.provider.LoginAs(operator)
