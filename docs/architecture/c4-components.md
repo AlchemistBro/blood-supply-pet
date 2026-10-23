@@ -12,16 +12,16 @@ C4Component
     title transfer · компоненты (оркестратор саги подтверждения)
 
     Container(web, "web", "Go, SSR + HTMX", "BFF: операции оператора и дежурного с JWT пользователя")
-    Container(inventory, "inventory", "Go", "Копия учёта АИСТ-М; точечный статус единиц")
-    ContainerQueue(kafka, "Kafka", "KRaft", "transfer.commands, inventory.events, logistics.replies → transfer; transfer.events, logistics.commands, inventory.commands, audit.events ← transfer")
+    Container(inventory, "inventory", "Go", "Копия учёта АИСТ-М, точечный статус единиц")
+    ContainerQueue(kafka, "Kafka", "KRaft", "transfer.commands, inventory.events, logistics.replies → transfer, transfer.events, logistics.commands, inventory.commands, audit.events ← transfer")
     ContainerDb(db, "БД transfer", "PostgreSQL 16", "obligation, allocation, source_stock, unit_copy, outbox, inbox, audit_local")
 
     Container_Boundary(trf, "transfer") {
-        Component(api, "HTTP API", "net/http, oapi-codegen, libs/httpx", "Open, Confirm, Replace, Cancel, чтение O07; проверка JWT и роли; problem+json")
-        Component(consumers, "Обработчики сообщений", "adapters/kafka, libs/messaging Consumer", "transfer.commands, inventory.events, logistics.replies; ручной коммит после TX, повторы, DLT")
+        Component(api, "HTTP API", "net/http, oapi-codegen, libs/httpx", "Open, Confirm, Replace, Cancel, чтение O07, проверка JWT и роли, problem+json")
+        Component(consumers, "Обработчики сообщений", "adapters/kafka, libs/messaging Consumer", "transfer.commands, inventory.events, logistics.replies, ручной коммит после TX, повторы, DLT")
         Component(timer, "Таймер срока", "воркер, опрос 5 с", "ExpireOverdue: просроченные PENDING → EXPIRED, эскалация к следующему источнику")
-        Component(app, "TransferService", "internal/app", "Сценарии саги: одна TX = агрегат + outbox + аудит; порядок блокировок Остаток → O07; сетевых вызовов в TX нет")
-        Component(domain, "Домен", "internal/domain", "Obligation и CAS-переходы, Allocation, SourceStock, ConfirmationResult, ReplacementResult, спецификация замены; без pgx, Kafka, HTTP")
+        Component(app, "TransferService", "internal/app", "Сценарии саги: одна TX = агрегат + outbox + аудит, порядок блокировок Остаток → O07, сетевых вызовов в TX нет")
+        Component(domain, "Домен", "internal/domain", "Obligation и CAS-переходы, Allocation, SourceStock, ConfirmationResult, ReplacementResult, спецификация замены, без pgx, Kafka, HTTP")
         Component(store, "Хранилище", "adapters/postgres, pgx + sqlc", "CAS UPDATE … WHERE status, SELECT … FOR UPDATE, UNIQUE (unit_id) WHERE CONFIRMED, запрет DELETE allocation")
         Component(invclient, "inventoryclient", "HTTP-клиент", "GET /internal/units/status: таймаут 3 с, предохранитель, сервисный токен (ADR-0004)")
         Component(journal, "Journal (outbox)", "libs/messaging", "События, команды и аудит в outbox той же транзакцией")
@@ -63,19 +63,19 @@ C4Component
 C4Component
     title logistics-gateway · компоненты (ACL к службе перевозки C03)
 
-    ContainerQueue(kafka, "Kafka", "KRaft", "logistics.commands → шлюз; logistics.replies, logistics.events, audit.events ← шлюз")
+    ContainerQueue(kafka, "Kafka", "KRaft", "logistics.commands → шлюз, logistics.replies, logistics.events, audit.events ← шлюз")
     ContainerDb(db, "БД logistics", "PostgreSQL 16", "transport_request (аренда, попытки, надгробие), delivery_estimate, outbox, inbox, audit_local")
-    System_Ext(c03, "C03 служба перевозки", "Заказы перевозки, оценки времени; не дедуплицирует заказы")
+    System_Ext(c03, "C03 служба перевозки", "Заказы перевозки, оценки времени, не дедуплицирует заказы")
 
     Container_Boundary(lg, "logistics-gateway") {
-        Component(consumer, "Обработчик команд", "adapters/kafka, libs/messaging Consumer", "RequestTransport → AcceptRequest; CancelTransport → AcceptCancel")
-        Component(gateway, "Gateway", "internal/app", "Inbox + строка REQUESTING одной TX; Drive: аренда → сверка по clientRef → заказ; исход и ответ в outbox, пока аренда наша")
-        Component(reconciler, "Сверщик", "internal/app, фоновый воркер", "ReconcileDue: строки с истёкшей арендой, просроченной попыткой, UNKNOWN; тот же Drive")
-        Component(gdomain, "Домен", "internal/domain", "Статусы REQUESTING/ACCEPTED/REJECTED/UNKNOWN/FAILED/CANCELLED; решение после сверки; политика повторов")
-        Component(gstore, "Хранилище", "adapters/postgres, pgx + sqlc", "PK obligation_id; Claim (аренда), Finish и FailAttempt с CAS по lease_owner; надгробие")
-        Component(carrier, "Клиент C03", "adapters/c03, HTTP", "FindActive(clientRef), Submit, Cancel; сбой или таймаут → ErrCarrierUnavailable")
+        Component(consumer, "Обработчик команд", "adapters/kafka, libs/messaging Consumer", "RequestTransport → AcceptRequest, CancelTransport → AcceptCancel")
+        Component(gateway, "Gateway", "internal/app", "Inbox + строка REQUESTING одной TX, Drive: аренда → сверка по clientRef → заказ, исход и ответ в outbox, пока аренда наша")
+        Component(reconciler, "Сверщик", "internal/app, фоновый воркер", "ReconcileDue: строки с истёкшей арендой, просроченной попыткой, UNKNOWN, тот же Drive")
+        Component(gdomain, "Домен", "internal/domain", "Статусы REQUESTING/ACCEPTED/REJECTED/UNKNOWN/FAILED/CANCELLED, решение после сверки, политика повторов")
+        Component(gstore, "Хранилище", "adapters/postgres, pgx + sqlc", "PK obligation_id, Claim (аренда), Finish и FailAttempt с CAS по lease_owner, надгробие")
+        Component(carrier, "Клиент C03", "adapters/c03, HTTP", "FindActive(clientRef), Submit, Cancel, сбой или таймаут → ErrCarrierUnavailable")
         Component(estimates, "Оценки времени", "запланировано, ADR-0014", "Матрица «источник → получатель» из C03 → DeliveryEstimatesPublished")
-        Component(gjournal, "Journal и ретранслятор", "libs/messaging", "Ответы TransportAccepted, TransportRejected, TransportCancelled в outbox; relay в Kafka")
+        Component(gjournal, "Journal и ретранслятор", "libs/messaging", "Ответы TransportAccepted, TransportRejected, TransportCancelled в outbox, relay в Kafka")
     }
 
     Rel(kafka, consumer, "logistics.commands")
@@ -83,7 +83,7 @@ C4Component
     Rel(reconciler, gateway, "Drive по просроченным строкам")
     Rel(gateway, gdomain, "Begin, AfterReconcile, OnCarrierUnavailable")
     Rel(gateway, gstore, "аренда, исход, попытки")
-    Rel(gateway, carrier, "сверка раньше заказа; вне транзакции")
+    Rel(gateway, carrier, "сверка раньше заказа, вне транзакции")
     Rel(gateway, gjournal, "ответ в outbox в TX исхода")
     Rel(carrier, c03, "ИНТ-03b", "HTTPS/JSON, clientRef = o07-…")
     Rel(estimates, c03, "ИНТ-03a", "HTTPS/JSON")
