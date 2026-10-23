@@ -113,6 +113,9 @@ erDiagram
 
 Представление `actual_stock` (O02): `clinic_id, component_kind_code, blood_group_code, unit_count, volume_ml, nearest_expiry`
 по единицам со статусом `is_available` и `expires_at > now()`. Индекс `(clinic_id, component_kind_code, blood_group_code, expires_at)`.
+Расчёт вынесен в SQL-функции с моментом годности параметром: `available_unit_at(p_at)` (единицы запаса) и
+`actual_stock_at(p_at)` (сводка); представление `actual_stock` — `actual_stock_at(now())`. Сервис передаёт время своих
+часов (`Clock`), поэтому сроки в тестах воспроизводимы. Для FEFO (FR015) — индекс `(clinic_id, expires_at, unit_id)`.
 
 Справочник статусов единицы `ref_unit_status` (в ПР6 `unit_status_dict`) создаётся миграцией `libs/refdata` `00003` и
 сидируется из `libs/refdata` во все базы (версия набора справочников 2).

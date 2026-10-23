@@ -31,7 +31,10 @@ func main() {
 				Pool: rt.Pool, Store: postgres.New(rt.Pool),
 				Aist:      aistclient.New(cfg.AistURL, aistclient.Options{StatusTimeout: cfg.StatusTimeout}),
 				Publisher: events.New(rt.Journal), Journal: rt.Journal, Ref: rt.Refdata, Clock: rt.Clock, Log: rt.Log,
-				Config: app.Config{PollInterval: cfg.PollInterval, PageLimit: cfg.PageLimit, StatusTimeout: cfg.StatusTimeout},
+				Config: app.Config{
+					PollInterval: cfg.PollInterval, PageLimit: cfg.PageLimit, StatusTimeout: cfg.StatusTimeout,
+					StaleAfter: cfg.StaleAfter,
+				},
 			})
 			api.Mount(rt.Mux, svc, rt.Deny(), api.Options{DevEnabled: rt.Cfg.Environment == "local"})
 			return []runtime.Worker{svc.RunSync}, nil

@@ -39,6 +39,8 @@ type Config struct {
 	MaxStatusIDs int
 	// MaxPollBackoff — предел паузы опроса при недоступной АИСТ-М (пауза удваивается от PollInterval).
 	MaxPollBackoff time.Duration
+	// StaleAfter — порог актуальности копии (NFR015): старше — экран предупреждает. Демо-значение.
+	StaleAfter time.Duration
 }
 
 func (c Config) withDefaults() Config {
@@ -68,6 +70,9 @@ func (c Config) withDefaults() Config {
 	}
 	if c.MaxPollBackoff <= 0 {
 		c.MaxPollBackoff = time.Minute
+	}
+	if c.StaleAfter <= 0 {
+		c.StaleAfter = 10 * time.Minute
 	}
 	return c
 }

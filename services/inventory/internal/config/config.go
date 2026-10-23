@@ -21,6 +21,8 @@ type Config struct {
 	// StatusTimeout — предел вызова АИСТ-М в точечном статусе; меньше 3 с бюджета transfer → inventory
 	// (ADR-0004): остаток нужен на ответ из копии.
 	StatusTimeout time.Duration `env:"BS_AIST_STATUS_TIMEOUT" envDefault:"2s"`
+	// StaleAfter — порог актуальности копии запаса (NFR015): параметр, согласуемый с заказчиком; здесь демо-значение.
+	StaleAfter time.Duration `env:"BS_STOCK_STALE_AFTER" envDefault:"10m"`
 }
 
 // Load читает и проверяет настройки.
@@ -38,6 +40,8 @@ func Load() (Config, error) {
 		return Config{}, errors.New("конфигурация inventory: BS_AIST_PAGE_LIMIT — от 1 до 5000")
 	case c.StatusTimeout <= 0:
 		return Config{}, errors.New("конфигурация inventory: BS_AIST_STATUS_TIMEOUT должен быть положительным")
+	case c.StaleAfter <= 0:
+		return Config{}, errors.New("конфигурация inventory: BS_STOCK_STALE_AFTER должен быть положительным")
 	}
 	return c, nil
 }
