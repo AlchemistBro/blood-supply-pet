@@ -9,7 +9,7 @@ snake_case, суррогатные ключи агрегатов — `uuid` v7, 
 - Один экземпляр PostgreSQL 16, база и роль на сервис (`inventory`, `demand`, `planning`, `matching`, `transfer`, `logistics`, `notification`, `audit`), `REVOKE CONNECT … FROM PUBLIC`.
 - Миграции `goose` в `services/<svc>/migrations/*.sql`, встроены в бинарник, применяются при старте с advisory lock.
 - В каждой базе платформенные таблицы `outbox`, `inbox` (см. `events.md`) и `audit_local` (локальная запись в транзакции, уходит в `audit.events` через outbox).
-- Справочники `ref_*` (клиники, районы, виды, группы, срочность) во всех базах одинаковые, заполняются из `libs/refdata` миграцией-сидом.
+- Справочники `ref_*` (клиники, районы, виды, группы, срочность, статусы единицы) во всех базах одинаковые, заполняются из `libs/refdata` миграцией-сидом.
 - Внешних ключей между базами нет; ссылки на чужие агрегаты — `uuid` без FK, целостность через проекции с версией.
 - Объёмы в мл — `bigint`, расчётные доли и объёмы — `numeric`, время — `timestamptz`.
 
@@ -21,7 +21,7 @@ erDiagram
     unit ||--o{ unit_status_history : история
     ref_component_kind ||--o{ unit : вид
     ref_blood_group ||--o{ unit : группа
-    unit_status_dict ||--o{ unit : статус
+    ref_unit_status ||--o{ unit : статус
     ref_clinic ||--o{ annual_consumption : "Kгод"
     annual_consumption ||--o{ stock_norm : рассчитан
     sync_run }o--|| ref_clinic : "по клинике (опц.)"
@@ -40,6 +40,11 @@ erDiagram
         varchar unit_status_code FK
         timestamptz status_received_at
         bigint source_version "старая версия не перезаписывает новую"
+    }
+    ref_unit_status {
+        varchar unit_status_code PK "IN_STOCK | QUARANTINE | ISSUED | DISCARDED | TRANSFERRED"
+        varchar unit_status_name UK
+        boolean is_available "true только у IN_STOCK"
     }
     unit_status_history {
         uuid unit_status_history_id PK
@@ -95,6 +100,12 @@ erDiagram
 
 Представление `actual_stock` (O02): `clinic_id, component_kind_code, blood_group_code, unit_count, volume_ml, nearest_expiry`
 по единицам со статусом `is_available` и `expires_at > now()`. Индекс `(clinic_id, component_kind_code, blood_group_code, expires_at)`.
+
+Справочник статусов единицы `ref_unit_status` (в ПР6 `unit_status_dict`) создаётся миграцией `libs/refdata` `00003` и
+сидируется из `libs/refdata` во все базы (версия набора справочников 2).
+Доступна для закрепления и передачи только `IN_STOCK`; `QUARANTINE` недоступна (ПП РФ № 641, п. 62 а). Истёкшая единица
+хранится как `DISCARDED`, отдельного статуса нет (ADR-0027). Строки `unit` не удаляются: выбывшая единица сохраняет
+`unit_id` и `aist_unit_code` (прослеживаемость, ПП РФ № 641, п. 17–18).
 
 ## demand
 
@@ -201,10 +212,10 @@ erDiagram
 
 | Таблица | Назначение | Ключевые ограничения |
 | --- | --- | --- |
-| `source_stock` | Остаток источника: `clinic_id, component_kind_code, available_units, reserved_units, protected_volume, protected_version, protected_reason` | PK (clinic, kind); блокируется `FOR UPDATE` первой |
-| `unit_copy` | Проекция единиц из `inventory.events` с версией | `version` растёт только вперёд |
-| `obligation` | O07: `obligation_id, choice_id UK, request_id, origin, source_clinic_id, target_clinic_id, component_kind_code, blood_group_code, requested_qty, confirmed_qty, status, urgency_code, deadline, confirm_window_seconds, fallback_sources text[], spec_* (группа, резус, фенотип, min_expires_at, rule_version), confirm_key, transport_ref, status_reason, version, created_at, updated_at` | `CHECK (source ≠ target)`; индекс `(deadline) WHERE status='PENDING'`; индекс `(request_id)` |
-| `allocation` | O18: `allocation_id, unit_id, obligation_id, status (CONFIRMED/RELEASED/CONSUMED), created_at, closed_at` | `UNIQUE (unit_id) WHERE status = 'CONFIRMED'` — NFR004 |
+| `source_stock` | Остаток источника: `clinic_id bigint, component_kind_code, available_units, reserved_units, protected_volume, protected_version, protected_reason` | PK (clinic, kind); блокируется `FOR UPDATE` первой |
+| `unit_copy` | Проекция единиц из `inventory.events` с версией: `unit_id, clinic_id bigint, component_kind_code, blood_group_code, rh_positive, phenotype, volume_ml, expires_at, unit_status_code, version` | `version` растёт только вперёд; закрепляется только `IN_STOCK` |
+| `obligation` | O07: `obligation_id, choice_id UK, request_id, origin, source_clinic_id bigint, target_clinic_id bigint, component_kind_code, blood_group_code, requested_qty, confirmed_qty, status, urgency_code, deadline, confirm_window_seconds, fallback_sources bigint[], spec_* (группа, резус, фенотип, min_expires_at, rule_version), confirm_key, transport_ref, status_reason, version, created_at, updated_at` | `CHECK (source ≠ target)`; индекс `(deadline) WHERE status='PENDING'`; индекс `(request_id)` |
+| `allocation` | O18: `allocation_id, unit_id, obligation_id, status (CONFIRMED/RELEASED/CONSUMED), created_at, closed_at` | `UNIQUE (unit_id) WHERE status = 'CONFIRMED'` — NFR004; индексы `(obligation_id)` и `(unit_id, created_at)`. Строки не удаляются, `DELETE` запрещён триггером: история «куда уходила единица» (ПП РФ № 641, п. 17–18, 54; ADR-0027) |
 | `outbox`, `inbox`, `audit_local` | платформа | см. `events.md` |
 
 ## logistics

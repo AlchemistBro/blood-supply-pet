@@ -33,6 +33,11 @@
 не ниже норматива, заранее пополняет его по агрегированному прогнозу ЧС и подбирает компонент по заявке врача по правилам,
 не опуская клинику-источник ниже её защищённого объёма.
 
+Назначение системы — учёт и распределение запаса, планирование и организация передачи между клиниками. Клиническое
+решение и индивидуальную совместимость определяет врач: система предлагает варианты по демонстрационным правилам и
+объясняет их, но не выбирает за врача и медицинским изделием не задумана. Границы регулирования —
+[ADR-0024](docs/adr/0024-regulatory-boundaries.md), применимые акты и обязательства — [регуляторный реестр](docs/compliance/register.md).
+
 Проект вырос из учебного архитектурного проекта (РТУ МИРЭА, дисциплины «Архитектура микросервисов» и DDD): предметная
 модель, каталог из 52 функциональных и 17 нефункциональных требований, карта контекстов и сага подтверждения перенесены
 как канон, а реализация сделана на Go как production-ready набор микросервисов с Kubernetes.
@@ -202,7 +207,8 @@ task k8s:up               # kind + kustomize overlay local
 | Правила разработки | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Канон предметной области: глоссарий, требования, состояния O07, карта контекстов | [docs/domain/](docs/domain/) |
 | Архитектура: C4, события, модель данных, сага, развёртывание, безопасность, тесты | [docs/architecture/](docs/architecture/) |
-| Решения (ADR) | [docs/adr/](docs/adr/README.md) |
+| Решения (ADR) | [docs/adr/](docs/adr/README.md); этап 1: [отступления от канона и прототипа](docs/adr/0027-stage1-deviations.md), [границы регулирования](docs/adr/0024-regulatory-boundaries.md), [перевозка](docs/adr/0022-transport-carrier-and-conditions.md) |
+| Регуляторный реестр: акты, статусы, обязательства | [docs/compliance/register.md](docs/compliance/register.md) |
 | Задачи по этапам | [docs/tasks/](docs/tasks/) |
 | Стиль и экраны интерфейса | [docs/ui/](docs/ui/) |
 
@@ -213,7 +219,7 @@ libs/         contracts · messaging · httpx · observability · pgx · clock �
 services/     web · inventory · demand · planning · matching · transfer · logistics-gateway · notification · audit · sim-*
 deploy/       compose · docker · k8s (base, overlays)
 tests/        e2e · load · chaos
-docs/         PLAN · domain · architecture · adr · tasks · ui
+docs/         PLAN · domain · architecture · adr · compliance · tasks · ui
 ```
 
 ## Планы

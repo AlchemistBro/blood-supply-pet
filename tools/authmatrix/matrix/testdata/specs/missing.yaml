@@ -1,0 +1,11 @@
+openapi: 3.0.3
+info: { title: missing, version: 0.1.0 }
+paths:
+  /records:
+    get:
+      operationId: listRecords
+      x-bs-operation: READ_AUDIT
+      responses: { "200": { description: ok } }
+    delete:
+      operationId: dropRecords
+      responses: { "204": { description: ok } }
