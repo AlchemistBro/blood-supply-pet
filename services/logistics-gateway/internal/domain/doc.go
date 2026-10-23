@@ -1,3 +1,0 @@
-// Package domain - чистая предметная логика сервиса logistics-gateway: агрегаты, правила, результаты операций.
-// Не зависит от БД, Kafka и HTTP (проверяет tools/archtest и depguard).
-package domain
