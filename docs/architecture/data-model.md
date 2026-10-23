@@ -89,7 +89,7 @@ erDiagram
         uuid idempotency_key UK
         uuid transfer_obligation_id
         varchar message_type "ALLOCATE_TO_PATIENT | RELEASE_ALLOCATION"
-        jsonb payload "id единиц, номер случая, клиника; без ФИО/СНИЛС"
+        jsonb payload "id единиц, request_id, конверт номера случая (ADR-0020), клиника; без ФИО/СНИЛС"
         timestamptz created_at
         integer attempt_count
         timestamptz next_attempt_at

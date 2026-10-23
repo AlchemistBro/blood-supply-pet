@@ -13,7 +13,7 @@
 - [ ] Шаг 2 ранжирование (FR034): приоритет правила, срок годности на момент прибытия (FEFO), время получения (местный = 0), расходование защищённого запаса источника (`is_deficit_stock_used`); `explanation` текстом с факторами (NFR009); `stock_watermark`.
 - [ ] Конкретные единицы варианта (FR031) без закрепления; доступное количество; время получения (FR032); пометка дефицитного запаса (FR033).
 - [ ] Нет допустимого варианта → `RequestDeficitRecorded(NO_ALLOWED_VARIANT)`, статус заявки «дефицит».
-- [ ] Выбор врача (FR043): местный вариант → статус «выбран местный вариант» (закрепления в АС нет); удалённый → спецификация замены (ADR-0011) + `OpenObligation` (`choice_id` = id выбора, `fallback_sources` = следующие варианты по рангу, `confirm_window` по срочности, `patient_case_ref`) → статус «создано задание»; реакция на `TransferRejected/Expired/Broken` → следующий вариант или дефицит; на `TransferShortfallRecorded` → задание на остаток.
+- [ ] Выбор врача (FR043): местный вариант → статус «выбран местный вариант» (закрепления в АС нет); удалённый → спецификация замены (ADR-0011) + `OpenObligation` (`choice_id` = id выбора, `fallback_sources` = следующие варианты по рангу, `confirm_window` по срочности, `patient_case_sealed` — конверт `libs/k1seal`, ADR-0020) → статус «создано задание»; реакция на `TransferRejected/Expired/Broken` → следующий вариант или дефицит; на `TransferShortfallRecorded` → задание на остаток.
 - [ ] Отмена заявки врачом → `CancelObligation` → закрепления сняты.
 - [ ] OpenAPI: `POST /requests`, `GET /requests?clinic=`, `GET /requests/{id}`, `GET /requests/{id}/patient-case` (отдельно, аудит `READ_PATIENT_CASE`), `GET /requests/{id}/variants`, `POST /requests/{id}/select`, `POST /requests/{id}/cancel`.
 

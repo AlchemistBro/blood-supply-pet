@@ -52,7 +52,7 @@
 | `SyncRunCompleted` | Сеанс обмена с АИСТ-М завершён | `sync_run_id`, `kind`, `result`, `changes_count`, `finished_at` |
 | `ConsumptionExportPublished` | Выгрузка расхода для demand (FR045) | `component_kind`, `period_start`, `period_end`, `consumed_volume_ml` |
 | `PatientAllocationAcknowledged` | АИСТ-М подтвердил приём закрепления (ИНТ-05) | `obligation_id`, `idempotency_key`, `acknowledged_at` |
-| команда `AllocateUnitsToPatient` | От transfer после подтверждения по заявке врача (FR051), этап 6 | `obligation_id`, `idempotency_key`, `unit_ids`, номер случая (K1, только в зашифрованном виде, ADR-0020), `target_clinic_id` |
+| команда `AllocateUnitsToPatient` | От transfer после подтверждения по заявке врача (FR051), этап 6 | `obligation_id`, `idempotency_key`, `unit_ids`, `request_id`, `patient_case_sealed` (конверт номера случая K1, ADR-0020), `target_clinic_id` |
 | команда `ReleasePatientAllocation` | Снять закрепление при отмене/нарушении | `obligation_id`, `idempotency_key` |
 
 ### demand
@@ -89,7 +89,7 @@
 
 | Тип | Поля |
 | --- | --- |
-| команда `OpenObligation` | `choice_id` (идемпотентность), `request_id` (заявка или план), `origin`(DOCTOR_CHOICE/PLAN_PROPOSAL), `source_clinic_id`, `target_clinic_id`, `component_kind`, `requested_qty`, `urgency`, `confirm_window_seconds`, `fallback_sources[]`, `spec{blood_group?, rh_positive?, phenotype?, min_expires_at?, rule_version}`. Номера случая нет: обязательство ссылается на заявку через `request_id`, путь номера случая в ИНТ-05 задаёт ADR-0020 (этап 6) |
+| команда `OpenObligation` | `choice_id` (идемпотентность), `request_id` (заявка или план), `origin`(DOCTOR_CHOICE/PLAN_PROPOSAL), `source_clinic_id`, `target_clinic_id`, `component_kind`, `requested_qty`, `urgency`, `confirm_window_seconds`, `fallback_sources[]`, `spec{blood_group?, rh_positive?, phenotype?, min_expires_at?, rule_version}`, `patient_case_sealed?` (этап 6: конверт номера случая, ADR-0020). Открытого номера случая нет: обязательство ссылается на заявку через `request_id` |
 | команда `CancelObligation` | `obligation_id`, `reason`(REQUEST_CANCELLED/PLAN_RECALCULATED/DUTY_OFFICER_DECISION) |
 | `ObligationOpened` | `obligation_id`, `request_id`, `origin`, `source_clinic_id`, `target_clinic_id`, `component_kind`, `requested_qty`, `deadline` |
 | `TransferConfirmed` | `obligation_id`, `request_id`, `units[]`, `quantity`, `operator` |
