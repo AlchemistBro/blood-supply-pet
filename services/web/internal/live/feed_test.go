@@ -89,6 +89,56 @@ func TestFeedSkipsOldEventsButLearnsClinics(t *testing.T) {
 	}
 }
 
+// msgWithClinics — событие с необязательными полями клиник (расширение контракта transfer.events).
+func msgWithClinics(t *testing.T, p contracts.Payload, source, target int64, at time.Time) messaging.Message {
+	t.Helper()
+	m := msg(t, p, at)
+	var fields map[string]any
+	if err := json.Unmarshal(m.Payload, &fields); err != nil {
+		t.Fatal(err)
+	}
+	fields["source_clinic_id"], fields["target_clinic_id"] = source, target
+	raw, err := json.Marshal(fields)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.Payload = raw
+	return m
+}
+
+// Клиники из полей события: ObligationOpened этому экземпляру не нужен.
+func TestFeedUsesClinicsFromEventFields(t *testing.T) {
+	h := NewHub(8)
+	c1, c7 := h.Subscribe(clinic(1)), h.Subscribe(clinic(7))
+	f := newFeed(h)
+	id := uuid.New()
+	m := msgWithClinics(t, &transfer.TransferConfirmed{ObligationID: id, Quantity: 1}, 1, 5, start.Add(time.Second))
+	if err := f.Handle(context.Background(), m); err != nil {
+		t.Fatal(err)
+	}
+	if e, ok := recv(c1, time.Second); !ok || e.SourceClinicID != 1 || e.TargetClinicID != 5 || e.Status != "CONFIRMED" {
+		t.Fatalf("клиника из полей события: %+v", e)
+	}
+	// Клиники события важнее индекса и пополняют его для следующих событий без полей.
+	f.remember(id, 7, 8)
+	m = msgWithClinics(t, &transfer.TransportRequested{ObligationID: id, ShipmentRef: "S-1"}, 1, 5, start.Add(2*time.Second))
+	if err := f.Handle(context.Background(), m); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := recv(c1, time.Second); !ok {
+		t.Fatal("поля события важнее индекса")
+	}
+	if _, ok := recv(c7, 50*time.Millisecond); ok {
+		t.Fatal("устаревший индекс не используется, если клиники есть в событии")
+	}
+	if err := f.Handle(context.Background(), msg(t, &transfer.TransferBroken{ObligationID: id, UnitID: uuid.New()}, start.Add(3*time.Second))); err != nil {
+		t.Fatal(err)
+	}
+	if e, ok := recv(c1, time.Second); !ok || e.Status != "BROKEN" {
+		t.Fatalf("событие без полей — по индексу, пополненному из событий: %+v", e)
+	}
+}
+
 func TestFeedStatusMapping(t *testing.T) {
 	h := NewHub(16)
 	all := h.Subscribe(nil)

@@ -139,6 +139,8 @@ func liveEvents(cfg config, rt *runtime.Runtime, srv *server.Server) ([]runtime.
 	feed := live.NewFeed(hub, rt.Clock, rt.Log)
 	consumer, err := messaging.NewConsumer(messaging.ConsumerConfig{
 		Brokers: rt.Cfg.KafkaBrokers, Group: "web-" + instance, Topics: []string{contracts.TopicTransferEvents},
+		// Только новые события: история для показа не нужна, клиники приходят в самих событиях.
+		StartAtEnd: true,
 	}, feed.Handle, rt.Log)
 	if err != nil {
 		return nil, err

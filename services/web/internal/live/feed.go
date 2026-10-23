@@ -21,9 +21,10 @@ type clinicPair struct{ source, target int64 }
 // Feed — обработчик transfer.events для показа. Это не бизнес-обработка: inbox не нужен, повторов и DLT
 // нет (ошибка разбора только в лог), рассылаются лишь события, случившиеся после запуска процесса.
 //
-// Клиники есть только в ObligationOpened, поэтому Feed помнит obligation_id → (источник, получатель)
-// в ограниченном индексе. Для обязательства, открытого до того, как этот экземпляр начал читать топик,
-// клиники неизвестны: такое событие получают только подписчики без клиники (дежурный).
+// Клиники берутся из полей события (source_clinic_id, target_clinic_id). Для событий без них (выпущенных
+// до расширения контракта) запасной путь — ограниченный индекс obligation_id → (источник, получатель),
+// который пополняется из событий с клиниками. Если клиники неизвестны, событие получают только
+// подписчики без клиники (дежурный), чтобы статус не ушёл чужой клинике.
 type Feed struct {
 	hub   *Hub
 	clock clock.Clock
@@ -41,19 +42,31 @@ func NewFeed(hub *Hub, clk clock.Clock, log *slog.Logger) *Feed {
 	return &Feed{hub: hub, clock: clk, since: clk.Now(), log: log, index: map[uuid.UUID]clinicPair{}, capacity: defaultIndexCapacity}
 }
 
+// clinicFields — необязательные клиники обязательства во всех событиях transfer.events (обратно совместимое
+// расширение контракта). Читаются своим узким DTO, а не типами libs/contracts: код собирается и до, и после
+// обновления контрактов, а старые события без полей обрабатываются через индекс.
+type clinicFields struct {
+	SourceClinicID *int64 `json:"source_clinic_id"`
+	TargetClinicID *int64 `json:"target_clinic_id"`
+}
+
 // Handle реализует messaging.Handler. Всегда возвращает nil.
 func (f *Feed) Handle(_ context.Context, msg messaging.Message) error {
 	id, status, ok := f.decode(msg)
 	if !ok {
 		return nil
 	}
+	pair, known := f.clinicsFromEvent(msg)
+	if known {
+		f.remember(id, pair.source, pair.target)
+	} else {
+		pair, _ = f.clinics(id)
+	}
+	// События до запуска экземпляра (повтор после перезапуска с закоммиченного offset) не показываются:
+	// страница при открытии и так берёт текущий статус из transfer.
 	if msg.OccurredAt.Before(f.since) {
 		return nil
 	}
-	if status == "" {
-		return nil
-	}
-	pair, _ := f.clinics(id)
 	html, err := renderStatus(id, status)
 	if err != nil {
 		f.log.Error("фрагмент статуса не отрисован", "type", msg.Type, "err", err)
@@ -64,19 +77,17 @@ func (f *Feed) Handle(_ context.Context, msg messaging.Message) error {
 	return nil
 }
 
-// decode разбирает событие: обязательство и новый статус O07 ("" — событие статус не меняет).
-// ObligationOpened дополнительно запоминает клиники.
+// decode разбирает событие: обязательство и новый статус O07.
 func (f *Feed) decode(msg messaging.Message) (uuid.UUID, string, bool) {
 	var id uuid.UUID
 	var status string
 	var err error
 	switch msg.Type {
 	case "ObligationOpened":
+		// Клиники ObligationOpened читает clinicsFromEvent, как и у остальных событий.
 		var e transfer.ObligationOpened
-		if err = msg.Decode(&e); err == nil {
-			f.remember(e.ObligationID, e.SourceClinicID, e.TargetClinicID)
-			id, status = e.ObligationID, "PENDING"
-		}
+		err = msg.Decode(&e)
+		id, status = e.ObligationID, "PENDING"
 	case "TransferConfirmed":
 		var e transfer.TransferConfirmed
 		err = msg.Decode(&e)
@@ -110,6 +121,22 @@ func (f *Feed) decode(msg messaging.Message) (uuid.UUID, string, bool) {
 		return uuid.Nil, "", false
 	}
 	return id, status, true
+}
+
+// clinicsFromEvent — клиники из полей самого события; false, если их там нет.
+func (f *Feed) clinicsFromEvent(msg messaging.Message) (clinicPair, bool) {
+	var c clinicFields
+	if err := msg.Decode(&c); err != nil {
+		return clinicPair{}, false
+	}
+	var p clinicPair
+	if c.SourceClinicID != nil {
+		p.source = *c.SourceClinicID
+	}
+	if c.TargetClinicID != nil {
+		p.target = *c.TargetClinicID
+	}
+	return p, p.source > 0 || p.target > 0
 }
 
 func (f *Feed) remember(id uuid.UUID, source, target int64) {
