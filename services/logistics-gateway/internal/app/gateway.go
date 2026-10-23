@@ -129,10 +129,21 @@ func (g *Gateway) AcceptRequest(ctx context.Context, msg messaging.Message, req 
 			return err
 		}
 		first = true
-		if _, err := g.store.Insert(ctx, tx, req, now); err != nil {
+		inserted, err := g.store.Insert(ctx, tx, req, now)
+		if err != nil {
 			return fmt.Errorf("запись заказа перевозки: %w", err)
 		}
-		return nil
+		if !inserted {
+			return nil // повтор отправки transfer или надгробие отмены: принимать нечего
+		}
+		return g.outbox.Audit(ctx, tx, messaging.AuditEntry{
+			Action: actionRequestAccepted, ObjectType: auditObject, ObjectID: req.ObligationID.String(),
+			Result: auditc.ResultSuccess, Details: map[string]any{
+				"request_id": req.RequestID.String(), "source_clinic_id": req.SourceClinicID,
+				"target_clinic_id": req.TargetClinicID, "component_kind_code": req.ComponentKindCode,
+				"quantity": req.Quantity, "temperature_regime": req.TemperatureRegime,
+			},
+		})
 	})
 	if err != nil {
 		return err
@@ -159,6 +170,16 @@ func (g *Gateway) AcceptCancel(ctx context.Context, msg messaging.Message, oblig
 		before, existed, err := g.store.RequestCancel(ctx, tx, obligationID, now)
 		if err != nil {
 			return fmt.Errorf("отмена заказа перевозки: %w", err)
+		}
+		details := map[string]any{"status_before": string(before)}
+		if !existed {
+			details = map[string]any{"tombstone": true}
+		}
+		if err := g.outbox.Audit(ctx, tx, messaging.AuditEntry{
+			Action: actionCancelRequested, ObjectType: auditObject, ObjectID: obligationID.String(),
+			Result: auditc.ResultSuccess, Details: details,
+		}); err != nil {
+			return err
 		}
 		if !existed || domain.NothingToCancel(before) {
 			if err := g.outbox.Reply(ctx, tx, domain.CancelledReply(obligationID)); err != nil {
@@ -330,6 +351,13 @@ func (g *Gateway) RunReconciler(ctx context.Context) error {
 	}
 }
 
+// Действия аудита шлюза. Объект — обязательство O07; номеров единиц и ПДн в записях нет.
+const (
+	auditObject           = "obligation"
+	actionRequestAccepted = "REQUEST_ACCEPTED"
+	actionCancelRequested = "CANCEL_REQUESTED"
+)
+
 // audit — запись исхода в журнал той же транзакцией. Без номеров единиц и ПДн: только обязательство и заказ.
 func (g *Gateway) audit(ctx context.Context, tx pgx.Tx, obligationID uuid.UUID, status domain.Status, shipmentRef string) error {
 	result := auditc.ResultSuccess
@@ -344,7 +372,7 @@ func (g *Gateway) audit(ctx context.Context, tx pgx.Tx, obligationID uuid.UUID, 
 		details["shipment_ref"] = shipmentRef
 	}
 	return g.outbox.Audit(ctx, tx, messaging.AuditEntry{
-		Action: "TRANSPORT_" + string(status), ObjectType: "obligation", ObjectID: obligationID.String(),
+		Action: "TRANSPORT_" + string(status), ObjectType: auditObject, ObjectID: obligationID.String(),
 		Result: result, Details: details,
 	})
 }

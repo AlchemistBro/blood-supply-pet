@@ -791,6 +791,40 @@ func TestCancelDuringRefusedSubmitIsAnswered(t *testing.T) {
 	assertReplies(t, f.repliesOf(c.ObligationID), "TransportRejected", "TransportCancelled")
 }
 
+// Приём команды и запрос отмены попадают в аудит теми же транзакциями; повтор команды второй записи не даёт.
+func TestAcceptedCommandsAreAudited(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	c := command()
+	body, err := json.Marshal(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 2 { // повтор отправки transfer с новым message-id
+		msg := messaging.Message{ID: uuid.New(), Type: "RequestTransport", SchemaVersion: 1, Payload: body, Producer: "transfer"}
+		if err := f.gw.AcceptRequest(ctx, msg, request(t, c)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := f.gw.AcceptCancel(ctx, cancelMessage(t, c.ObligationID), c.ObligationID); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := f.pool.Query(ctx, `SELECT action FROM audit_local WHERE object_type = 'obligation' AND object_id = $1 ORDER BY id`,
+		c.ObligationID.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	actions, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Приём, исход заказа (ACCEPTED), запрос отмены, исход отмены (CANCELLED).
+	want := []string{"REQUEST_ACCEPTED", "TRANSPORT_ACCEPTED", "CANCEL_REQUESTED", "TRANSPORT_CANCELLED"}
+	if fmt.Sprint(actions) != fmt.Sprint(want) {
+		t.Fatalf("аудит %v, ожидали %v", actions, want)
+	}
+}
+
 // Исход пишется только при ожидаемом статусе: аренда наша, но строку успели перевести — запись отбрасывается.
 func TestOutcomeIsNotWrittenOverChangedStatus(t *testing.T) {
 	f := newFixture(t)
