@@ -230,7 +230,7 @@ func distributeForecast(f *Forecast, shares []ClinicShare, kinds map[string]Kind
 		var (
 			clinics []int64
 			parts   []int64
-			source  = SourceForecastC02
+			origin  = SourceForecastC02
 		)
 		if l.ClinicID != 0 {
 			clinics, parts = []int64{l.ClinicID}, []int64{total}
@@ -242,7 +242,7 @@ func distributeForecast(f *Forecast, shares []ClinicShare, kinds map[string]Kind
 				}
 				roughReady = true
 			}
-			clinics, parts, source = roughClinics, splitByWeights(total, roughWeights), SourceDistrictShares
+			clinics, parts, origin = roughClinics, splitByWeights(total, roughWeights), SourceDistrictShares
 		}
 		for ci, c := range clinics {
 			gparts, undetermined := splitGroups(parts[ci], kind, l.Group, groups)
@@ -252,7 +252,7 @@ func distributeForecast(f *Forecast, shares []ClinicShare, kinds map[string]Kind
 				}
 				out = append(out, EmergencyAllocation{
 					LineID: l.LineID, ClinicID: c, Kind: kind.Code, Group: gp.group, VolumeML: gp.volume,
-					Source: source, IsRoughEstimate: source == SourceDistrictShares, GroupUndetermined: undetermined,
+					Source: origin, IsRoughEstimate: origin == SourceDistrictShares, GroupUndetermined: undetermined,
 				})
 			}
 		}
