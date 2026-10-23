@@ -6,9 +6,20 @@ import (
 	"net/http"
 )
 
-// FlashCookieName — cookie с уведомлениями между POST и GET после перенаправления.
-// Отдельно от cookie сессии: та и так близка к пределу размера (ADR-0018), а уведомление живёт секунды.
-const FlashCookieName = "bs_flash"
+// FlashCookieName — cookie с уведомлениями между POST и GET после перенаправления (без Secure, только отладка).
+// FlashCookieNameSecure — то же при Secure: префикс __Host- требует Secure, Path=/ и запрещает Domain, поэтому
+// поддомен не может подложить свою cookie. Отдельно от cookie сессии: та и так близка к пределу размера (ADR-0018),
+// а уведомление живёт секунды.
+//
+// Принятый риск: значение не подписано. Подменить его может только тот, кто уже пишет cookie браузера пользователя
+// (сам пользователь или скрипт на том же источнике, которого CSP не допускает); при этом он меняет лишь текст
+// уведомления на собственном экране. Текст экранируется html/template, тон — из белого списка, длина — до 300 рун,
+// уведомлений не больше трёх: внедрить разметку или действие нельзя, остаётся только ложная надпись. Подпись ключом
+// сессии потребовала бы связать пакет ui с хранилищем сессии ради защиты от самого пользователя.
+const (
+	FlashCookieName       = "bs_flash"
+	FlashCookieNameSecure = "__Host-bs_flash"
+)
 
 const (
 	maxFlashes     = 3
@@ -32,34 +43,34 @@ func SetFlash(w http.ResponseWriter, secure bool, flashes ...Flash) {
 	if len(flashes) > maxFlashes {
 		flashes = flashes[:maxFlashes]
 	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     FlashCookieName,
-		Value:    encodeFlashes(flashes),
-		Path:     "/",
-		MaxAge:   flashCookieTTL,
-		HttpOnly: true,
-		Secure:   secure,
-		SameSite: http.SameSiteLaxMode,
-	})
+	http.SetCookie(w, flashCookie(encodeFlashes(flashes), flashCookieTTL, secure))
 }
 
 // TakeFlashes читает уведомления и удаляет cookie: каждое показывается один раз. Испорченное значение
 // и неизвестный тон отбрасываются. Текст при выводе экранируется html/template, как любые данные.
 func TakeFlashes(w http.ResponseWriter, r *http.Request, secure bool) []Flash {
-	c, err := r.Cookie(FlashCookieName)
+	c, err := r.Cookie(flashCookieName(secure))
 	if err != nil {
 		return nil
 	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     FlashCookieName,
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   secure,
-		SameSite: http.SameSiteLaxMode,
-	})
+	http.SetCookie(w, flashCookie("", -1, secure))
 	return decodeFlashes(c.Value)
+}
+
+func flashCookieName(secure bool) string {
+	if secure {
+		return FlashCookieNameSecure
+	}
+	return FlashCookieName
+}
+
+func flashCookie(value string, maxAge int, secure bool) *http.Cookie {
+	// Secure включён по умолчанию (BS_COOKIE_SECURE в web); выключается только явно для отладки (ADR-0018).
+	//nolint:gosec // G124: HttpOnly и SameSite=Lax заданы всегда, Secure — из конфигурации, с ним имя __Host-
+	return &http.Cookie{
+		Name: flashCookieName(secure), Value: value, Path: "/", MaxAge: maxAge,
+		HttpOnly: true, Secure: secure, SameSite: http.SameSiteLaxMode,
+	}
 }
 
 func encodeFlashes(flashes []Flash) string {
