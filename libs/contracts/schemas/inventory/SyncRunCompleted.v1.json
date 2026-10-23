@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/inventory/SyncRunCompleted.v1.json",
+  "title": "SyncRunCompleted",
+  "type": "object",
+  "description": "Событие inventory.events: сеанс обмена с АИСТ-М завершён (ИНТ-01, FR050). Расхождения — только число.",
+  "additionalProperties": false,
+  "required": [
+    "sync_run_id",
+    "kind",
+    "result",
+    "changes_count",
+    "finished_at"
+  ],
+  "properties": {
+    "sync_run_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "CHANGES",
+        "DAILY_SNAPSHOT",
+        "ON_DEMAND",
+        "UNIT_CHECK"
+      ]
+    },
+    "result": {
+      "type": "string",
+      "enum": [
+        "SUCCESS",
+        "PARTIAL",
+        "FAILED"
+      ]
+    },
+    "clinic_id": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Клиника, если сеанс по одной клинике (ON_DEMAND, FR050)"
+    },
+    "changes_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "discrepancies_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Расхождения копии с АИСТ-М, найденные и исправленные"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "finished_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "clinic_id": 1,
+  "component_kind": "RBC",
+  "norm_ml": 2400.5,
+  "avg_monthly_ml": 72015,
+  "is_min_unit_applied": false,
+  "version": 3,
+  "calculated_at": "2026-10-23T09:30:00Z"
+}

@@ -69,6 +69,8 @@ func TestGoEnumsMatchSchemas(t *testing.T) {
 		{"inventory/UnitRegistered", "status", inventory.Statuses},
 		{"inventory/UnitUpdated", "status", inventory.UpdatedStatuses},
 		{"inventory/UnitWithdrawn", "reason", inventory.WithdrawReasons},
+		{"inventory/SyncRunCompleted", "kind", inventory.SyncKinds},
+		{"inventory/SyncRunCompleted", "result", inventory.SyncResults},
 	}
 	for _, c := range cases {
 		schema := readJSON(t, "schemas/"+c.schema+".v1.json")
