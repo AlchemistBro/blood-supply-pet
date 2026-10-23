@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/AlchemistBro/blood-supply-pet/libs/clock"
@@ -50,10 +51,12 @@ func UnknownFreshness() Freshness {
 }
 
 // LoadFreshness спрашивает источник и считает водяной знак по часам clk. Ошибка источника не ломает страницу:
-// показывается «неизвестно» с предупреждением.
+// показывается «неизвестно» с предупреждением, а ошибка пишется в журнал (с correlation_id из контекста,
+// без данных пользователя: только текст ошибки источника).
 func LoadFreshness(ctx context.Context, src FreshnessSource, clk clock.Clock, staleAfter time.Duration) Freshness {
 	at, err := src.LastStockSync(ctx)
 	if err != nil {
+		slog.WarnContext(ctx, "время обновления запаса недоступно, водяной знак — «неизвестно»", "err", err)
 		return UnknownFreshness()
 	}
 	return NewFreshness(at, clk.Now(), staleAfter)
