@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"net/http"
 	"path"
+	"slices"
 	"strings"
 
 	"github.com/AlchemistBro/blood-supply-pet/services/web/static"
@@ -22,9 +23,16 @@ var staticTypes = map[string]string{
 
 // StaticHandler отдаёт встроенную статику; монтируется под StaticPrefix через http.StripPrefix.
 // Каталоги не перечисляются. Совпала метка версии — кэш на год (immutable), иначе — на 5 минут.
+// Путь с сегментом ".." отклоняется 404 сразу, даже если после очистки он ведёт к существующему файлу:
+// ServeMux такой адрес и так перенаправляет на очищенный, а сюда он попадает только в обход маршрутизатора.
 func (r *Renderer) StaticHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		name := path.Clean(strings.TrimPrefix(req.URL.Path, "/"))
+		raw := strings.TrimPrefix(req.URL.Path, "/")
+		if slices.Contains(strings.Split(raw, "/"), "..") {
+			http.NotFound(w, req)
+			return
+		}
+		name := path.Clean(raw)
 		ctype, known := staticTypes[path.Ext(name)]
 		if !known || !fs.ValidPath(name) {
 			http.NotFound(w, req)
@@ -41,7 +49,8 @@ func (r *Renderer) StaticHandler() http.Handler {
 		} else {
 			w.Header().Set("Cache-Control", "public, max-age=300")
 		}
-		http.ServeFileFS(w, req, static.FS, name)
+		// G703: name прошёл fs.ValidPath, белый список расширений и fs.Stat во встроенной FS — за её пределы не выйти.
+		http.ServeFileFS(w, req, static.FS, name) //nolint:gosec // G703: путь проверен выше, FS встроенная
 	})
 }
 

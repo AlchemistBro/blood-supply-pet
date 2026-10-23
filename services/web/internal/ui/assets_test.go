@@ -33,9 +33,11 @@ func TestStaticHandlerServesWithExplicitTypes(t *testing.T) {
 	}
 }
 
+// Каталоги, чужие расширения и любые сегменты ".." — 404. "/static/img/../css/app.css" после очистки указывает на
+// существующий файл, но отклоняется до очистки: обработчик не полагается на то, что ServeMux уже почистил путь.
 func TestStaticHandlerNoListingNoTraversal(t *testing.T) {
 	h := http.StripPrefix("/static/", newTestRenderer(t).StaticHandler())
-	for _, path := range []string{"/static/", "/static/vendor/", "/static/vendor", "/static/../ui.go", "/static/nope.js", "/static/vendor/README.md"} {
+	for _, path := range []string{"/static/", "/static/vendor/", "/static/vendor", "/static/../ui.go", "/static/img/../css/app.css", "/static/nope.js", "/static/vendor/README.md"} {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 		if rec.Code != http.StatusNotFound {
