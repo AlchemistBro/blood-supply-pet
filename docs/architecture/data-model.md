@@ -103,6 +103,12 @@ erDiagram
 `estimate_status_dict`, `demand_estimate`, `estimate_history_link`, `clinic_demand`.
 Ключевые ограничения: `PUBLISHED` только с `confirmed_by` и `confirmed_at`; суммы долей по району равны 1 проверяются при загрузке;
 `UNIQUE NULLS NOT DISTINCT (demand_estimate_id, clinic_id, component_kind_code, blood_group_code)`.
+Отличия реализации от DDL ПР6 (миграция `services/demand/migrations/00100_demand.sql`): ключи агрегатов — `uuid`;
+`uploaded_by` и `confirmed_by` — идентификатор пользователя из токена (`varchar(128)`), учётных записей в АС нет;
+`consumed_volume_ml` — `bigint` (целые мл, как все объёмы); у `statistics_file` со статусом `REJECTED` источник и
+период могут быть пустыми (файл отклонён до чтения строк), ошибка всего файла хранится строкой 1 в `file_row_error`;
+`clinic_share_version.statistics_file_id` уникален (один файл — одна версия). Исправленная история расхода за тот же
+вид и период заменяет прежнюю запись, если та не вошла ни в одну версию оценки (`estimate_history_link`).
 
 ## planning
 
