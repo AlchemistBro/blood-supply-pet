@@ -2,9 +2,12 @@ package app
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/logistics"
+	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/transfer"
 	"github.com/AlchemistBro/blood-supply-pet/libs/messaging"
 	"github.com/AlchemistBro/blood-supply-pet/services/transfer/internal/domain"
 )
@@ -14,6 +17,11 @@ import (
 // TransferCancelled; после TRANSPORT_REQUESTED ещё CancelTransport перевозчику.
 // Из конечного статуса — идемпотентный отказ без изменений: ни событий, ни аудита.
 func (s *Service) Cancel(ctx context.Context, msg *messaging.Message, c CancelObligation) (CancelResult, error) {
+	switch c.Reason {
+	case transfer.CancelRequestCancelled, transfer.CancelPlanRecalculated, transfer.CancelDutyOfficerDecision:
+	default:
+		return CancelResult{}, deliveryErr(msg, fmt.Errorf("%w: неизвестная причина отмены %q", ErrInvalidEvent, c.Reason))
+	}
 	o, err := s.store.Obligation(ctx, s.pool, c.ObligationID)
 	if err != nil {
 		return CancelResult{}, deliveryErr(msg, err)
@@ -66,7 +74,7 @@ func (s *Service) cancelLocked(ctx context.Context, tx pgx.Tx, o domain.Obligati
 		return CancelResult{}, err
 	}
 	if locked.Status == domain.StatusTransportRequested {
-		if err := s.command(ctx, tx, o.ID, CancelTransport{ObligationID: o.ID, Reason: c.Reason}); err != nil {
+		if err := s.command(ctx, tx, o.ID, CancelTransport{ObligationID: o.ID, Reason: logistics.CancelObligationCancelled}); err != nil {
 			return CancelResult{}, err
 		}
 	}

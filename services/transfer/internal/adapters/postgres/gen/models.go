@@ -87,6 +87,14 @@ type RefDistrict struct {
 	Population   int64
 }
 
+// Статус единицы компонента крови по данным АИСТ-М (C01)
+type RefUnitStatus struct {
+	UnitStatusCode string
+	UnitStatusName string
+	// Единица в наличии и может быть закреплена (O02 actual_stock)
+	IsAvailable bool
+}
+
 type RefUrgency struct {
 	UrgencyCode string
 	UrgencyName string

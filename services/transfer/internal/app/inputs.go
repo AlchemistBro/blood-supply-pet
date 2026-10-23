@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/logistics"
 	"github.com/AlchemistBro/blood-supply-pet/services/transfer/internal/domain"
 )
 
@@ -36,7 +37,7 @@ type CancelObligation struct {
 	Actor        string
 }
 
-// UnitRegistered — единица появилась в наличии по данным АИСТ-М.
+// UnitRegistered — единица появилась в копии запаса по данным АИСТ-М. Может прийти сразу на карантине.
 type UnitRegistered struct {
 	UnitID        uuid.UUID
 	ClinicID      int64
@@ -46,6 +47,7 @@ type UnitRegistered struct {
 	Phenotype     *string
 	VolumeML      int64
 	ExpiresAt     time.Time
+	Status        domain.UnitStatus
 	Version       int64
 }
 
@@ -88,8 +90,8 @@ const (
 
 // Причины TransportRejected.
 const (
-	RejectRefused        = "REFUSED"
-	RejectOutcomeUnknown = "OUTCOME_UNKNOWN"
+	RejectRefused        = logistics.RejectRefused
+	RejectOutcomeUnknown = logistics.RejectOutcomeUnknown
 )
 
 // LogisticsReply — ответ logistics-gateway из logistics.replies.

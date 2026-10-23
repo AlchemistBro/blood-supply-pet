@@ -257,6 +257,12 @@ func TestWithdrawalOfAllocatedUnitBreaksObligationAndReleasesUnits(t *testing.T)
 	}
 	h.expectTypes("события", h.eventTypes(o), "ObligationOpened", "TransferConfirmed", "TransferBroken")
 	h.expectTypes("команды", h.commandTypes(o), "RequestTransport", "CancelTransport")
+	if r := h.payloadField(o, "TransferBroken", "reason"); r != "ISSUED" {
+		t.Errorf("TransferBroken.reason = %q, ожидали причину выбытия ISSUED", r)
+	}
+	if r := h.payloadField(o, "CancelTransport", "reason"); r != "UNIT_WITHDRAWN" {
+		t.Errorf("CancelTransport.reason = %q", r)
+	}
 	h.assertStockConsistent(1, "RBC")
 }
 
@@ -329,11 +335,37 @@ func TestQuarantineOfAllocatedUnitBreaksObligation(t *testing.T) {
 	if v.StatusReason != string(domain.BreakUnitQuarantined) {
 		t.Errorf("причина %q, ожидали UNIT_QUARANTINED", v.StatusReason)
 	}
+	if r := h.payloadField(o, "TransferBroken", "reason"); r != "QUARANTINE" {
+		t.Errorf("TransferBroken.reason = %q, ожидали QUARANTINE", r)
+	}
 	h.expectTypes("события", h.eventTypes(o), "ObligationOpened", "TransferConfirmed", "TransferBroken")
 	h.expectTypes("команды", h.commandTypes(o), "RequestTransport", "CancelTransport")
 	h.assertStockConsistent(1, "RBC")
 	if n := h.count(`SELECT available_units FROM source_stock WHERE clinic_id = 1 AND component_kind_code = 'RBC'`); n != 1 {
 		t.Errorf("в наличии %d, карантинная не должна считаться", n)
+	}
+}
+
+// Единица может прийти сразу на карантине: в наличие не входит и не закрепляется.
+func TestUnitRegisteredInQuarantineIsNotAvailable(t *testing.T) {
+	h := setup(t)
+	id := uuid.New()
+	h.aist.set(id, domain.UnitQuarantine)
+	if err := h.svc.OnUnitRegistered(h.ctx, delivery(), app.UnitRegistered{
+		UnitID: id, ClinicID: 1, ComponentKind: "RBC", BloodGroup: "A", RhPositive: true, VolumeML: 300,
+		ExpiresAt: h.inDays(20), Status: domain.UnitQuarantine, Version: h.versions.Add(1),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if n := h.count(`SELECT available_units FROM source_stock WHERE clinic_id = 1 AND component_kind_code = 'RBC'`); n != 0 {
+		t.Fatalf("в наличии %d, карантинная не должна считаться", n)
+	}
+	o := h.open(1, "RBC", 1)
+	if res := h.confirm(o, []uuid.UUID{id}, true); !isType[domain.Rejected](res) {
+		t.Fatalf("ожидали Rejected, получили %#v", res)
+	}
+	if n := h.count(`SELECT count(*) FROM allocation`); n != 0 {
+		t.Fatalf("закреплено %d", n)
 	}
 }
 
@@ -378,6 +410,9 @@ func TestCancelAfterTransportRequestedSendsCancelTransport(t *testing.T) {
 	}
 	h.expectTypes("команды", h.commandTypes(o), "RequestTransport", "CancelTransport")
 	h.expectTypes("события", h.eventTypes(o), "ObligationOpened", "TransferConfirmed", "TransportRequested", "TransferCancelled")
+	if r := h.payloadField(o, "CancelTransport", "reason"); r != "OBLIGATION_CANCELLED" {
+		t.Errorf("CancelTransport.reason = %q", r)
+	}
 	h.assertStockConsistent(1, "RBC")
 }
 

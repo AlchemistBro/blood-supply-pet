@@ -3,10 +3,12 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/logistics"
 	"github.com/AlchemistBro/blood-supply-pet/services/transfer/internal/domain"
 )
 
@@ -136,9 +138,9 @@ func (s *Service) confirmLocked(ctx context.Context, tx pgx.Tx, o domain.Obligat
 			return nil, err
 		}
 	}
-	regime, err := domain.TemperatureRegime(o.ComponentKind)
-	if err != nil {
-		return nil, err
+	regime, ok := logistics.TemperatureRegimeFor(o.ComponentKind)
+	if !ok {
+		return nil, fmt.Errorf("нет температурного режима перевозки для вида %q", o.ComponentKind)
 	}
 	// Следующий шаг саги — заказ перевозки. Команда в той же транзакции: подтверждение без заказа
 	// или заказ без подтверждения невозможны (ADR-0003).
@@ -215,7 +217,7 @@ func (s *Service) sourceUnavailable(ctx context.Context, o domain.Obligation, ca
 	}
 	err := s.inTx(ctx, nil, func(ctx context.Context, tx pgx.Tx) error {
 		return s.event(ctx, tx, o.ID, EscalationRaised{
-			ObligationID: o.ID, RequestID: o.RequestID, Reason: string(domain.EscalationSourceSystemUnavailable),
+			ObligationID: o.ID, RequestID: o.RequestID, Reason: string(domain.EscalationSourceSystemUnavailable), At: s.clock.Now(),
 		})
 	})
 	if err != nil {

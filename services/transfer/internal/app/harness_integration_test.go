@@ -274,6 +274,20 @@ func (h *harness) commandTypes(id uuid.UUID) []string {
 	return h.strings(`SELECT message_type FROM outbox WHERE topic = $1 AND key = $2 ORDER BY id`, contracts.TopicLogisticsCommands, id.String())
 }
 
+// payloadField — поле тела последнего сообщения типа msgType по обязательству (события и команды).
+func (h *harness) payloadField(id uuid.UUID, msgType, field string) string {
+	h.t.Helper()
+	var v *string
+	if err := h.pool.QueryRow(h.ctx, `SELECT payload ->> $3::text FROM outbox WHERE key = $1 AND message_type = $2 ORDER BY id DESC LIMIT 1`,
+		id.String(), msgType, field).Scan(&v); err != nil {
+		h.t.Fatalf("%s.%s: %v", msgType, field, err)
+	}
+	if v == nil {
+		return ""
+	}
+	return *v
+}
+
 // auditActions — действия локального аудита по объекту.
 func (h *harness) auditActions(id uuid.UUID) []string {
 	return h.strings(`SELECT action FROM audit_local WHERE object_type = 'obligation' AND object_id = $1 ORDER BY id`, id.String())

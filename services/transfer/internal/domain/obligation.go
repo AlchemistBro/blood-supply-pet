@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/transfer"
 )
 
 // Origin — откуда пришло задание.
@@ -13,22 +15,22 @@ type Origin string
 
 // Происхождение задания.
 const (
-	OriginDoctorChoice Origin = "DOCTOR_CHOICE"
-	OriginPlanProposal Origin = "PLAN_PROPOSAL"
+	OriginDoctorChoice Origin = transfer.OriginDoctorChoice
+	OriginPlanProposal Origin = transfer.OriginPlanProposal
 )
 
 // UrgencyEmergency — код экстренной срочности (ref_urgency).
-const UrgencyEmergency = "EMERGENCY"
+const UrgencyEmergency = transfer.UrgencyEmergency
 
 // EscalationReason — повод для EscalationRaised: дежурный смены должен вмешаться.
 type EscalationReason string
 
 // Поводы эскалации.
 const (
-	EscalationExpiredNoFallback       EscalationReason = "EXPIRED_NO_FALLBACK"
-	EscalationTransportRefused        EscalationReason = "TRANSPORT_REFUSED"
-	EscalationTransportOutcomeUnknown EscalationReason = "TRANSPORT_OUTCOME_UNKNOWN"
-	EscalationSourceSystemUnavailable EscalationReason = "SOURCE_SYSTEM_UNAVAILABLE"
+	EscalationExpiredNoFallback       EscalationReason = transfer.EscalationExpiredNoFallback
+	EscalationTransportRefused        EscalationReason = transfer.EscalationTransportRefused
+	EscalationTransportOutcomeUnknown EscalationReason = transfer.EscalationTransportOutcomeUnknown
+	EscalationSourceSystemUnavailable EscalationReason = transfer.EscalationSourceSystemUnavailable
 )
 
 // Obligation — обязательство на передачу O07 в том виде, в котором оно хранится в базе transfer.

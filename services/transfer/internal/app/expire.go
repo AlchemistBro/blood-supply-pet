@@ -81,7 +81,7 @@ func (s *Service) expire(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*Escalat
 	}
 	if esc.NextID == nil {
 		if err := s.event(ctx, tx, o.ID, EscalationRaised{
-			ObligationID: o.ID, RequestID: o.RequestID, Reason: string(domain.EscalationExpiredNoFallback),
+			ObligationID: o.ID, RequestID: o.RequestID, Reason: string(domain.EscalationExpiredNoFallback), At: now,
 		}); err != nil {
 			return nil, err
 		}

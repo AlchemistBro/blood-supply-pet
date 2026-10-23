@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+
+	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/transfer"
 )
 
 // ConfirmationResult — ответ оператору источника в том же запросе: «закреплено, готовьте» или «нет, и вот почему».
@@ -69,7 +71,7 @@ type RejectReason string
 
 // Причины отказа.
 const (
-	RejectUnitsUnavailable RejectReason = "UNITS_WITHDRAWN"
+	RejectUnitsUnavailable RejectReason = transfer.RejectUnitsWithdrawn
 )
 
 // Rejected — все выбранные единицы недоступны: задание отклонено, подбор предложит следующий вариант.

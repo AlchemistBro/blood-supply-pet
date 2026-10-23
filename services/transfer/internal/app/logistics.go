@@ -79,7 +79,9 @@ func (s *Service) transportRejected(ctx context.Context, tx pgx.Tx, o domain.Obl
 			return err
 		}
 	}
-	if err := s.event(ctx, tx, o.ID, EscalationRaised{ObligationID: o.ID, RequestID: o.RequestID, Reason: string(escalation)}); err != nil {
+	if err := s.event(ctx, tx, o.ID, EscalationRaised{
+		ObligationID: o.ID, RequestID: o.RequestID, Reason: string(escalation), At: s.clock.Now(),
+	}); err != nil {
 		return err
 	}
 	return s.audit(ctx, tx, actorLogistics, ActionTransportFailed, o, map[string]any{"reason": r.Reason, "details": r.Details})

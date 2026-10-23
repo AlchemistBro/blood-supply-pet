@@ -3,6 +3,7 @@ package domain_test
 import (
 	"testing"
 
+	"github.com/AlchemistBro/blood-supply-pet/libs/refdata"
 	"github.com/AlchemistBro/blood-supply-pet/services/transfer/internal/domain"
 )
 
@@ -66,20 +67,15 @@ func TestBreakReasonForUnitStatus(t *testing.T) {
 	}
 }
 
-func TestTemperatureRegimeForEveryKind(t *testing.T) {
-	cases := map[string]string{
-		"RBC":  domain.RegimeRefrigerated,
-		"FFP":  domain.RegimeFrozen,
-		"CRYO": domain.RegimeFrozen,
-		"PLT":  domain.RegimeRoomAgitated,
+// Правило «закреплять только IN_STOCK» совпадает со справочником ref_unit_status (is_available).
+func TestAllocatableMatchesUnitStatusDictionary(t *testing.T) {
+	ref := refdata.MustLoad()
+	if len(ref.UnitStatuses) != len(domain.AllUnitStatuses) {
+		t.Fatalf("в справочнике %d статусов единицы, в домене %d", len(ref.UnitStatuses), len(domain.AllUnitStatuses))
 	}
-	for kind, want := range cases {
-		got, err := domain.TemperatureRegime(kind)
-		if err != nil || got != want {
-			t.Errorf("TemperatureRegime(%s) = %s, %v; ожидали %s", kind, got, err, want)
+	for _, s := range domain.AllUnitStatuses {
+		if s.Allocatable() != ref.IsUnitAvailable(string(s)) {
+			t.Errorf("%s: домен %v, справочник %v", s, s.Allocatable(), ref.IsUnitAvailable(string(s)))
 		}
-	}
-	if _, err := domain.TemperatureRegime("WHOLE"); err == nil {
-		t.Error("неизвестный вид компонента должен давать ошибку, а не режим по умолчанию")
 	}
 }

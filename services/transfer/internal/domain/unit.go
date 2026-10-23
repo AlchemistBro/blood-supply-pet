@@ -5,18 +5,21 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/inventory"
 )
 
-// UnitStatus — статус единицы компонента крови по данным inventory (АИСТ-М, C01).
+// UnitStatus — статус единицы компонента крови по данным inventory (АИСТ-М, C01). Коды — из контракта
+// inventory и справочника ref_unit_status; согласованность проверяет тест домена.
 type UnitStatus string
 
 // Статусы единицы из inventory.
 const (
-	UnitInStock     UnitStatus = "IN_STOCK"
-	UnitQuarantine  UnitStatus = "QUARANTINE"
-	UnitIssued      UnitStatus = "ISSUED"
-	UnitDiscarded   UnitStatus = "DISCARDED"
-	UnitTransferred UnitStatus = "TRANSFERRED"
+	UnitInStock     UnitStatus = inventory.StatusInStock
+	UnitQuarantine  UnitStatus = inventory.StatusQuarantine
+	UnitIssued      UnitStatus = inventory.StatusIssued
+	UnitDiscarded   UnitStatus = inventory.StatusDiscarded
+	UnitTransferred UnitStatus = inventory.StatusTransferred
 )
 
 // AllUnitStatuses — все статусы единицы.
@@ -75,7 +78,7 @@ type UnitCopy struct {
 	Version       int64
 }
 
-// BreakReason — почему обязательство перешло в BROKEN.
+// BreakReason — почему обязательство перешло в BROKEN (obligation.status_reason).
 type BreakReason string
 
 // Причины нарушения.
@@ -83,6 +86,11 @@ const (
 	BreakUnitWithdrawn   BreakReason = "UNIT_WITHDRAWN"
 	BreakUnitQuarantined BreakReason = "UNIT_QUARANTINED"
 )
+
+// BrokenReasonQuarantine — reason события TransferBroken при карантине закреплённой единицы.
+// Перечисление TransferBroken.reason в контракте пока знает только причины выбытия (ISSUED, DISCARDED,
+// TRANSFERRED, EXPIRED); значение QUARANTINE ждёт обратно совместимой правки контракта (пакет контрактов).
+const BrokenReasonQuarantine = inventory.StatusQuarantine
 
 // BreakReasonFor — нарушает ли новый статус закреплённой единицы обязательство и с какой причиной.
 // Карантин закреплённой единицы равен выбытию: отправлять её нельзя (ПП РФ № 641, п. 62).
@@ -92,31 +100,7 @@ func BreakReasonFor(s CopyStatus) (BreakReason, bool) {
 		return BreakUnitQuarantined, true
 	case CopyWithdrawn:
 		return BreakUnitWithdrawn, true
-	case CopyInStock:
-		return "", false
 	default:
 		return "", false
-	}
-}
-
-// Температурные режимы перевозки для RequestTransport. Демо: режимы по виду компонента, без учёта упаковки.
-const (
-	RegimeRefrigerated = "REFRIGERATED"  // +2…+6 °C, эритроцитсодержащие
-	RegimeFrozen       = "FROZEN"        // не выше −25 °C, плазма и криопреципитат
-	RegimeRoomAgitated = "ROOM_AGITATED" // +20…+24 °C с перемешиванием, тромбоциты
-)
-
-// TemperatureRegime — режим перевозки по виду компонента. Неизвестный вид — ошибка: режим «по умолчанию»
-// для крови опаснее отказа.
-func TemperatureRegime(kind string) (string, error) {
-	switch kind {
-	case "RBC":
-		return RegimeRefrigerated, nil
-	case "FFP", "CRYO":
-		return RegimeFrozen, nil
-	case "PLT":
-		return RegimeRoomAgitated, nil
-	default:
-		return "", fmt.Errorf("нет температурного режима для вида %q", kind)
 	}
 }

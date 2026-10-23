@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/logistics"
 	"github.com/AlchemistBro/blood-supply-pet/libs/messaging"
 	"github.com/AlchemistBro/blood-supply-pet/services/transfer/internal/domain"
 )
@@ -16,12 +17,20 @@ import (
 // (как InventoryProjection прототипа): иначе выдача единицы во время подтверждения даёт рассинхрон резерва и NFR013.
 // msg — входящее сообщение для inbox (nil при прямом вызове).
 
-// OnUnitRegistered — единица появилась в наличии.
+// OnUnitRegistered — единица появилась в копии запаса; может прийти сразу на карантине (тогда в наличие не входит).
+// Пустой статус — IN_STOCK (событие регистрации без статуса означает «в наличии»).
 func (s *Service) OnUnitRegistered(ctx context.Context, msg *messaging.Message, e UnitRegistered) error {
 	if e.UnitID == uuid.Nil || e.ComponentKind == "" {
 		return deliveryErr(msg, fmt.Errorf("%w: UnitRegistered без unit_id или вида", ErrInvalidEvent))
 	}
-	err := s.inTx(ctx, msg, func(ctx context.Context, tx pgx.Tx) error {
+	if e.Status == "" {
+		e.Status = domain.UnitInStock
+	}
+	status, err := domain.CopyStatusOf(e.Status)
+	if err != nil {
+		return deliveryErr(msg, fmt.Errorf("%w: %w", ErrInvalidEvent, err))
+	}
+	err = s.inTx(ctx, msg, func(ctx context.Context, tx pgx.Tx) error {
 		now := s.clock.Now()
 		if _, err := s.store.LockStock(ctx, tx, e.ClinicID, e.ComponentKind); err != nil {
 			return err
@@ -29,12 +38,20 @@ func (s *Service) OnUnitRegistered(ctx context.Context, msg *messaging.Message, 
 		applied, err := s.store.UpsertUnitCopy(ctx, tx, domain.UnitCopy{
 			UnitID: e.UnitID, ClinicID: e.ClinicID, ComponentKind: e.ComponentKind, BloodGroup: e.BloodGroup,
 			RhPositive: e.RhPositive, Phenotype: e.Phenotype, VolumeML: e.VolumeML, ExpiresAt: e.ExpiresAt,
-			Status: domain.CopyInStock, Version: e.Version,
+			Status: status, Version: e.Version,
 		}, now)
 		if err != nil || !applied {
 			return err // устаревшая версия ничего не меняет
 		}
-		return s.store.RecountAvailable(ctx, tx, e.ClinicID, e.ComponentKind)
+		if err := s.store.RecountAvailable(ctx, tx, e.ClinicID, e.ComponentKind); err != nil {
+			return err
+		}
+		// Повторная регистрация уже закреплённой единицы с недоступным статусом нарушает обязательство так же,
+		// как UnitUpdated.
+		if breakReason, breaks := domain.BreakReasonFor(status); breaks {
+			return s.breakHolding(ctx, tx, e.UnitID, breakReason, string(e.Status), now)
+		}
+		return nil
 	})
 	return deliveryErr(msg, err)
 }
@@ -73,7 +90,7 @@ func (s *Service) applyUnitStatus(ctx context.Context, msg *messaging.Message, u
 			return err
 		}
 		if breakReason, breaks := domain.BreakReasonFor(status); breaks {
-			return s.breakHolding(ctx, tx, unitID, breakReason, now)
+			return s.breakHolding(ctx, tx, unitID, breakReason, reason, now)
 		}
 		return nil
 	})
@@ -83,7 +100,9 @@ func (s *Service) applyUnitStatus(ctx context.Context, msg *messaging.Message, u
 // breakHolding — компенсация: закреплённая единица недоступна. В той же транзакции O07 → BROKEN, все его
 // закрепления RELEASED, резерв уменьшается, TransferBroken и CancelTransport. Команда шлётся всегда:
 // RequestTransport уже в пути, а шлюз отвечает и тогда, когда заказа не было (надгробие).
-func (s *Service) breakHolding(ctx context.Context, tx pgx.Tx, unitID uuid.UUID, reason domain.BreakReason, now time.Time) error {
+// reason — причина в status_reason O07; unitReason — причина выбытия или статус единицы для TransferBroken.
+func (s *Service) breakHolding(ctx context.Context, tx pgx.Tx, unitID uuid.UUID, reason domain.BreakReason, unitReason string,
+	now time.Time) error {
 	obligationID, held, err := s.store.ObligationHoldingUnit(ctx, tx, unitID)
 	if err != nil || !held {
 		return err
@@ -107,16 +126,27 @@ func (s *Service) breakHolding(ctx context.Context, tx pgx.Tx, unitID uuid.UUID,
 		return err
 	}
 	if err := s.event(ctx, tx, o.ID, TransferBroken{
-		ObligationID: o.ID, RequestID: o.RequestID, UnitID: unitID, Reason: string(reason),
+		ObligationID: o.ID, RequestID: o.RequestID, UnitID: unitID, Reason: brokenEventReason(reason, unitReason),
 	}); err != nil {
 		return err
 	}
-	if err := s.command(ctx, tx, o.ID, CancelTransport{ObligationID: o.ID, Reason: string(reason)}); err != nil {
+	// У CancelTransport причин две; карантин — тоже «единица выбыла» с точки зрения перевозки.
+	if err := s.command(ctx, tx, o.ID, CancelTransport{ObligationID: o.ID, Reason: logistics.CancelUnitWithdrawn}); err != nil {
 		return err
 	}
 	return s.audit(ctx, tx, actorSystem, ActionBroken, o, map[string]any{
-		"unit_id": unitID, "reason": string(reason), "from_status": string(o.Status), "released_units": released,
+		"unit_id": unitID, "reason": string(reason), "unit_reason": unitReason, "from_status": string(o.Status),
+		"released_units": released,
 	})
+}
+
+// brokenEventReason — reason для TransferBroken: причина выбытия из UnitWithdrawn (или статус выбытия из
+// UnitUpdated, коды совпадают). Для карантина — QUARANTINE, которого перечисление контракта пока не содержит.
+func brokenEventReason(reason domain.BreakReason, unitReason string) string {
+	if reason == domain.BreakUnitQuarantined {
+		return domain.BrokenReasonQuarantine
+	}
+	return unitReason
 }
 
 // OnProtectedVolume — защищённый объём источника (NFR013). Применяется только более новая версия.
