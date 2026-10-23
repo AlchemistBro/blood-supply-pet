@@ -35,7 +35,7 @@ type config struct {
 	CookieSecure       bool          `env:"BS_COOKIE_SECURE" envDefault:"true"`
 	HSTSMaxAge         int           `env:"BS_HSTS_MAX_AGE" envDefault:"31536000"`
 	DemoAccess         bool          `env:"BS_DEMO_ACCESS" envDefault:"true"`
-	// AuditURL — адрес сервиса audit; пусто — записи только в лог (локальная отладка без стенда).
+	// AuditURL — адрес сервиса audit; пусто допустимо только при BS_ENV=local (записи в лог).
 	AuditURL string `env:"BS_AUDIT_URL"`
 	// Служебный клиент Keycloak для POST /records (роль SERVICE, ADR-0017).
 	ServiceClientID     string `env:"BS_SERVICE_CLIENT_ID" envDefault:"services"`
@@ -122,7 +122,11 @@ func sessionKeys(cfg config) ([][]byte, error) {
 // auditRecorder — запись в audit служебным токеном (client credentials); без BS_AUDIT_URL — только лог.
 func auditRecorder(cfg config, rt *runtime.Runtime) (auditclient.Recorder, error) {
 	if cfg.AuditURL == "" {
-		rt.Log.Warn("BS_AUDIT_URL не задан: вход, выход и отказы пишутся только в лог (локальная отладка)")
+		// Без журнала аудита web работает только на машине разработчика (NFR008, ADR-0017).
+		if rt.Cfg.Environment != "local" {
+			return nil, fmt.Errorf("BS_AUDIT_URL не задан (окружение %q): без аудита web не запускается", rt.Cfg.Environment)
+		}
+		rt.Log.Warn("BS_AUDIT_URL не задан: вход, выход и отказы пишутся только в лог (только BS_ENV=local)")
 		return auditclient.LogOnly{Log: rt.Log}, nil
 	}
 	if cfg.ServiceClientSecret == "" {
