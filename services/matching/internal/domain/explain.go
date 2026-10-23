@@ -115,7 +115,7 @@ func explainDeficit(res Result, req Request) string {
 		b.WriteString(strings.Join(res.Notes, "; "))
 		b.WriteString(".\n")
 	} else {
-		b.WriteString("Причины: подходящих единиц в наличии нет.\n")
+		b.WriteString("Причины: единиц, соответствующих правилам демо-набора и ограничениям заявки, в наличии нет.\n")
 	}
 	if len(req.Constraints) > 0 {
 		codes := make([]string, 0, len(req.Constraints))

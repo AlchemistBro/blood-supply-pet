@@ -285,22 +285,32 @@ func TestDemoExceptionDoesNotHitOtherRequests(t *testing.T) {
 
 // Проверка «тест действительно проверяет» этапа 6 (docs/tasks/06-matching.md).
 // Ловит правило: применение ограничения NO_GROUP_SUBSTITUTION в match.go (permittedTargets удаляет
-// разрешённые правилами замены группы). Если это применение убрать, подбор предложит A- по
-// DEMO_RBC_A_NEG_FOR_A_POS и O- по DEMO_RBC_O_NEG, и тест упадёт: вместо дефицита появятся варианты.
+// разрешённые правилами замены группы). Если это применение убрать, подбор предложит A- по T_A_NEG и O-
+// по T_O_NEG, и тест упадёт: вместо дефицита появятся варианты. Правила собраны здесь, а не взяты из
+// демо-набора, чтобы правка демо-набора не ослабила проверку.
 func TestNoGroupSubstitutionConstraintIsEnforced(t *testing.T) {
+	rules := []domain.Rule{
+		testRule("T_IDENTICAL", "RBC", "", "", "", false, 1),
+		testRule("T_A_NEG", "RBC", "A+", "A-", "", false, 2),
+		testRule("T_O_NEG", "RBC", "", "O-", "", false, 3),
+	}
 	units := []domain.Unit{
 		unit(1, local, "RBC", "A-", 10*day24),
 		unit(2, remote3, "RBC", "O-", 10*day24),
 		unit(3, remote3, "RBC", "O-", 10*day24),
 	}
 	// Без ограничения замены допустимы: обстановка действительно содержит запас для замены.
-	free := mustMatch(t, input(t, request("RBC", "A+", "EMERGENCY", 1), units...))
+	freeIn := input(t, request("RBC", "A+", "EMERGENCY", 1), units...)
+	freeIn.Rules = rules
+	free := mustMatch(t, freeIn)
 	if len(free.Variants) != 2 {
 		t.Fatalf("без ограничения ожидали замены A- и O-, получили %+v", views(free))
 	}
 
-	res := mustMatch(t, input(t,
-		request("RBC", "A+", "EMERGENCY", 1, domain.Constraint{Code: domain.ConstraintNoGroupSubstitution}), units...))
+	in := input(t,
+		request("RBC", "A+", "EMERGENCY", 1, domain.Constraint{Code: domain.ConstraintNoGroupSubstitution}), units...)
+	in.Rules = rules
+	res := mustMatch(t, in)
 	if len(res.Variants) != 0 {
 		t.Fatalf("NO_GROUP_SUBSTITUTION нарушено: предложены %+v", views(res))
 	}
@@ -451,6 +461,33 @@ func TestUnitExpiringBeforeArrivalIsNotOffered(t *testing.T) {
 			res := mustMatch(t, input(t, request("RBC", "A+", "URGENT", 1), unit(1, tc.clinic, "RBC", "A+", tc.expiresIn)))
 			if got := len(res.Variants) == 1; got != tc.offered {
 				t.Fatalf("предложена: %v, ожидали %v", got, tc.offered)
+			}
+		})
+	}
+}
+
+// MIN_REMAINING_HOURS: годность строго больше момента прибытия + N ч; точная граница не проходит.
+// Спецификация замены несёт ту же границу, transfer сравнивает строго.
+func TestMinRemainingHoursBoundary(t *testing.T) {
+	// Источник 2: прибытие через 60 мин; N = 12 ч → граница at + 13 ч.
+	cases := []struct {
+		name      string
+		expiresIn time.Duration
+		offered   bool
+	}{
+		{"истекает ровно на границе", 13 * time.Hour, false},
+		{"истекает на минуту позже границы", 13*time.Hour + time.Minute, true},
+		{"истекает на минуту раньше границы", 13*time.Hour - time.Minute, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := request("RBC", "A+", "URGENT", 1, domain.Constraint{Code: domain.ConstraintMinRemainingHours, Value: "12"})
+			res := mustMatch(t, input(t, req, unit(1, remote2, "RBC", "A+", tc.expiresIn)))
+			if got := len(res.Variants) == 1; got != tc.offered {
+				t.Fatalf("предложена: %v, ожидали %v", got, tc.offered)
+			}
+			if tc.offered && !res.Variants[0].Spec.MinExpiresAt.Equal(at.Add(13*time.Hour)) {
+				t.Fatalf("граница в спецификации замены %v", res.Variants[0].Spec.MinExpiresAt)
 			}
 		})
 	}
@@ -823,7 +860,8 @@ func TestExplanationHasRuleVersionAndDemoMark(t *testing.T) {
 	if deficit.Deficit == nil {
 		t.Fatal("ожидали дефицит при пустом запасе")
 	}
-	for _, want := range []string{"ДЕМО", "DEMO_RBC_IDENTICAL v1", "4242"} {
+	for _, want := range []string{"ДЕМО", "DEMO_RBC_IDENTICAL v1", "4242",
+		"единиц, соответствующих правилам демо-набора и ограничениям заявки, в наличии нет"} {
 		if !strings.Contains(deficit.Deficit.Explanation, want) {
 			t.Fatalf("в объяснении дефицита нет %q:\n%s", want, deficit.Deficit.Explanation)
 		}

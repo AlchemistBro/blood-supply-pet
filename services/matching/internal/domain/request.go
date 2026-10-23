@@ -22,7 +22,8 @@ const (
 	ConstraintNoGroupSubstitution = "NO_GROUP_SUBSTITUTION"
 	// ConstraintIrradiated — только единицы с признаком IRRADIATED; нет сведений о признаке — единица не подходит.
 	ConstraintIrradiated = "IRRADIATED"
-	// ConstraintMinRemainingHours — на момент прибытия у единицы остаётся не меньше N часов годности (параметр N).
+	// ConstraintMinRemainingHours — срок годности единицы строго больше момента прибытия + N ч (параметр N):
+	// единица, истекающая ровно в момент прибытия + N ч, не подходит. Без ограничения N = 0.
 	ConstraintMinRemainingHours = "MIN_REMAINING_HOURS"
 )
 

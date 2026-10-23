@@ -36,7 +36,8 @@ type MatchingRule struct {
 
 func day(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.UTC) }
 
-// demoRules — десять версий девяти демо-правил. ДЕМО: синтетические правила, не клинические.
+// demoRules — девять демо-правил (кодов) в десяти версиях: у DEMO_RBC_O_NEG две версии.
+// ДЕМО: синтетические правила, не клинические.
 var demoRules = []MatchingRule{
 	{
 		RuleCode: "DEMO_RBC_IDENTICAL", VersionNo: 1, ComponentKindCode: "RBC",

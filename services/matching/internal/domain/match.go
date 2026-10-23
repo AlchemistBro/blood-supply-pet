@@ -145,9 +145,11 @@ type ReplacementSpec struct {
 	ComponentKind string
 	BloodGroup    string
 	Phenotype     string
-	MinExpiresAt  time.Time
-	RuleCode      string
-	RuleVersion   int64
+	// MinExpiresAt — момент прибытия + MIN_REMAINING_HOURS. Единица-замена подходит, только если её срок
+	// годности строго позже MinExpiresAt: transfer сравнивает строго (expires_at > min_expires_at), как подбор.
+	MinExpiresAt time.Time
+	RuleCode     string
+	RuleVersion  int64
 }
 
 // Variant — допустимый вариант O10: один источник, один вид, одна группа.
@@ -519,7 +521,7 @@ var rankFactors = []rankFactor{
 		show:    func(v Variant) string { return fmt.Sprintf("%d", v.Rule.Priority) },
 	},
 	{
-		name:    "годность на момент прибытия (FEFO)",
+		name:    "годность (FEFO, от момента подбора)",
 		compare: func(a, b Variant) int { return cmp.Compare(a.expiryBucket, b.expiryBucket) },
 		show:    func(v Variant) string { return "до " + formatTime(v.EarliestExpiresAt) },
 	},
