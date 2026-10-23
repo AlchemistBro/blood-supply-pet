@@ -312,6 +312,12 @@ func TestStoreClearRemovesAllChunks(t *testing.T) {
 	}
 }
 
+func TestEqual(t *testing.T) {
+	if !Equal("abc", "abc") || Equal("abc", "abd") || Equal("", "") || Equal("abc", "") {
+		t.Fatal("сравнение секретов неверно")
+	}
+}
+
 // Данные сессии превращаются в участника для матрицы прав.
 func TestDataPrincipal(t *testing.T) {
 	clinic := int64(1)

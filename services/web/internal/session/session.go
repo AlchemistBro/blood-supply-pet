@@ -7,6 +7,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -170,6 +171,14 @@ type LoginState struct {
 	Verifier string `json:"pkce"`
 	// Next — локальный путь, куда вернуть пользователя после входа.
 	Next string `json:"next,omitempty"`
+}
+
+// Equal сравнивает секреты (state, nonce, CSRF) за постоянное время; пустые значения не равны ничему.
+func Equal(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
 
 // RandomToken — случайная строка для state, nonce и CSRF: 32 байта в base64url.
