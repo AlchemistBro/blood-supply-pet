@@ -142,3 +142,11 @@ SELECT EXISTS (
 -- name: AllocationHistory :many
 -- Куда уходила единица: все закрепления, включая снятые.
 SELECT * FROM allocation WHERE unit_id = $1 ORDER BY created_at, allocation_id;
+
+-- name: ObligationsBySource :many
+-- Задания клиники-источника для экрана оператора; статус — необязательный фильтр.
+SELECT * FROM obligation
+WHERE source_clinic_id = sqlc.arg('source_clinic_id')
+  AND (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status'))
+ORDER BY created_at DESC, obligation_id
+LIMIT sqlc.arg('max_rows');

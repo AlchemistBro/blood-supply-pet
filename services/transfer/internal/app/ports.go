@@ -52,6 +52,8 @@ type Store interface {
 	LockObligation(ctx context.Context, db DB, id uuid.UUID) (domain.Obligation, error)
 	ObligationIDByChoice(ctx context.Context, db DB, choiceID uuid.UUID) (uuid.UUID, error)
 	ObligationsByRequest(ctx context.Context, db DB, requestID uuid.UUID) ([]domain.Obligation, error)
+	// ObligationsBySource — задания клиники-источника, новые первыми; status nil — любой.
+	ObligationsBySource(ctx context.Context, db DB, sourceClinicID int64, status *domain.Status, limit int) ([]domain.Obligation, error)
 	PendingDueBy(ctx context.Context, db DB, now time.Time, limit int) ([]uuid.UUID, error)
 	UrgencyWindow(ctx context.Context, db DB, urgencyCode string) (time.Duration, error)
 

@@ -191,6 +191,10 @@ func (s *Service) ByRequest(ctx context.Context, requestID uuid.UUID) ([]Obligat
 	if err != nil {
 		return nil, err
 	}
+	return s.views(ctx, list)
+}
+
+func (s *Service) views(ctx context.Context, list []domain.Obligation) ([]ObligationView, error) {
 	out := make([]ObligationView, 0, len(list))
 	for _, o := range list {
 		v, err := s.view(ctx, o)
@@ -200,6 +204,18 @@ func (s *Service) ByRequest(ctx context.Context, requestID uuid.UUID) ([]Obligat
 		out = append(out, v)
 	}
 	return out, nil
+}
+
+// BySourceLimit — сколько заданий источника отдаёт список (экран оператора, новые первыми).
+const BySourceLimit = 200
+
+// BySource — задания клиники-источника; status nil — любой.
+func (s *Service) BySource(ctx context.Context, sourceClinicID int64, status *domain.Status) ([]ObligationView, error) {
+	list, err := s.store.ObligationsBySource(ctx, s.pool, sourceClinicID, status, BySourceLimit)
+	if err != nil {
+		return nil, err
+	}
+	return s.views(ctx, list)
 }
 
 // AllocationHistory — все закрепления единицы, включая снятые: куда уходила единица (ПП РФ № 641).

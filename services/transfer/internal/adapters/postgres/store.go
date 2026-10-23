@@ -91,6 +91,32 @@ func (Store) ObligationsByRequest(ctx context.Context, db app.DB, requestID uuid
 	return out, nil
 }
 
+// ObligationsBySource — задания клиники-источника.
+func (Store) ObligationsBySource(ctx context.Context, db app.DB, sourceClinicID int64, status *domain.Status, limit int) ([]domain.Obligation, error) {
+	l, err := int32Of(limit)
+	if err != nil {
+		return nil, err
+	}
+	var st *string
+	if status != nil {
+		v := string(*status)
+		st = &v
+	}
+	rows, err := q(db).ObligationsBySource(ctx, gen.ObligationsBySourceParams{SourceClinicID: sourceClinicID, Status: st, MaxRows: l})
+	if err != nil {
+		return nil, fmt.Errorf("обязательства источника: %w", err)
+	}
+	out := make([]domain.Obligation, 0, len(rows))
+	for _, r := range rows {
+		o, err := toObligation(r)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, o)
+	}
+	return out, nil
+}
+
 // PendingDueBy — просроченные PENDING по индексу (deadline) WHERE status = 'PENDING'.
 func (Store) PendingDueBy(ctx context.Context, db app.DB, now time.Time, limit int) ([]uuid.UUID, error) {
 	l, err := int32Of(limit)

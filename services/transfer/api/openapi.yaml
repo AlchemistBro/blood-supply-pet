@@ -2,12 +2,317 @@ openapi: 3.0.3
 info:
   title: transfer
   version: 0.1.0
-  description: Контракт сервиса transfer. Источник истины для HTTP: код сервера генерируется из этого файла.
+  description: |
+    Обязательства на передачу O07 и сага подтверждения (FR048, FR049; NFR004, NFR013).
+    Источник истины для HTTP: код сервера генерируется из этого файла (oapi-codegen).
+    Расширение x-bs-operation у каждой операции — имя операции матрицы прав (libs/httpx/auth/policy.go).
+    Ответ на подтверждение и замену — исход в том же запросе (code + message); ошибки транспорта и прав — problem+json.
+    Фенотип из спецификации замены наружу не отдаётся: только признак phenotype_required.
 servers:
   - url: http://localhost:8105
-paths: {}
+paths:
+  /obligations:
+    post:
+      operationId: openObligation
+      x-bs-operation: OPEN_OBLIGATION
+      summary: Открыть задание источнику (служебный токен matching или planning). Идемпотентно по choice_id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OpenObligationInput" }
+      responses:
+        "200":
+          description: Задание открыто или уже было открыто этим выбором
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Obligation" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    get:
+      operationId: listObligations
+      x-bs-operation: VIEW_OBLIGATION
+      summary: Задания по заявке или по клинике-источнику. Нужен хотя бы один из параметров requestId, sourceClinicId.
+      parameters:
+        - { name: requestId, in: query, schema: { type: string, format: uuid } }
+        - { name: sourceClinicId, in: query, schema: { type: integer, format: int64 } }
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/ObligationStatus" } }
+      responses:
+        "200":
+          description: Задания, видимые участнику (своя клиника — источник или получатель)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ObligationList" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /obligations/{id}:
+    get:
+      operationId: getObligation
+      x-bs-operation: VIEW_OBLIGATION
+      summary: Задание с действующими закреплениями
+      parameters:
+        - { $ref: "#/components/parameters/ObligationId" }
+      responses:
+        "200":
+          description: Задание
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Obligation" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /obligations/{id}/confirm:
+    post:
+      operationId: confirmTransfer
+      x-bs-operation: CONFIRM_TRANSFER
+      summary: Подтвердить задание единицами (оператор клиники-источника). Ответ — в том же запросе.
+      description: |
+        200 — CONFIRMED (закреплено, готовьте) или REJECTED (все единицы недоступны, задание отклонено);
+        409 — TASK_WITHDRAWN, UNITS_UNAVAILABLE, UNITS_TAKEN; 422 — PROTECTED_VOLUME_EXCEEDED, INVALID_REQUEST;
+        503 — SOURCE_SYSTEM_UNAVAILABLE (АИСТ-М не ответила, повторите). Повтор с тем же idempotency_key
+        возвращает тот же CONFIRMED.
+      parameters:
+        - { $ref: "#/components/parameters/ObligationId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConfirmInput" }
+      responses:
+        "200": { $ref: "#/components/responses/Confirmation" }
+        "409": { $ref: "#/components/responses/Confirmation" }
+        "422": { $ref: "#/components/responses/Confirmation" }
+        "503": { $ref: "#/components/responses/Confirmation" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /obligations/{id}/replace:
+    post:
+      operationId: replaceUnit
+      x-bs-operation: REPLACE_UNIT
+      summary: Заменить закреплённую единицу равноценной до отправки (ADR-0011)
+      description: |
+        200 — REPLACED; 409 — NOT_ALLOWED, UNIT_UNAVAILABLE, UNIT_TAKEN; 422 — SPEC_MISMATCH;
+        503 — SOURCE_SYSTEM_UNAVAILABLE.
+      parameters:
+        - { $ref: "#/components/parameters/ObligationId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReplaceInput" }
+      responses:
+        "200": { $ref: "#/components/responses/Replacement" }
+        "409": { $ref: "#/components/responses/Replacement" }
+        "422": { $ref: "#/components/responses/Replacement" }
+        "503": { $ref: "#/components/responses/Replacement" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /obligations/{id}/cancel:
+    post:
+      operationId: cancelObligation
+      x-bs-operation: CANCEL_OBLIGATION
+      summary: Отменить задание (служба или дежурный). Из конечного статуса — без изменений, cancelled=false.
+      parameters:
+        - { $ref: "#/components/parameters/ObligationId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CancelInput" }
+      responses:
+        "200":
+          description: Итог отмены
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CancelResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 components:
+  parameters:
+    ObligationId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  responses:
+    Confirmation:
+      description: Исход подтверждения
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ConfirmationResult" }
+    Replacement:
+      description: Исход замены
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ReplacementResult" }
+    BadRequest:
+      description: Запрос не разобран или не прошёл проверку
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Unauthorized:
+      description: Нет действительного токена
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Forbidden:
+      description: Роли не разрешена операция или задание другой клиники
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    NotFound:
+      description: Задание не найдено
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
   schemas:
+    ObligationStatus:
+      type: string
+      enum: [PENDING, CONFIRMED, TRANSPORT_REQUESTED, DISPATCHED, DELIVERED, REJECTED, EXPIRED, CANCELLED, BROKEN]
+    SpecInput:
+      type: object
+      description: Спецификация замены из выбора врача (ADR-0011). Фенотип — квазиидентификатор, не логируется.
+      required: [rule_version]
+      properties:
+        blood_group: { type: string, maxLength: 4 }
+        rh_positive: { type: boolean }
+        phenotype: { type: string, maxLength: 64 }
+        min_expires_at: { type: string, format: date-time }
+        rule_version: { type: string, minLength: 1, maxLength: 64 }
+    OpenObligationInput:
+      type: object
+      required: [choice_id, request_id, origin, source_clinic_id, target_clinic_id, component_kind, requested_qty, urgency, confirm_window_seconds, spec]
+      properties:
+        choice_id: { type: string, format: uuid }
+        request_id: { type: string, format: uuid }
+        origin: { type: string, enum: [DOCTOR_CHOICE, PLAN_PROPOSAL] }
+        source_clinic_id: { type: integer, format: int64 }
+        target_clinic_id: { type: integer, format: int64 }
+        component_kind: { type: string, minLength: 1, maxLength: 16 }
+        requested_qty: { type: integer, minimum: 1 }
+        urgency: { type: string, enum: [PLANNED, URGENT, EMERGENCY] }
+        confirm_window_seconds: { type: integer, format: int64, minimum: 1 }
+        fallback_sources:
+          type: array
+          items: { type: integer, format: int64 }
+        spec: { $ref: "#/components/schemas/SpecInput" }
+    SpecView:
+      type: object
+      description: Спецификация замены без фенотипа
+      required: [rule_version, phenotype_required]
+      properties:
+        blood_group: { type: string }
+        rh_positive: { type: boolean }
+        min_expires_at: { type: string, format: date-time }
+        rule_version: { type: string }
+        phenotype_required: { type: boolean, description: Есть требование к фенотипу (само значение не отдаётся) }
+    Obligation:
+      type: object
+      required: [obligation_id, choice_id, request_id, origin, source_clinic_id, target_clinic_id, component_kind,
+                 requested_qty, confirmed_qty, status, urgency, deadline, fallback_sources, spec, units, version,
+                 created_at, updated_at]
+      properties:
+        obligation_id: { type: string, format: uuid }
+        choice_id: { type: string, format: uuid }
+        request_id: { type: string, format: uuid }
+        origin: { type: string, enum: [DOCTOR_CHOICE, PLAN_PROPOSAL] }
+        source_clinic_id: { type: integer, format: int64 }
+        target_clinic_id: { type: integer, format: int64 }
+        component_kind: { type: string }
+        blood_group: { type: string }
+        requested_qty: { type: integer }
+        confirmed_qty: { type: integer }
+        status: { $ref: "#/components/schemas/ObligationStatus" }
+        status_reason: { type: string }
+        urgency: { type: string }
+        deadline: { type: string, format: date-time }
+        fallback_sources:
+          type: array
+          items: { type: integer, format: int64 }
+        spec: { $ref: "#/components/schemas/SpecView" }
+        transport_ref: { type: string }
+        units:
+          type: array
+          description: Действующие закрепления
+          items: { type: string, format: uuid }
+        version: { type: integer, format: int64 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ObligationList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Obligation" }
+    ConfirmInput:
+      type: object
+      required: [unit_ids, idempotency_key]
+      properties:
+        unit_ids:
+          type: array
+          minItems: 1
+          items: { type: string, format: uuid }
+        accept_partial: { type: boolean, default: false, description: Согласен закрепить только оставшиеся на месте единицы }
+        idempotency_key: { type: string, minLength: 1, maxLength: 128 }
+    ConfirmationResult:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum: [CONFIRMED, TASK_WITHDRAWN, UNITS_UNAVAILABLE, REJECTED, UNITS_TAKEN, PROTECTED_VOLUME_EXCEEDED, INVALID_REQUEST, SOURCE_SYSTEM_UNAVAILABLE]
+        message: { type: string, description: Текст для оператора }
+        obligation_id: { type: string, format: uuid }
+        units:
+          type: array
+          description: CONFIRMED — закреплённые; UNITS_UNAVAILABLE — недоступные; UNITS_TAKEN — занятые
+          items: { type: string, format: uuid }
+        shortfall: { type: integer, description: Недостача при частичном подтверждении }
+        status: { $ref: "#/components/schemas/ObligationStatus" }
+        reason: { type: string }
+        max_confirmable: { type: integer }
+    ReplaceInput:
+      type: object
+      required: [old_unit_id, new_unit_id]
+      properties:
+        old_unit_id: { type: string, format: uuid }
+        new_unit_id: { type: string, format: uuid }
+    ReplacementResult:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum: [REPLACED, NOT_ALLOWED, SPEC_MISMATCH, UNIT_UNAVAILABLE, UNIT_TAKEN, SOURCE_SYSTEM_UNAVAILABLE]
+        message: { type: string }
+        obligation_id: { type: string, format: uuid }
+        old_unit_id: { type: string, format: uuid }
+        new_unit_id: { type: string, format: uuid }
+        unit_id: { type: string, format: uuid }
+        status: { $ref: "#/components/schemas/ObligationStatus" }
+        reason: { type: string }
+    CancelInput:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, enum: [REQUEST_CANCELLED, PLAN_RECALCULATED, DUTY_OFFICER_DECISION] }
+    CancelResult:
+      type: object
+      required: [obligation_id, cancelled, status]
+      properties:
+        obligation_id: { type: string, format: uuid }
+        cancelled: { type: boolean }
+        status: { $ref: "#/components/schemas/ObligationStatus" }
     Problem:
       type: object
       required: [title, status]
@@ -18,3 +323,4 @@ components:
         detail: { type: string }
         instance: { type: string }
         correlation_id: { type: string }
+        errors: { type: object, additionalProperties: true }

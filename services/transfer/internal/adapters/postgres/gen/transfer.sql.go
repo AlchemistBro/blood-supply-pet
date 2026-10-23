@@ -534,6 +534,68 @@ func (q *Queries) ObligationsByRequest(ctx context.Context, requestID uuid.UUID)
 	return items, nil
 }
 
+const obligationsBySource = `-- name: ObligationsBySource :many
+SELECT obligation_id, choice_id, request_id, origin, source_clinic_id, target_clinic_id, component_kind_code, blood_group_code, requested_qty, confirmed_qty, status, urgency_code, deadline, confirm_window_seconds, fallback_sources, spec_blood_group_code, spec_rh_positive, spec_phenotype, spec_min_expires_at, spec_rule_version, confirm_key, transport_ref, status_reason, version, created_at, updated_at FROM obligation
+WHERE source_clinic_id = $1
+  AND ($2::text IS NULL OR status = $2)
+ORDER BY created_at DESC, obligation_id
+LIMIT $3
+`
+
+type ObligationsBySourceParams struct {
+	SourceClinicID int64
+	Status         *string
+	MaxRows        int32
+}
+
+// Задания клиники-источника для экрана оператора; статус — необязательный фильтр.
+func (q *Queries) ObligationsBySource(ctx context.Context, arg ObligationsBySourceParams) ([]Obligation, error) {
+	rows, err := q.db.Query(ctx, obligationsBySource, arg.SourceClinicID, arg.Status, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Obligation{}
+	for rows.Next() {
+		var i Obligation
+		if err := rows.Scan(
+			&i.ObligationID,
+			&i.ChoiceID,
+			&i.RequestID,
+			&i.Origin,
+			&i.SourceClinicID,
+			&i.TargetClinicID,
+			&i.ComponentKindCode,
+			&i.BloodGroupCode,
+			&i.RequestedQty,
+			&i.ConfirmedQty,
+			&i.Status,
+			&i.UrgencyCode,
+			&i.Deadline,
+			&i.ConfirmWindowSeconds,
+			&i.FallbackSources,
+			&i.SpecBloodGroupCode,
+			&i.SpecRhPositive,
+			&i.SpecPhenotype,
+			&i.SpecMinExpiresAt,
+			&i.SpecRuleVersion,
+			&i.ConfirmKey,
+			&i.TransportRef,
+			&i.StatusReason,
+			&i.Version,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const pendingDueBy = `-- name: PendingDueBy :many
 SELECT obligation_id FROM obligation
 WHERE status = 'PENDING' AND deadline <= $1
