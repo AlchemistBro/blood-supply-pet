@@ -47,7 +47,7 @@ var arrival = time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
 func candidate() domain.UnitCopy {
 	return domain.UnitCopy{
 		UnitID: uuid.New(), ClinicID: 7, ComponentKind: "RBC", BloodGroup: "A+", RhPositive: true,
-		Phenotype: ptr("CcDee"), ExpiresAt: arrival.Add(48 * time.Hour), Status: domain.CopyInStock,
+		Phenotype: ptr("CcDee"), ExpiresAt: arrival.Add(48 * time.Hour), Status: domain.UnitInStock,
 	}
 }
 

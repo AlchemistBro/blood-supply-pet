@@ -127,10 +127,12 @@ type UnitCopy struct {
 	BloodGroupCode    string
 	RhPositive        bool
 	// Только для проверки спецификации замены (ADR-0011); не логируется и не публикуется
-	Phenotype    *string
-	VolumeMl     int64
-	ExpiresAt    time.Time
-	Status       string
+	Phenotype *string
+	VolumeMl  int64
+	ExpiresAt time.Time
+	// Статус по справочнику ref_unit_status; доступность — ref_unit_status.is_available
+	UnitStatusCode string
+	// Причина выбытия из UnitWithdrawn (EXPIRED хранится здесь при статусе DISCARDED)
 	StatusReason *string
 	Version      int64
 	UpdatedAt    time.Time

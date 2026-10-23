@@ -248,7 +248,7 @@ func (Store) UpsertUnitCopy(ctx context.Context, db app.DB, u domain.UnitCopy, n
 	n, err := q(db).UpsertUnitCopy(ctx, gen.UpsertUnitCopyParams{
 		UnitID: u.UnitID, ClinicID: u.ClinicID, ComponentKindCode: u.ComponentKind, BloodGroupCode: u.BloodGroup,
 		RhPositive: u.RhPositive, Phenotype: u.Phenotype, VolumeMl: u.VolumeML, ExpiresAt: u.ExpiresAt,
-		Status: string(u.Status), Version: u.Version, UpdatedAt: now,
+		UnitStatusCode: string(u.Status), Version: u.Version, UpdatedAt: now,
 	})
 	if err != nil {
 		return false, fmt.Errorf("копия единицы %s: %w", u.UnitID, err)
@@ -257,9 +257,9 @@ func (Store) UpsertUnitCopy(ctx context.Context, db app.DB, u domain.UnitCopy, n
 }
 
 // SetUnitCopyStatus меняет статус копии, если версия новее.
-func (Store) SetUnitCopyStatus(ctx context.Context, db app.DB, unitID uuid.UUID, s domain.CopyStatus, reason string, version int64, now time.Time) (bool, error) {
+func (Store) SetUnitCopyStatus(ctx context.Context, db app.DB, unitID uuid.UUID, s domain.UnitStatus, reason string, version int64, now time.Time) (bool, error) {
 	n, err := q(db).SetUnitCopyStatus(ctx, gen.SetUnitCopyStatusParams{
-		Status: string(s), StatusReason: optString(reason), Version: version, Now: now, UnitID: unitID,
+		UnitStatusCode: string(s), StatusReason: optString(reason), Version: version, Now: now, UnitID: unitID,
 	})
 	if err != nil {
 		return false, fmt.Errorf("статус копии %s: %w", unitID, err)
@@ -278,7 +278,7 @@ func (Store) UnitCopies(ctx context.Context, db app.DB, ids []uuid.UUID) (map[uu
 		out[r.UnitID] = domain.UnitCopy{
 			UnitID: r.UnitID, ClinicID: r.ClinicID, ComponentKind: r.ComponentKindCode, BloodGroup: r.BloodGroupCode,
 			RhPositive: r.RhPositive, Phenotype: r.Phenotype, VolumeML: r.VolumeMl, ExpiresAt: r.ExpiresAt,
-			Status: domain.CopyStatus(r.Status), Version: r.Version,
+			Status: domain.UnitStatus(r.UnitStatusCode), Version: r.Version,
 		}
 	}
 	return out, nil

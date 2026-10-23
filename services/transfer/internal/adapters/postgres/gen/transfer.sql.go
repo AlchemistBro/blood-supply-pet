@@ -400,9 +400,11 @@ func (q *Queries) LockStock(ctx context.Context, arg LockStockParams) (LockStock
 }
 
 const notInStockAmong = `-- name: NotInStockAmong :many
-SELECT unit_id FROM unit_copy WHERE unit_id = ANY($1::uuid[]) AND status <> 'IN_STOCK'
+SELECT u.unit_id FROM unit_copy u JOIN ref_unit_status s USING (unit_status_code)
+WHERE u.unit_id = ANY($1::uuid[]) AND NOT s.is_available
 `
 
+// Недоступные по справочнику ref_unit_status: карантин и выбывшие.
 func (q *Queries) NotInStockAmong(ctx context.Context, unitIds []uuid.UUID) ([]uuid.UUID, error) {
 	rows, err := q.db.Query(ctx, notInStockAmong, unitIds)
 	if err != nil {
@@ -630,8 +632,8 @@ func (q *Queries) PendingDueBy(ctx context.Context, arg PendingDueByParams) ([]u
 
 const recountAvailable = `-- name: RecountAvailable :exec
 UPDATE source_stock SET available_units = (
-    SELECT count(*) FROM unit_copy u
-    WHERE u.clinic_id = $1 AND u.component_kind_code = $2 AND u.status = 'IN_STOCK')
+    SELECT count(*) FROM unit_copy u JOIN ref_unit_status s USING (unit_status_code)
+    WHERE u.clinic_id = $1 AND u.component_kind_code = $2 AND s.is_available)
 WHERE source_stock.clinic_id = $1 AND source_stock.component_kind_code = $2
 `
 
@@ -715,23 +717,23 @@ func (q *Queries) SetProtectedVolume(ctx context.Context, arg SetProtectedVolume
 
 const setUnitCopyStatus = `-- name: SetUnitCopyStatus :execrows
 UPDATE unit_copy
-SET status = $1, status_reason = $2, version = $3,
+SET unit_status_code = $1, status_reason = $2, version = $3,
     updated_at = $4
 WHERE unit_id = $5 AND version < $3
 `
 
 type SetUnitCopyStatusParams struct {
-	Status       string
-	StatusReason *string
-	Version      int64
-	Now          time.Time
-	UnitID       uuid.UUID
+	UnitStatusCode string
+	StatusReason   *string
+	Version        int64
+	Now            time.Time
+	UnitID         uuid.UUID
 }
 
 // Устаревшая или повторная версия события ничего не меняет.
 func (q *Queries) SetUnitCopyStatus(ctx context.Context, arg SetUnitCopyStatusParams) (int64, error) {
 	result, err := q.db.Exec(ctx, setUnitCopyStatus,
-		arg.Status,
+		arg.UnitStatusCode,
 		arg.StatusReason,
 		arg.Version,
 		arg.Now,
@@ -744,7 +746,7 @@ func (q *Queries) SetUnitCopyStatus(ctx context.Context, arg SetUnitCopyStatusPa
 }
 
 const unitCopies = `-- name: UnitCopies :many
-SELECT unit_id, clinic_id, component_kind_code, blood_group_code, rh_positive, phenotype, volume_ml, expires_at, status, status_reason, version, updated_at FROM unit_copy WHERE unit_id = ANY($1::uuid[])
+SELECT unit_id, clinic_id, component_kind_code, blood_group_code, rh_positive, phenotype, volume_ml, expires_at, unit_status_code, status_reason, version, updated_at FROM unit_copy WHERE unit_id = ANY($1::uuid[])
 `
 
 func (q *Queries) UnitCopies(ctx context.Context, unitIds []uuid.UUID) ([]UnitCopy, error) {
@@ -765,7 +767,7 @@ func (q *Queries) UnitCopies(ctx context.Context, unitIds []uuid.UUID) ([]UnitCo
 			&i.Phenotype,
 			&i.VolumeMl,
 			&i.ExpiresAt,
-			&i.Status,
+			&i.UnitStatusCode,
 			&i.StatusReason,
 			&i.Version,
 			&i.UpdatedAt,
@@ -808,12 +810,12 @@ func (q *Queries) UnknownClinics(ctx context.Context, clinicIds []int64) ([]int6
 
 const upsertUnitCopy = `-- name: UpsertUnitCopy :execrows
 INSERT INTO unit_copy (unit_id, clinic_id, component_kind_code, blood_group_code, rh_positive, phenotype, volume_ml,
-                       expires_at, status, status_reason, version, updated_at)
+                       expires_at, unit_status_code, status_reason, version, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NULL, $10, $11)
 ON CONFLICT (unit_id) DO UPDATE
 SET clinic_id = excluded.clinic_id, component_kind_code = excluded.component_kind_code,
     blood_group_code = excluded.blood_group_code, rh_positive = excluded.rh_positive, phenotype = excluded.phenotype,
-    volume_ml = excluded.volume_ml, expires_at = excluded.expires_at, status = excluded.status,
+    volume_ml = excluded.volume_ml, expires_at = excluded.expires_at, unit_status_code = excluded.unit_status_code,
     status_reason = NULL, version = excluded.version, updated_at = excluded.updated_at
 WHERE unit_copy.version < excluded.version
 `
@@ -827,7 +829,7 @@ type UpsertUnitCopyParams struct {
 	Phenotype         *string
 	VolumeMl          int64
 	ExpiresAt         time.Time
-	Status            string
+	UnitStatusCode    string
 	Version           int64
 	UpdatedAt         time.Time
 }
@@ -842,7 +844,7 @@ func (q *Queries) UpsertUnitCopy(ctx context.Context, arg UpsertUnitCopyParams) 
 		arg.Phenotype,
 		arg.VolumeMl,
 		arg.ExpiresAt,
-		arg.Status,
+		arg.UnitStatusCode,
 		arg.Version,
 		arg.UpdatedAt,
 	)

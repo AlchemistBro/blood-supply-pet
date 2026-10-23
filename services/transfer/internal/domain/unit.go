@@ -38,35 +38,28 @@ func ParseUnitStatus(s string) (UnitStatus, error) {
 }
 
 // Allocatable — единицу можно закрепить. Только IN_STOCK: единица на карантине не выдаётся
-// и не закрепляется (ПП РФ № 641, п. 62), выбывшая — тем более.
+// и не закрепляется (ПП РФ № 641, п. 62 а), выбывшая — тем более. Совпадает с ref_unit_status.is_available
+// (проверяет тест домена).
 func (s UnitStatus) Allocatable() bool { return s == UnitInStock }
 
-// CopyStatus — статус единицы в копии transfer. Причины выбытия для подбора не важны, поэтому сведены в WITHDRAWN.
-type CopyStatus string
-
-// Статусы копии единицы.
-const (
-	CopyInStock    CopyStatus = "IN_STOCK"
-	CopyQuarantine CopyStatus = "QUARANTINE"
-	CopyWithdrawn  CopyStatus = "WITHDRAWN"
-)
-
-// CopyStatusOf переводит статус inventory в статус копии.
-func CopyStatusOf(s UnitStatus) (CopyStatus, error) {
-	switch s {
-	case UnitInStock:
-		return CopyInStock, nil
-	case UnitQuarantine:
-		return CopyQuarantine, nil
-	case UnitIssued, UnitDiscarded, UnitTransferred:
-		return CopyWithdrawn, nil
+// WithdrawalStatus — статус единицы по причине UnitWithdrawn. Истёкшая единица списывается: в справочнике
+// ref_unit_status отдельного статуса для неё нет, причина EXPIRED сохраняется в unit_copy.status_reason.
+func WithdrawalStatus(reason string) (UnitStatus, error) {
+	switch reason {
+	case inventory.WithdrawIssued:
+		return UnitIssued, nil
+	case inventory.WithdrawDiscarded, inventory.WithdrawExpired:
+		return UnitDiscarded, nil
+	case inventory.WithdrawTransferred:
+		return UnitTransferred, nil
 	default:
-		return "", fmt.Errorf("неизвестный статус единицы %q", s)
+		return "", fmt.Errorf("неизвестная причина выбытия %q", reason)
 	}
 }
 
 // UnitCopy — единица в локальной копии transfer (проекция inventory.events с версией).
-// Фенотип хранится только для проверки спецификации замены и никуда не выводится.
+// Статус — код справочника ref_unit_status. Фенотип хранится только для проверки спецификации замены
+// и никуда не выводится.
 type UnitCopy struct {
 	UnitID        uuid.UUID
 	ClinicID      int64
@@ -76,7 +69,7 @@ type UnitCopy struct {
 	Phenotype     *string
 	VolumeML      int64
 	ExpiresAt     time.Time
-	Status        CopyStatus
+	Status        UnitStatus
 	Version       int64
 }
 
@@ -93,18 +86,22 @@ const (
 // CancelTransportReason — CancelTransport.reason для нарушения: коды совпадают.
 func (r BreakReason) CancelTransportReason() string { return string(r) }
 
-// BrokenReasonQuarantine — TransferBroken.reason при карантине закреплённой единицы. Для выбытия reason —
-// причина из UnitWithdrawn (inventory.Withdraw*) или код статуса выбытия из UnitUpdated (коды совпадают
-// с transfer.BrokenReasons).
-const BrokenReasonQuarantine = transfer.BrokenQuarantine
+// BrokenEventReason — TransferBroken.reason: при карантине transfer.BrokenQuarantine, при выбытии — причина
+// из UnitWithdrawn или код статуса выбытия из UnitUpdated (оба входят в transfer.BrokenReasons).
+func BrokenEventReason(r BreakReason, unitReason string) string {
+	if r == BreakUnitQuarantined {
+		return transfer.BrokenQuarantine
+	}
+	return unitReason
+}
 
 // BreakReasonFor — нарушает ли новый статус закреплённой единицы обязательство и с какой причиной.
-// Карантин закреплённой единицы равен выбытию: отправлять её нельзя (ПП РФ № 641, п. 62).
-func BreakReasonFor(s CopyStatus) (BreakReason, bool) {
+// Карантин закреплённой единицы равен выбытию: отправлять её нельзя (ПП РФ № 641, п. 62 а).
+func BreakReasonFor(s UnitStatus) (BreakReason, bool) {
 	switch s {
-	case CopyQuarantine:
+	case UnitQuarantine:
 		return BreakUnitQuarantined, true
-	case CopyWithdrawn:
+	case UnitIssued, UnitDiscarded, UnitTransferred:
 		return BreakUnitWithdrawn, true
 	default:
 		return "", false

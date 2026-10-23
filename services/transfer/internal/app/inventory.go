@@ -27,7 +27,7 @@ func (s *Service) OnUnitRegistered(ctx context.Context, msg *messaging.Message, 
 	if e.Status == "" {
 		e.Status = domain.UnitInStock
 	}
-	status, err := domain.CopyStatusOf(e.Status)
+	status, err := domain.ParseUnitStatus(string(e.Status))
 	if err != nil {
 		return deliveryErr(msg, fmt.Errorf("%w: %w", ErrInvalidEvent, err))
 	}
@@ -58,9 +58,9 @@ func (s *Service) OnUnitRegistered(ctx context.Context, msg *messaging.Message, 
 }
 
 // OnUnitUpdated — изменился статус единицы. Карантин закреплённой единицы равен выбытию:
-// отправлять её нельзя (ПП РФ № 641, п. 62), обязательство сразу BROKEN с причиной UNIT_QUARANTINED.
+// отправлять её нельзя (ПП РФ № 641, п. 62 а), обязательство сразу BROKEN с причиной UNIT_QUARANTINED.
 func (s *Service) OnUnitUpdated(ctx context.Context, msg *messaging.Message, e UnitUpdated) error {
-	status, err := domain.CopyStatusOf(e.Status)
+	status, err := domain.ParseUnitStatus(string(e.Status))
 	if err != nil {
 		return deliveryErr(msg, fmt.Errorf("%w: %w", ErrInvalidEvent, err))
 	}
@@ -69,12 +69,17 @@ func (s *Service) OnUnitUpdated(ctx context.Context, msg *messaging.Message, e U
 
 // OnUnitWithdrawn — единица выбыла. Выбытие закреплённой единицы сразу переводит O07 в BROKEN
 // (решение владельца 23.10.2026, как в прототипе): замену оператор делает до выбытия.
+// Статус копии — код справочника по причине выбытия (EXPIRED — списание), сама причина — в status_reason.
 func (s *Service) OnUnitWithdrawn(ctx context.Context, msg *messaging.Message, e UnitWithdrawn) error {
-	return s.applyUnitStatus(ctx, msg, e.UnitID, e.ClinicID, e.ComponentKind, domain.CopyWithdrawn, e.Reason, e.Version)
+	status, err := domain.WithdrawalStatus(e.Reason)
+	if err != nil {
+		return deliveryErr(msg, fmt.Errorf("%w: %w", ErrInvalidEvent, err))
+	}
+	return s.applyUnitStatus(ctx, msg, e.UnitID, e.ClinicID, e.ComponentKind, status, e.Reason, e.Version)
 }
 
 func (s *Service) applyUnitStatus(ctx context.Context, msg *messaging.Message, unitID uuid.UUID, clinicID int64, kind string,
-	status domain.CopyStatus, reason string, version int64) error {
+	status domain.UnitStatus, reason string, version int64) error {
 	if unitID == uuid.Nil || kind == "" {
 		return deliveryErr(msg, fmt.Errorf("%w: событие единицы без unit_id или вида", ErrInvalidEvent))
 	}
@@ -127,7 +132,7 @@ func (s *Service) breakHolding(ctx context.Context, tx pgx.Tx, unitID uuid.UUID,
 		return err
 	}
 	if err := s.event(ctx, tx, o.ID, TransferBroken{
-		ObligationID: o.ID, RequestID: o.RequestID, UnitID: unitID, Reason: brokenEventReason(reason, unitReason),
+		ObligationID: o.ID, RequestID: o.RequestID, UnitID: unitID, Reason: domain.BrokenEventReason(reason, unitReason),
 	}); err != nil {
 		return err
 	}
@@ -138,15 +143,6 @@ func (s *Service) breakHolding(ctx context.Context, tx pgx.Tx, unitID uuid.UUID,
 		"unit_id": unitID, "reason": string(reason), "unit_reason": unitReason, "from_status": string(o.Status),
 		"released_units": released,
 	})
-}
-
-// brokenEventReason — reason для TransferBroken: причина выбытия из UnitWithdrawn (или статус выбытия из
-// UnitUpdated, коды совпадают). Для карантина — QUARANTINE, которого перечисление контракта пока не содержит.
-func brokenEventReason(reason domain.BreakReason, unitReason string) string {
-	if reason == domain.BreakUnitQuarantined {
-		return domain.BrokenReasonQuarantine
-	}
-	return unitReason
 }
 
 // OnProtectedVolume — защищённый объём источника (NFR013). Применяется только более новая версия.

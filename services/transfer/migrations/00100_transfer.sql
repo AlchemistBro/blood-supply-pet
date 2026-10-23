@@ -29,12 +29,14 @@ CREATE TABLE unit_copy (
     phenotype           text,
     volume_ml           bigint      NOT NULL DEFAULT 0 CHECK (volume_ml >= 0),
     expires_at          timestamptz NOT NULL,
-    status              varchar(16) NOT NULL CHECK (status IN ('IN_STOCK', 'QUARANTINE', 'WITHDRAWN')),
+    unit_status_code    varchar(16) NOT NULL REFERENCES ref_unit_status (unit_status_code),
     status_reason       text,
     version             bigint      NOT NULL,
     updated_at          timestamptz NOT NULL
 );
-CREATE INDEX unit_copy_stock_idx ON unit_copy (clinic_id, component_kind_code, status);
+CREATE INDEX unit_copy_stock_idx ON unit_copy (clinic_id, component_kind_code, unit_status_code);
+COMMENT ON COLUMN unit_copy.unit_status_code IS 'Статус по справочнику ref_unit_status; доступность — ref_unit_status.is_available';
+COMMENT ON COLUMN unit_copy.status_reason IS 'Причина выбытия из UnitWithdrawn (EXPIRED хранится здесь при статусе DISCARDED)';
 COMMENT ON COLUMN unit_copy.phenotype IS 'Только для проверки спецификации замены (ADR-0011); не логируется и не публикуется';
 
 -- Обязательство на передачу O07. Каждый переход статуса — CAS по status и version.

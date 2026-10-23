@@ -23,25 +23,23 @@ func TestOnlyInStockUnitIsAllocatable(t *testing.T) {
 	}
 }
 
-func TestUnitStatusMapsToCopyStatus(t *testing.T) {
-	cases := map[domain.UnitStatus]domain.CopyStatus{
-		domain.UnitInStock:     domain.CopyInStock,
-		domain.UnitQuarantine:  domain.CopyQuarantine,
-		domain.UnitIssued:      domain.CopyWithdrawn,
-		domain.UnitDiscarded:   domain.CopyWithdrawn,
-		domain.UnitTransferred: domain.CopyWithdrawn,
+// Причина выбытия переводится в код справочника ref_unit_status; EXPIRED — списание.
+func TestWithdrawalStatus(t *testing.T) {
+	cases := map[string]domain.UnitStatus{
+		"ISSUED": domain.UnitIssued, "DISCARDED": domain.UnitDiscarded, "EXPIRED": domain.UnitDiscarded,
+		"TRANSFERRED": domain.UnitTransferred,
 	}
-	if len(cases) != len(domain.AllUnitStatuses) {
-		t.Fatalf("таблица не покрывает все %d статусов единицы", len(domain.AllUnitStatuses))
-	}
-	for s, want := range cases {
-		got, err := domain.CopyStatusOf(s)
+	for reason, want := range cases {
+		got, err := domain.WithdrawalStatus(reason)
 		if err != nil || got != want {
-			t.Errorf("CopyStatusOf(%s) = %s, %v; ожидали %s", s, got, err, want)
+			t.Errorf("WithdrawalStatus(%s) = %s, %v; ожидали %s", reason, got, err, want)
+		}
+		if got.Allocatable() {
+			t.Errorf("%s: выбывшая единица не может быть доступна", reason)
 		}
 	}
-	if _, err := domain.CopyStatusOf("LOST"); err == nil {
-		t.Error("неизвестный статус единицы должен давать ошибку")
+	if _, err := domain.WithdrawalStatus("TRANSFUSED"); err == nil {
+		t.Error("неизвестная причина выбытия должна давать ошибку")
 	}
 }
 
@@ -59,13 +57,15 @@ func TestParseUnitStatus(t *testing.T) {
 
 // Причина нарушения зависит от нового статуса: карантин отличается от выбытия.
 func TestBreakReasonForUnitStatus(t *testing.T) {
-	if r, ok := domain.BreakReasonFor(domain.CopyQuarantine); !ok || r != domain.BreakUnitQuarantined {
+	if r, ok := domain.BreakReasonFor(domain.UnitQuarantine); !ok || r != domain.BreakUnitQuarantined {
 		t.Errorf("карантин: %s, %v", r, ok)
 	}
-	if r, ok := domain.BreakReasonFor(domain.CopyWithdrawn); !ok || r != domain.BreakUnitWithdrawn {
-		t.Errorf("выбытие: %s, %v", r, ok)
+	for _, s := range []domain.UnitStatus{domain.UnitIssued, domain.UnitDiscarded, domain.UnitTransferred} {
+		if r, ok := domain.BreakReasonFor(s); !ok || r != domain.BreakUnitWithdrawn {
+			t.Errorf("выбытие %s: %s, %v", s, r, ok)
+		}
 	}
-	if _, ok := domain.BreakReasonFor(domain.CopyInStock); ok {
+	if _, ok := domain.BreakReasonFor(domain.UnitInStock); ok {
 		t.Error("единица в наличии не нарушает обязательство")
 	}
 }
@@ -93,8 +93,11 @@ func TestCancelTransportReasonIsContractValue(t *testing.T) {
 	if domain.BreakUnitQuarantined.CancelTransportReason() != logistics.CancelUnitQuarantined {
 		t.Error("карантин снимает заказ с причиной UNIT_QUARANTINED")
 	}
-	if !slices.Contains(transfer.BrokenReasons, domain.BrokenReasonQuarantine) {
-		t.Errorf("TransferBroken.reason %q вне перечисления контракта", domain.BrokenReasonQuarantine)
+	if r := domain.BrokenEventReason(domain.BreakUnitQuarantined, "QUARANTINE"); r != transfer.BrokenQuarantine {
+		t.Errorf("TransferBroken.reason при карантине %q", r)
+	}
+	if r := domain.BrokenEventReason(domain.BreakUnitWithdrawn, "EXPIRED"); !slices.Contains(transfer.BrokenReasons, r) {
+		t.Errorf("TransferBroken.reason при выбытии %q вне перечисления контракта", r)
 	}
 	for _, s := range []domain.UnitStatus{domain.UnitIssued, domain.UnitDiscarded, domain.UnitTransferred} {
 		if !slices.Contains(transfer.BrokenReasons, string(s)) {

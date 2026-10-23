@@ -73,8 +73,8 @@ WHERE clinic_id = sqlc.arg('clinic_id') AND component_kind_code = sqlc.arg('comp
 -- name: RecountAvailable :exec
 -- Пересчёт по копии вместо инкремента: проекция переживает дубли и перестановку событий.
 UPDATE source_stock SET available_units = (
-    SELECT count(*) FROM unit_copy u
-    WHERE u.clinic_id = sqlc.arg('clinic_id') AND u.component_kind_code = sqlc.arg('component_kind_code') AND u.status = 'IN_STOCK')
+    SELECT count(*) FROM unit_copy u JOIN ref_unit_status s USING (unit_status_code)
+    WHERE u.clinic_id = sqlc.arg('clinic_id') AND u.component_kind_code = sqlc.arg('component_kind_code') AND s.is_available)
 WHERE source_stock.clinic_id = sqlc.arg('clinic_id') AND source_stock.component_kind_code = sqlc.arg('component_kind_code');
 
 -- name: SetProtectedVolume :execrows
@@ -87,19 +87,19 @@ WHERE clinic_id = sqlc.arg('clinic_id') AND component_kind_code = sqlc.arg('comp
 
 -- name: UpsertUnitCopy :execrows
 INSERT INTO unit_copy (unit_id, clinic_id, component_kind_code, blood_group_code, rh_positive, phenotype, volume_ml,
-                       expires_at, status, status_reason, version, updated_at)
+                       expires_at, unit_status_code, status_reason, version, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NULL, $10, $11)
 ON CONFLICT (unit_id) DO UPDATE
 SET clinic_id = excluded.clinic_id, component_kind_code = excluded.component_kind_code,
     blood_group_code = excluded.blood_group_code, rh_positive = excluded.rh_positive, phenotype = excluded.phenotype,
-    volume_ml = excluded.volume_ml, expires_at = excluded.expires_at, status = excluded.status,
+    volume_ml = excluded.volume_ml, expires_at = excluded.expires_at, unit_status_code = excluded.unit_status_code,
     status_reason = NULL, version = excluded.version, updated_at = excluded.updated_at
 WHERE unit_copy.version < excluded.version;
 
 -- name: SetUnitCopyStatus :execrows
 -- Устаревшая или повторная версия события ничего не меняет.
 UPDATE unit_copy
-SET status = sqlc.arg('status'), status_reason = sqlc.narg('status_reason'), version = sqlc.arg('version'),
+SET unit_status_code = sqlc.arg('unit_status_code'), status_reason = sqlc.narg('status_reason'), version = sqlc.arg('version'),
     updated_at = sqlc.arg('now')
 WHERE unit_id = sqlc.arg('unit_id') AND version < sqlc.arg('version');
 
@@ -107,7 +107,9 @@ WHERE unit_id = sqlc.arg('unit_id') AND version < sqlc.arg('version');
 SELECT * FROM unit_copy WHERE unit_id = ANY(sqlc.arg('unit_ids')::uuid[]);
 
 -- name: NotInStockAmong :many
-SELECT unit_id FROM unit_copy WHERE unit_id = ANY(sqlc.arg('unit_ids')::uuid[]) AND status <> 'IN_STOCK';
+-- Недоступные по справочнику ref_unit_status: карантин и выбывшие.
+SELECT u.unit_id FROM unit_copy u JOIN ref_unit_status s USING (unit_status_code)
+WHERE u.unit_id = ANY(sqlc.arg('unit_ids')::uuid[]) AND NOT s.is_available;
 
 
 -- name: InsertAllocation :exec
