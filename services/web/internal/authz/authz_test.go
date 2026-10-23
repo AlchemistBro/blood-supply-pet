@@ -144,6 +144,15 @@ func TestRequireClinic(t *testing.T) {
 	}
 }
 
+// Denied подключается к runtime.OnDeny: отказ из общих middleware тоже попадает в аудит.
+func TestDeniedRecordsAudit(t *testing.T) {
+	a := &fakeAudit{}
+	newGuard(a).Denied()(httptest.NewRequest(http.MethodGet, "/x", nil), &physician, auth.OpReadAudit)
+	if len(a.entries) != 1 || a.entries[0].ObjectID != string(auth.OpReadAudit) || a.entries[0].Result != auditc.ResultDenied {
+		t.Fatalf("отказ не записан: %+v", a.entries)
+	}
+}
+
 func TestClinicFromContext(t *testing.T) {
 	ctx := auth.WithPrincipal(context.Background(), operator1)
 	if id, ok := ClinicID(ctx); !ok || id != 1 {

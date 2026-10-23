@@ -67,16 +67,25 @@ func (g *Guard) RequireClinic(op auth.Operation, clinicOf ClinicOf) httpx.Middle
 // Deny пишет ACCESS_DENIED в аудит и показывает страницу 403. Недоступность аудита не меняет ответа:
 // отказ остаётся отказом, ошибка записи уходит в лог.
 func (g *Guard) Deny(w http.ResponseWriter, r *http.Request, p auth.Principal, op auth.Operation, reason string) {
+	g.record(r, &p, op, reason)
+	g.forbidden.ServeHTTP(w, r)
+}
+
+// Denied — запись отказа в формате libs/httpx/auth (для runtime.Runtime.OnDeny и auth.Require).
+func (g *Guard) Denied() auth.Denied {
+	return func(r *http.Request, p *auth.Principal, op auth.Operation) { g.record(r, p, op, "role") }
+}
+
+func (g *Guard) record(r *http.Request, p *auth.Principal, op auth.Operation, reason string) {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 3*time.Second)
 	defer cancel()
 	err := g.audit.Record(ctx, auditclient.Entry{
 		Action: auditc.ActionAccessDenied, ObjectType: "operation", ObjectID: string(op), Result: auditc.ResultDenied,
-		Principal: &p, Details: map[string]any{"reason": reason, "path": r.URL.Path, "method": r.Method},
+		Principal: p, Details: map[string]any{"reason": reason, "path": r.URL.Path, "method": r.Method},
 	})
 	if err != nil {
 		g.log.ErrorContext(r.Context(), "не удалось записать отказ в аудит", "operation", string(op), "err", err)
 	}
-	g.forbidden.ServeHTTP(w, r)
 }
 
 // ClinicID — клиника участника из токена; false для ролей без клиники.

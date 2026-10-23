@@ -1,0 +1,33 @@
+{{define "layout" -}}
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} — АС распределения компонентов донорской крови</title>
+</head>
+<body>
+<header>
+  <p><strong>АС распределения компонентов донорской крови</strong></p>
+  {{- with .User}}
+  <p>
+    <span>{{.Role}}</span> ·
+    <span>{{.Clinic}}</span> ·
+    <span>{{.Login}}</span>
+  </p>
+  <form method="post" action="/logout">
+    <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+    <button type="submit">Выйти</button>
+  </form>
+  {{- end}}
+</header>
+<main>
+{{template "content" .}}
+</main>
+<footer>
+  <p>Демонстрационные данные и правила. Клиническое решение принимает врач.</p>
+  <p>Версия {{.Version}}</p>
+</footer>
+</body>
+</html>
+{{- end}}

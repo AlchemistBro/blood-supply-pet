@@ -131,6 +131,13 @@ func LoginOnUnauthorized(w http.ResponseWriter, r *http.Request, err error) bool
 	if !errors.Is(err, ErrUnauthorized) {
 		return false
 	}
+	RedirectToLogin(w, r)
+	return true
+}
+
+// RedirectToLogin отправляет пользователя на вход: 303 на /login (для GET — с адресом возврата),
+// для HTMX — 401 с HX-Redirect, чтобы страница перешла целиком, а не вставила форму входа во фрагмент.
+func RedirectToLogin(w http.ResponseWriter, r *http.Request) {
 	target := "/login"
 	if r.Method == http.MethodGet {
 		target += "?next=" + url.QueryEscape(r.URL.RequestURI())
@@ -138,8 +145,7 @@ func LoginOnUnauthorized(w http.ResponseWriter, r *http.Request, err error) bool
 	if r.Header.Get("HX-Request") == "true" {
 		w.Header().Set("HX-Redirect", "/login")
 		w.WriteHeader(http.StatusUnauthorized)
-		return true
+		return
 	}
 	http.Redirect(w, r, target, http.StatusSeeOther)
-	return true
 }
