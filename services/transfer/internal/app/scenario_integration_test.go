@@ -322,7 +322,7 @@ func TestDuplicateWithdrawalDeliveryChangesNothing(t *testing.T) {
 	h.assertStockConsistent(1, "RBC")
 }
 
-// Единица на карантине не закрепляется никогда (ПП РФ № 641, п. 62): ни по ответу АИСТ-М, ни по копии, ни заменой.
+// Единица на карантине не закрепляется никогда (ПП РФ № 641, п. 62 а): ни по ответу АИСТ-М, ни по копии, ни заменой.
 func TestQuarantinedUnitIsNeverAllocated(t *testing.T) {
 	h := setup(t)
 	units := h.registerUnits(1, "RBC", 3)
@@ -482,7 +482,7 @@ func TestCancelOfFinishedObligationChangesNothing(t *testing.T) {
 	}
 }
 
-// Строки закреплений не удаляются: по ним видно, куда уходила единица (ПП РФ № 641).
+// Строки закреплений не удаляются: по ним видно, куда уходила единица (прослеживаемость, ПП РФ № 641, п. 17–18, 54).
 func TestAllocationHistoryIsKeptAfterRelease(t *testing.T) {
 	h := setup(t)
 	unit := h.registerUnits(1, "RBC", 1)[0]

@@ -41,7 +41,7 @@ func (s *Service) Replace(ctx context.Context, c ReplaceUnit) (domain.Replacemen
 	if reason := o.Spec.Mismatch(o.SourceClinicID, o.ComponentKind, candidate); reason != "" {
 		return domain.SpecMismatch{Reason: reason}, nil
 	}
-	// Карантин по копии — сразу отказ: такую единицу не закрепляем (ПП РФ № 641, п. 62).
+	// Карантин по копии — сразу отказ: такую единицу не закрепляем (ПП РФ № 641, п. 62 а).
 	if !candidate.Status.Allocatable() {
 		return domain.UnitUnavailable{UnitID: c.NewUnitID}, nil
 	}

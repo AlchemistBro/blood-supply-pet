@@ -105,7 +105,7 @@ func (n NewObligation) Validate() error {
 	return nil
 }
 
-// Allocation — закрепление единицы O18. Строки не удаляются: по ним видно, куда уходила единица (ПП РФ № 641).
+// Allocation — закрепление единицы O18. Строки не удаляются: по ним видно, куда уходила единица (прослеживаемость, ПП РФ № 641, п. 17–18, 54).
 type Allocation struct {
 	ID           uuid.UUID
 	UnitID       uuid.UUID

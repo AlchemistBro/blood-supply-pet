@@ -231,7 +231,7 @@ func (s *Service) BySource(ctx context.Context, sourceClinicID int64, status *do
 	return s.views(ctx, list)
 }
 
-// AllocationHistory — все закрепления единицы, включая снятые: куда уходила единица (ПП РФ № 641).
+// AllocationHistory — все закрепления единицы, включая снятые: куда уходила единица (прослеживаемость, ПП РФ № 641, п. 17–18, 54).
 func (s *Service) AllocationHistory(ctx context.Context, unitID uuid.UUID) ([]domain.Allocation, error) {
 	return s.store.AllocationHistory(ctx, s.pool, unitID)
 }

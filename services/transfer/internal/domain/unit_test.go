@@ -10,7 +10,7 @@ import (
 	"github.com/AlchemistBro/blood-supply-pet/services/transfer/internal/domain"
 )
 
-// Закреплять можно только единицу IN_STOCK. Карантин — никогда (ПП РФ № 641, п. 62).
+// Закреплять можно только единицу IN_STOCK. Карантин — никогда (ПП РФ № 641, п. 62 а).
 func TestOnlyInStockUnitIsAllocatable(t *testing.T) {
 	want := map[domain.UnitStatus]bool{domain.UnitInStock: true}
 	for _, s := range domain.AllUnitStatuses {
