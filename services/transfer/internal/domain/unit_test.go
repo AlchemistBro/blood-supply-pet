@@ -1,9 +1,11 @@
 package domain_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/logistics"
+	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/transfer"
 	"github.com/AlchemistBro/blood-supply-pet/libs/refdata"
 	"github.com/AlchemistBro/blood-supply-pet/services/transfer/internal/domain"
 )
@@ -84,8 +86,19 @@ func TestAllocatableMatchesUnitStatusDictionary(t *testing.T) {
 // Причина CancelTransport берётся из перечисления контракта logistics, своих кодов нет.
 func TestCancelTransportReasonIsContractValue(t *testing.T) {
 	for _, r := range []domain.BreakReason{domain.BreakUnitWithdrawn, domain.BreakUnitQuarantined} {
-		if got := r.CancelTransportReason(); got != logistics.CancelUnitWithdrawn && got != logistics.CancelObligationCancelled {
-			t.Errorf("%s → %q вне перечисления CancelTransport.reason", r, got)
+		if !slices.Contains(logistics.CancelReasons, r.CancelTransportReason()) {
+			t.Errorf("%s → %q вне перечисления CancelTransport.reason", r, r.CancelTransportReason())
+		}
+	}
+	if domain.BreakUnitQuarantined.CancelTransportReason() != logistics.CancelUnitQuarantined {
+		t.Error("карантин снимает заказ с причиной UNIT_QUARANTINED")
+	}
+	if !slices.Contains(transfer.BrokenReasons, domain.BrokenReasonQuarantine) {
+		t.Errorf("TransferBroken.reason %q вне перечисления контракта", domain.BrokenReasonQuarantine)
+	}
+	for _, s := range []domain.UnitStatus{domain.UnitIssued, domain.UnitDiscarded, domain.UnitTransferred} {
+		if !slices.Contains(transfer.BrokenReasons, string(s)) {
+			t.Errorf("статус выбытия %s вне TransferBroken.reason", s)
 		}
 	}
 	if string(domain.BreakUnitWithdrawn) != logistics.CancelUnitWithdrawn {

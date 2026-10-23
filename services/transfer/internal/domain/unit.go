@@ -8,6 +8,7 @@ import (
 
 	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/inventory"
 	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/logistics"
+	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/transfer"
 )
 
 // UnitStatus — статус единицы компонента крови по данным inventory (АИСТ-М, C01). Коды — из контракта
@@ -85,21 +86,17 @@ type BreakReason string
 
 // Причины нарушения.
 const (
-	BreakUnitWithdrawn BreakReason = logistics.CancelUnitWithdrawn
-	// BreakUnitQuarantined станет logistics.CancelUnitQuarantined после правки контракта (пакет контрактов).
-	BreakUnitQuarantined BreakReason = "UNIT_QUARANTINED"
+	BreakUnitWithdrawn   BreakReason = logistics.CancelUnitWithdrawn
+	BreakUnitQuarantined BreakReason = logistics.CancelUnitQuarantined
 )
 
-// CancelTransportReason — CancelTransport.reason для нарушения. До появления UNIT_QUARANTINED в перечислении
-// контракта карантин отправляется как UNIT_WITHDRAWN: для перевозчика это одно и то же «единицы не будет».
-func (r BreakReason) CancelTransportReason() string {
-	return logistics.CancelUnitWithdrawn
-}
+// CancelTransportReason — CancelTransport.reason для нарушения: коды совпадают.
+func (r BreakReason) CancelTransportReason() string { return string(r) }
 
 // BrokenReasonQuarantine — TransferBroken.reason при карантине закреплённой единицы. Для выбытия reason —
-// причина из UnitWithdrawn (inventory.Withdraw*) или код статуса выбытия из UnitUpdated (коды совпадают).
-// Значение QUARANTINE добавляет в перечисление контракта пакет контрактов.
-const BrokenReasonQuarantine = inventory.StatusQuarantine
+// причина из UnitWithdrawn (inventory.Withdraw*) или код статуса выбытия из UnitUpdated (коды совпадают
+// с transfer.BrokenReasons).
+const BrokenReasonQuarantine = transfer.BrokenQuarantine
 
 // BreakReasonFor — нарушает ли новый статус закреплённой единицы обязательство и с какой причиной.
 // Карантин закреплённой единицы равен выбытию: отправлять её нельзя (ПП РФ № 641, п. 62).

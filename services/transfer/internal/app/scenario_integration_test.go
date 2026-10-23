@@ -339,6 +339,9 @@ func TestQuarantineOfAllocatedUnitBreaksObligation(t *testing.T) {
 	if r := h.payloadField(o, "TransferBroken", "reason"); r != "QUARANTINE" {
 		t.Errorf("TransferBroken.reason = %q, ожидали QUARANTINE", r)
 	}
+	if r := h.payloadField(o, "CancelTransport", "reason"); r != "UNIT_QUARANTINED" {
+		t.Errorf("CancelTransport.reason = %q, ожидали UNIT_QUARANTINED", r)
+	}
 	h.expectTypes("события", h.eventTypes(o), "ObligationOpened", "TransferConfirmed", "TransferBroken")
 	h.expectTypes("команды", h.commandTypes(o), "RequestTransport", "CancelTransport")
 	h.assertStockConsistent(1, "RBC")
