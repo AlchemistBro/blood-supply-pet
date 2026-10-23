@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/audit"
+	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/logistics"
 	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/transfer"
 )
 
@@ -27,6 +28,15 @@ var Registry = map[string]func() Payload{
 	"TransportRequested":        func() Payload { return &transfer.TransportRequested{} },
 	"TransportRequestFailed":    func() Payload { return &transfer.TransportRequestFailed{} },
 	"EscalationRaised":          func() Payload { return &transfer.EscalationRaised{} },
+
+	// logistics.commands
+	"RequestTransport": func() Payload { return &logistics.RequestTransport{} },
+	"CancelTransport":  func() Payload { return &logistics.CancelTransport{} },
+	// logistics.replies
+	"TransportAccepted":  func() Payload { return &logistics.TransportAccepted{} },
+	"TransportRejected":  func() Payload { return &logistics.TransportRejected{} },
+	"TransportCancelled": func() Payload { return &logistics.TransportCancelled{} },
+	"TransportDelivered": func() Payload { return &logistics.TransportDelivered{} },
 }
 
 // SchemaPath возвращает путь к JSON Schema типа относительно libs/contracts.
