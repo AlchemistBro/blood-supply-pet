@@ -48,7 +48,7 @@
 | `UnitWithdrawn` | Единица выбыла: выдана, списана, передана, истёк срок | `unit_id`, `clinic_id`, `component_kind`, `reason`(ISSUED/DISCARDED/TRANSFERRED/EXPIRED), `version` |
 | `StockSnapshotPublished` | Снимок запаса клиники × вид × группа с водяным знаком | `clinic_id`, `component_kind`, `blood_group`, `unit_count`, `volume_ml`, `nearest_expiry`, `watermark`, `synced_at` |
 | `StockNormPublished` | Новый действующий норматив | `clinic_id`, `component_kind`, `norm_ml`, `avg_monthly_ml`, `version`, `calculated_at` |
-| `ProtectedVolumePublished` | Защищённый объём источника (норматив + фон + обязательства, считает planning, публикует inventory как владелец запаса) | `clinic_id`, `component_kind`, `volume_units` (в единицах, не в мл: Остаток `transfer` считает единицы), `version`, `reason` |
+| `ProtectedVolumePublished` | Защищённый объём источника (норматив + фон, без подтверждённых обязательств — их `transfer` вычитает сам, ADR-0019; считает planning) | `clinic_id`, `component_kind`, `volume_units` (в единицах, не в мл: Остаток `transfer` считает единицы), `version`, `reason` |
 | `SyncRunCompleted` | Сеанс обмена с АИСТ-М завершён | `sync_run_id`, `kind`, `result`, `changes_count`, `finished_at` |
 | `ConsumptionExportPublished` | Выгрузка расхода для demand (FR045) | `component_kind`, `period_start`, `period_end`, `consumed_volume_ml` |
 | `PatientAllocationAcknowledged` | АИСТ-М подтвердил приём закрепления (ИНТ-05) | `obligation_id`, `idempotency_key`, `acknowledged_at` |
