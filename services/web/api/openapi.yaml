@@ -1,0 +1,62 @@
+openapi: 3.0.3
+info:
+  title: web
+  version: 0.1.0
+  description: |
+    Интерфейс и BFF (ADR-0007, ADR-0018). Страницы отдаются HTML; вход через Keycloak (authorization code + PKCE),
+    сессия в зашифрованной cookie, каждый POST несёт CSRF-токен (поле csrf_token или заголовок X-CSRF-Token).
+    Маршруты входа публичные и операций матрицы прав не имеют; экраны ролей описываются вместе с их операциями.
+servers:
+  - url: http://localhost:8080
+paths:
+  /login:
+    get:
+      operationId: loginPage
+      summary: Страница входа с блоком «Демо-доступ»
+      parameters:
+        - { name: next, in: query, description: Локальный путь возврата после входа, schema: { type: string, maxLength: 512 } }
+      responses:
+        "200": { description: Страница входа, content: { text/html: { schema: { type: string } } } }
+  /auth/login:
+    get:
+      operationId: startLogin
+      summary: Переход в Keycloak (state, nonce, PKCE S256 в cookie bs_auth на 10 минут)
+      parameters:
+        - { name: hint, in: query, description: login_hint для Keycloak (логин демо-пользователя), schema: { type: string, pattern: "^[a-z0-9._-]{1,64}$" } }
+        - { name: next, in: query, schema: { type: string, maxLength: 512 } }
+      responses:
+        "302": { description: Переход на authorization endpoint Keycloak }
+  /auth/callback:
+    get:
+      operationId: loginCallback
+      summary: Возврат из Keycloak; проверка state и nonce, создание сессии, LOGIN в аудит
+      parameters:
+        - { name: code, in: query, schema: { type: string } }
+        - { name: state, in: query, schema: { type: string } }
+        - { name: error, in: query, schema: { type: string } }
+      responses:
+        "303": { description: Вход выполнен, переход на адрес возврата }
+        "400": { description: Вход не выполнен (state, nonce, ошибка провайдера), content: { text/html: { schema: { type: string } } } }
+  /logout:
+    post:
+      operationId: logout
+      summary: Выход - LOGOUT в аудит, удаление cookie, end-session Keycloak
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [csrf_token]
+              properties:
+                csrf_token: { type: string }
+      responses:
+        "303": { description: Переход на end-session Keycloak }
+        "403": { description: Нет CSRF-токена или он не совпал }
+  /:
+    get:
+      operationId: home
+      summary: Главная после входа
+      responses:
+        "200": { description: Страница, content: { text/html: { schema: { type: string } } } }
+        "303": { description: Нет сессии - переход на /login }
