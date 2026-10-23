@@ -1,7 +1,7 @@
 -- +goose Up
 -- Схема сервиса inventory (база inventory): копия единиц компонентов крови из АИСТ-М (O01), история статусов,
 -- сеансы обмена с АИСТ-М. Имена — из словаря данных ПР6 (docs/architecture/data-model.md).
--- Платформенные таблицы (outbox, inbox, audit_local, ref_*) создаются миграциями 00001–00099.
+-- Платформенные таблицы (outbox, inbox, audit_local, ref_*, в том числе ref_unit_status) создаются миграциями 00001–00099.
 
 -- Единица компонента крови. unit_id — суррогат uuid v7, единственный идентификатор вне inventory;
 -- исходный код АИСТ-М хранится для сверки, но в события не публикуется (ADR-0010).
@@ -15,9 +15,7 @@ CREATE TABLE unit (
     blood_group_code    varchar(4)   NOT NULL REFERENCES ref_blood_group (blood_group_code),
     phenotype           varchar(64),
     expires_at          timestamptz  NOT NULL,
-    -- TODO(этап 1, WP1): заменить CHECK внешним ключом на ref_unit_status (unit_status_code) после слияния справочника.
-    unit_status_code    varchar(16)  NOT NULL
-        CHECK (unit_status_code IN ('IN_STOCK', 'QUARANTINE', 'ISSUED', 'DISCARDED', 'TRANSFERRED')),
+    unit_status_code    varchar(16)  NOT NULL REFERENCES ref_unit_status (unit_status_code),
     status_received_at  timestamptz  NOT NULL,
     source_version      bigint       NOT NULL CHECK (source_version > 0)
 );
@@ -30,9 +28,7 @@ CREATE INDEX unit_stock_idx ON unit (clinic_id, component_kind_code, blood_group
 CREATE TABLE unit_status_history (
     unit_status_history_id uuid        PRIMARY KEY,
     unit_id                uuid        NOT NULL REFERENCES unit (unit_id),
-    -- TODO(этап 1, WP1): внешний ключ на ref_unit_status.
-    unit_status_code       varchar(16) NOT NULL
-        CHECK (unit_status_code IN ('IN_STOCK', 'QUARANTINE', 'ISSUED', 'DISCARDED', 'TRANSFERRED')),
+    unit_status_code       varchar(16) NOT NULL REFERENCES ref_unit_status (unit_status_code),
     source_version         bigint      NOT NULL,
     changed_at             timestamptz NOT NULL,
     received_at            timestamptz NOT NULL,

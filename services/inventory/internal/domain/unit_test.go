@@ -139,23 +139,6 @@ func TestApplyRejectsMalformedSource(t *testing.T) {
 	}
 }
 
-// Доступна для закрепления и передачи только единица в наличии: карантин недоступен (ПП РФ № 641, п. 62).
-func TestAvailability(t *testing.T) {
-	want := map[string]bool{
-		domain.StatusInStock:     true,
-		domain.StatusQuarantine:  false,
-		domain.StatusIssued:      false,
-		domain.StatusDiscarded:   false,
-		domain.StatusTransferred: false,
-		"UNKNOWN":                false,
-	}
-	for status, available := range want {
-		if got := domain.Available(status); got != available {
-			t.Errorf("Available(%s) = %v, ожидали %v", status, got, available)
-		}
-	}
-}
-
 func TestWithdrawReason(t *testing.T) {
 	cases := []struct{ status, reason, want string }{
 		{domain.StatusIssued, "", domain.ReasonIssued},

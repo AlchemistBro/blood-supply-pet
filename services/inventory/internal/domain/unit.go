@@ -6,24 +6,27 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/inventory"
 )
 
-// Статусы единицы компонента крови по данным АИСТ-М (C01); коды справочника ref_unit_status.
+// Статусы единицы компонента крови по данным АИСТ-М (C01) — коды справочника ref_unit_status,
+// те же, что в опубликованном контракте. Доступность статуса задаёт справочник (is_available).
 const (
-	StatusInStock     = "IN_STOCK"
-	StatusQuarantine  = "QUARANTINE"
-	StatusIssued      = "ISSUED"
-	StatusDiscarded   = "DISCARDED"
-	StatusTransferred = "TRANSFERRED"
+	StatusInStock     = inventory.StatusInStock
+	StatusQuarantine  = inventory.StatusQuarantine
+	StatusIssued      = inventory.StatusIssued
+	StatusDiscarded   = inventory.StatusDiscarded
+	StatusTransferred = inventory.StatusTransferred
 )
 
 // Причины выбытия (UnitWithdrawn). Истёкший срок годности АИСТ-М присылает как DISCARDED с причиной EXPIRED.
 // Трансфузию система не видит (её фиксирует клиника), поэтому выдача — ISSUED.
 const (
-	ReasonIssued      = "ISSUED"
-	ReasonDiscarded   = "DISCARDED"
-	ReasonTransferred = "TRANSFERRED"
-	ReasonExpired     = "EXPIRED"
+	ReasonIssued      = inventory.WithdrawIssued
+	ReasonDiscarded   = inventory.WithdrawDiscarded
+	ReasonTransferred = inventory.WithdrawTransferred
+	ReasonExpired     = inventory.WithdrawExpired
 )
 
 var (
@@ -46,10 +49,6 @@ func KnownStatus(s string) bool {
 func IsWithdrawn(s string) bool {
 	return s == StatusIssued || s == StatusDiscarded || s == StatusTransferred
 }
-
-// Available — единицу можно закрепить и передать. Только IN_STOCK: единица на карантине не выдаётся
-// и не передаётся (ПП РФ № 641, п. 62). Совпадает с ref_unit_status.is_available.
-func Available(s string) bool { return s == StatusInStock }
 
 func knownReason(r string) bool {
 	switch r {
