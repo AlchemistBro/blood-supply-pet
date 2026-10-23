@@ -2,10 +2,12 @@
 //   - libs/** не импортирует services/**;
 //   - services/<a>/** не импортирует services/<b>/** (строже, чем правило internal компилятора);
 //   - internal/domain не зависит от pgx, Kafka, HTTP и SQL;
-//   - клиент Kafka (franz-go) импортируется только в libs/messaging, libs/testinfra, tools и tests.
+//   - клиент Kafka (franz-go) импортируется только в libs/messaging, libs/testinfra, tools и tests;
+//   - расшифровку номера случая libs/k1seal/opener импортируют только matching, inventory и libs/k1seal (ADR-0020).
 package archtest
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -59,6 +61,25 @@ func serviceOf(path string) string {
 	return rest
 }
 
+// k1OpenerViolation возвращает текст нарушения, если importer импортирует расшифровку номера случая
+// (libs/k1seal/opener) без права на ключ K1 (ADR-0020). Пустая строка — нарушения нет.
+// Внутренний пакет libs/k1seal/internal/... ограничивает сам компилятор.
+func k1OpenerViolation(importer, imported string) string {
+	if imported != module+"/libs/k1seal/opener" {
+		return ""
+	}
+	// Внешний тестовый пакет (…_test) проверяется как пакет, который он тестирует.
+	path := strings.TrimSuffix(importer, "_test")
+	switch serviceOf(path) {
+	case "matching", "inventory":
+		return ""
+	}
+	if path == module+"/libs/k1seal" || strings.HasPrefix(path, module+"/libs/k1seal/") {
+		return ""
+	}
+	return fmt.Sprintf("%s импортирует расшифровку номера случая %s; разрешено только matching и inventory (ADR-0020)", importer, imported)
+}
+
 func TestDependencyRules(t *testing.T) {
 	pkgs := loadAll(t)
 	kafkaAllowed := func(path string) bool {
@@ -92,6 +113,9 @@ func TestDependencyRules(t *testing.T) {
 			}
 			if strings.HasPrefix(imp, "github.com/twmb/franz-go") && !kafkaAllowed(p.PkgPath) {
 				t.Errorf("%s импортирует Kafka напрямую; разрешено только через libs/messaging", p.PkgPath)
+			}
+			if msg := k1OpenerViolation(p.PkgPath, imp); msg != "" {
+				t.Error(msg)
 			}
 		}
 	}
