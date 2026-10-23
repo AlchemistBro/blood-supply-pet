@@ -75,14 +75,13 @@ type Estimate struct {
 //  4. D_c = Σ_r w(r, c) · D.
 //
 // Объёмы — целые мл; каждое деление — методом наибольших остатков (apportion), поэтому сумма по
-// клиникам точно равна сумме по районам и базе B. Доли района в версии долей, для которого нет профиля,
-// не дают потребности: делить нечего.
+// клиникам точно равна сумме по районам и базе B. Районы профиля и долей должны совпадать.
 func CalculateEstimate(in EstimateInput, ref *Reference) (Estimate, error) {
 	if ref == nil {
 		return Estimate{}, invalidInput("справочники не загружены")
 	}
-	if in.Period.IsZero() || in.Period.End.Before(in.Period.Start) {
-		return Estimate{}, invalidInput("период оценки не задан")
+	if !in.Period.valid() {
+		return Estimate{}, invalidInput("период оценки не задан или вне 1900–2100 годов")
 	}
 	if len(in.Profiles) == 0 {
 		return Estimate{}, invalidInput("нет профиля районов")
@@ -101,9 +100,18 @@ func CalculateEstimate(in EstimateInput, ref *Reference) (Estimate, error) {
 	if err != nil {
 		return Estimate{}, err
 	}
+	inProfile := make(map[int64]bool, len(profiles))
 	for _, p := range profiles {
+		inProfile[p.DistrictID] = true
 		if len(shares[p.DistrictID]) == 0 {
 			return Estimate{}, invalidInput("для района %s нет долей распределения по клиникам", ref.districtCode(p.DistrictID))
+		}
+	}
+	// Район в долях без профиля — несогласованные версии входов: делить B между оставшимися районами
+	// значит молча переложить на них чужую потребность.
+	for _, d := range sortedDistricts(shares) {
+		if !inProfile[d] {
+			return Estimate{}, invalidInput("район %s есть в долях, но нет в профиле районов", ref.districtCode(d))
 		}
 	}
 	base, err := baseVolumes(in.History, in.Period, ref)
@@ -210,7 +218,8 @@ func checkShares(in []ClinicShare, ref *Reference) (map[int64][]ClinicShare, err
 		}
 		out[s.DistrictID] = append(out[s.DistrictID], s)
 	}
-	for d, list := range out {
+	for _, d := range sortedDistricts(out) {
+		list := out[d]
 		sort.Slice(list, func(a, b int) bool { return list[a].ClinicID < list[b].ClinicID })
 		var sum int64
 		for i, s := range list {
@@ -227,6 +236,16 @@ func checkShares(in []ClinicShare, ref *Reference) (map[int64][]ClinicShare, err
 	return out, nil
 }
 
+// sortedDistricts — районы долей по возрастанию: сообщения об ошибках воспроизводимы.
+func sortedDistricts(shares map[int64][]ClinicShare) []int64 {
+	out := make([]int64, 0, len(shares))
+	for d := range shares {
+		out = append(out, d)
+	}
+	sort.Slice(out, func(a, b int) bool { return out[a] < out[b] })
+	return out
+}
+
 // baseVolumes считает B(k, p) по видам в порядке справочника. Пересекающиеся периоды одного вида
 // запрещены: иначе расход посчитался бы дважды (например, файл и выгрузка C01 за один месяц).
 func baseVolumes(history []ConsumptionRecord, p Period, ref *Reference) ([]KindBase, error) {
@@ -238,15 +257,8 @@ func baseVolumes(history []ConsumptionRecord, p Period, ref *Reference) ([]KindB
 		if h.ConsumedVolumeML < 0 {
 			return nil, invalidInput("вид %s: отрицательный расход", h.KindCode)
 		}
-		if h.Period.IsZero() || h.Period.End.Before(h.Period.Start) {
-			return nil, invalidInput("вид %s: период истории не задан", h.KindCode)
-		}
-		for _, prev := range byKind[h.KindCode] {
-			if prev.Period.Overlaps(h.Period) {
-				return nil, invalidInput("вид %s: периоды истории %s–%s и %s–%s пересекаются", h.KindCode,
-					prev.Period.Start.Format(dateLayout), prev.Period.End.Format(dateLayout),
-					h.Period.Start.Format(dateLayout), h.Period.End.Format(dateLayout))
-			}
+		if !h.Period.valid() {
+			return nil, invalidInput("вид %s: период истории не задан или вне 1900–2100 годов", h.KindCode)
 		}
 		byKind[h.KindCode] = append(byKind[h.KindCode], h)
 	}
@@ -255,6 +267,16 @@ func baseVolumes(history []ConsumptionRecord, p Period, ref *Reference) ([]KindB
 		records := byKind[k.Code]
 		if len(records) == 0 {
 			continue
+		}
+		// Пересечения — по соседям после сортировки по началу периода: O(n log n).
+		sort.Slice(records, func(a, b int) bool { return records[a].Period.Start.Before(records[b].Period.Start) })
+		for i := 1; i < len(records); i++ {
+			prev, cur := records[i-1].Period, records[i].Period
+			if !prev.End.Before(cur.Start) {
+				return nil, invalidInput("вид %s: периоды истории %s–%s и %s–%s пересекаются", k.Code,
+					prev.Start.Format(dateLayout), prev.End.Format(dateLayout),
+					cur.Start.Format(dateLayout), cur.End.Format(dateLayout))
+			}
 		}
 		var volume, days int64
 		for _, r := range records {

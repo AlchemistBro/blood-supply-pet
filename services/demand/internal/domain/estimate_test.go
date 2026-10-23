@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -295,18 +296,24 @@ func TestCalculateEstimate_InvalidInput(t *testing.T) {
 	}
 }
 
-// Доли района в файле относятся к району, даже если в профиле его нет: такой район не даёт потребности.
-func TestCalculateEstimate_SharesOfDistrictWithoutProfileIgnored(t *testing.T) {
+// Район есть в долях, но нет в профиле: версии входов несогласованы, B не делится между оставшимися.
+func TestCalculateEstimate_SharesOfDistrictWithoutProfileRejected(t *testing.T) {
 	in := referenceInput(t)
 	in.Shares = append(in.Shares, ClinicShare{DistrictID: 5, ClinicID: 8, Share: 1})
-	e, err := CalculateEstimate(in, testRef(t))
-	if err != nil {
-		t.Fatal(err)
+	_, err := CalculateEstimate(in, testRef(t))
+	if !errors.Is(err, ErrEstimateInput) {
+		t.Fatalf("ожидали ErrEstimateInput, получили %v", err)
 	}
-	for _, l := range e.Clinics {
-		if l.ClinicID == 8 {
-			t.Fatalf("клиника района без профиля получила потребность: %+v", l)
-		}
+	if !strings.Contains(err.Error(), "район D05 есть в долях, но нет в профиле") {
+		t.Fatalf("сообщение: %v", err)
+	}
+}
+
+func TestCalculateEstimate_PeriodYearsLimited(t *testing.T) {
+	in := referenceInput(t)
+	in.Period = Period{Start: date(1800, 1, 1), End: date(1800, 1, 31)}
+	if _, err := CalculateEstimate(in, testRef(t)); !errors.Is(err, ErrEstimateInput) {
+		t.Fatalf("период 1800 года: %v", err)
 	}
 }
 
