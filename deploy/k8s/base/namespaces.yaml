@@ -1,0 +1,43 @@
+# Сегменты сети ПР4 (docs/architecture/deployment.md, security.md) как namespace.
+# Метка blood-supply.io/segment — опора для NetworkPolicy: политики выбирают
+# соседей по ней, а не по имени namespace.
+# Pod Security Admission: restricted везде, где образы позволяют non-root; bs-observability —
+# baseline, потому что grafana/otel-lgtm работает от root.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bs-edge
+  labels:
+    blood-supply.io/segment: edge
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+# Основная сеть: сервисы приложения и Kafka.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bs-app
+  labels:
+    blood-supply.io/segment: app
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+# Сегмент данных: PostgreSQL (CloudNativePG) и хранилище копий MinIO.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bs-data
+  labels:
+    blood-supply.io/segment: data
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+# Зона контроля: телеметрия, только приём.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bs-observability
+  labels:
+    blood-supply.io/segment: observability
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/warn: restricted
