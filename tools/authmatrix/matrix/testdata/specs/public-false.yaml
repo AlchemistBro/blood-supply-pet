@@ -1,0 +1,8 @@
+openapi: 3.0.3
+info: { title: public-false, version: 0.1.0 }
+paths:
+  /metrics:
+    get:
+      operationId: metrics
+      x-bs-public: false
+      responses: { "200": { description: ok } }

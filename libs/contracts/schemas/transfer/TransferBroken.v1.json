@@ -2,12 +2,15 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://blood-supply.dev/schemas/transfer/TransferBroken.v1.json",
   "title": "TransferBroken",
-  "description": "Событие transfer.events: закреплённая единица выбыла в АИСТ-М или ушла на карантин, обязательство нарушено (→ BROKEN), закрепления сняты, ушла CancelTransport. reason — причина выбытия из UnitWithdrawn либо QUARANTINE (ПП РФ № 641, п. 62 а; ADR-0027).",
+  "description": "Событие transfer.events: закреплённая единица выбыла в АИСТ-М или ушла на карантин, обязательство нарушено (→ BROKEN), закрепления сняты, ушла CancelTransport. reason — причина выбытия из UnitWithdrawn либо QUARANTINE — статус «на карантине» (ПП РФ № 641, п. 62 а), нарушение по решению проекта (ADR-0027).",
   "type": "object",
   "additionalProperties": false,
   "required": ["obligation_id", "request_id", "unit_id", "reason"],
   "properties": {
     "obligation_id": { "type": "string", "format": "uuid" },
+    "obligation_version": { "type": "integer", "minimum": 0, "description": "Версия O07 после перехода; проекции применяют событие, только если версия выше сохранённой" },
+    "source_clinic_id": { "type": "integer", "minimum": 1, "description": "Клиника-источник обязательства; для фильтра живых статусов без запроса к transfer" },
+    "target_clinic_id": { "type": "integer", "minimum": 1, "description": "Клиника-получатель обязательства; для фильтра живых статусов без запроса к transfer" },
     "request_id": { "type": "string", "format": "uuid" },
     "unit_id": { "type": "string", "format": "uuid" },
     "reason": { "type": "string", "enum": ["ISSUED", "DISCARDED", "TRANSFERRED", "EXPIRED", "QUARANTINE"] }

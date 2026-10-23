@@ -1,0 +1,13 @@
+openapi: 3.0.3
+info: { title: alpha, version: 0.1.0 }
+paths:
+  /requests/{id}/patient-case:
+    get:
+      operationId: readPatientCase
+      x-bs-operation: READ_PATIENT_CASE
+      responses: { "200": { description: ok } }
+  /requests:
+    post:
+      operationId: createRequest
+      x-bs-operation: CREATE_REQUEST
+      responses: { "201": { description: ok } }

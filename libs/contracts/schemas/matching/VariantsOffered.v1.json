@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/matching/VariantsOffered.v1.json",
+  "title": "VariantsOffered",
+  "type": "object",
+  "description": "Событие matching.events: ранжированные варианты для заявки на водяном знаке запаса (O10, FR030–FR034).",
+  "additionalProperties": false,
+  "required": [
+    "clinical_request_id",
+    "variants",
+    "stock_watermark"
+  ],
+  "properties": {
+    "clinical_request_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "variants": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "variant_offer_id",
+          "rank_no",
+          "source_clinic_id",
+          "component_kind",
+          "blood_group",
+          "available_units",
+          "delivery_minutes",
+          "is_deficit_stock_used",
+          "matching_rule_id"
+        ],
+        "properties": {
+          "variant_offer_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "rank_no": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "source_clinic_id": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "component_kind": {
+            "type": "string",
+            "enum": [
+              "RBC",
+              "FFP",
+              "PLT",
+              "CRYO"
+            ]
+          },
+          "blood_group": {
+            "type": "string",
+            "enum": [
+              "O+",
+              "O-",
+              "A+",
+              "A-",
+              "B+",
+              "B-",
+              "AB+",
+              "AB-"
+            ]
+          },
+          "available_units": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "delivery_minutes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "is_deficit_stock_used": {
+            "type": "boolean"
+          },
+          "matching_rule_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      }
+    },
+    "stock_watermark": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

@@ -14,7 +14,7 @@
 ### audit
 - [ ] Consumer `audit.events` → `audit_record` с `seq`, `prev_hash`, `hash`; роль БД только INSERT; `task audit:verify` и `GET /internal/verify` проходят цепочку и находят разрыв.
 - [ ] OpenAPI (роли `IT_SERVICE`, `DUTY_OFFICER`): `GET /records?module=&action=&object=&user=&from=&to=`; экспорт CSV.
-- [ ] `web` пишет `READ_PATIENT_CASE`, `LOGIN`, `DENIED` через свой outbox? У `web` нет БД → отправляет через HTTP `POST /records` в `audit` с ретраем (ADR-0017: исключение для web, допускается, так как это не доменная операция) — зафиксировать ADR.
+- [ ] `web` пишет `LOGIN`, `LOGOUT`, `ACCESS_DENIED` через HTTP `POST /records` в `audit` с ретраем (у `web` нет БД; ADR-0017). `READ_PATIENT_CASE` пишет только `matching` в транзакции выдачи номера (ADR-0020); `web` его не дублирует.
 
 ### UI
 - [ ] Дежурный: «Эскалации» (не подтверждено в срок, C03 молчит/отказал, АИСТ-М недоступна при экстренной) с действиями «Назначить перевозку вручную» (ввод `transport_ref`), «Закрыть с комментарием»; «Все задания», «Запас всех клиник».

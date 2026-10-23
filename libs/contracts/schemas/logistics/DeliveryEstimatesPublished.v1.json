@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/logistics/DeliveryEstimatesPublished.v1.json",
+  "title": "DeliveryEstimatesPublished",
+  "type": "object",
+  "description": "Событие logistics.events: оценки времени доставки от источника до клиник-получателей (ADR-0014).",
+  "additionalProperties": false,
+  "required": [
+    "source_clinic_id",
+    "estimates",
+    "estimated_at"
+  ],
+  "properties": {
+    "source_clinic_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "estimates": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "target_clinic_id",
+          "minutes"
+        ],
+        "properties": {
+          "target_clinic_id": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "minutes": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "estimated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

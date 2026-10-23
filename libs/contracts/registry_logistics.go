@@ -13,5 +13,10 @@ func init() {
 		func() Payload { return &logistics.TransportRejected{} },
 		func() Payload { return &logistics.TransportCancelled{} },
 		func() Payload { return &logistics.TransportDelivered{} },
+		// этап 5: оценки доставки (logistics.events) и команда их обновить (logistics.commands)
+		func() Payload { return &logistics.DeliveryEstimatesPublished{} },
+		func() Payload { return &logistics.RefreshDeliveryEstimates{} },
+		// этап 7: отправка груза службой перевозки (logistics.replies)
+		func() Payload { return &logistics.TransportDispatched{} },
 	)
 }

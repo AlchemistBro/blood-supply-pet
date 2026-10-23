@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/inventory/PatientAllocationAcknowledged.v1.json",
+  "title": "PatientAllocationAcknowledged",
+  "type": "object",
+  "description": "Событие inventory.events: АИСТ-М подтвердил приём закрепления за пациентом (ИНТ-05, FR052).",
+  "additionalProperties": false,
+  "required": [
+    "obligation_id",
+    "idempotency_key",
+    "acknowledged_at"
+  ],
+  "properties": {
+    "obligation_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "acknowledged_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

@@ -4,6 +4,10 @@
 // Исходный код единицы АИСТ-М (aist_unit_code) и номер донации наружу не публикуются: только суррогат
 // unit_id (ADR-0010). Версия единицы растёт только вперёд: получатель применяет событие, если его
 // version больше сохранённой, иначе это дубль или устаревшее сообщение.
+//
+// Правило публикации: выбытие из учёта (ISSUED, DISCARDED, TRANSFERRED; истёкшая единица приходит как DISCARDED
+// с причиной EXPIRED) публикуется только как UnitWithdrawn. UnitUpdated — только для единиц, которые остаются
+// в учёте: IN_STOCK ↔ QUARANTINE, новый срок годности или место хранения (ADR-0027).
 package inventory
 
 import (
@@ -12,8 +16,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// Статус единицы — коды справочника ref_unit_status (libs/refdata). Доступна для закрепления только IN_STOCK:
-// единица на карантине не выдаётся и не передаётся (ПП РФ № 641, п. 62).
+// Статус единицы — коды справочника ref_unit_status (libs/refdata): статусы единицы в базе, в том числе
+// «на карантине» (ПП РФ № 641, п. 62 а); закрепляется только IN_STOCK — решение проекта (ADR-0027).
 const (
 	StatusInStock     = "IN_STOCK"
 	StatusQuarantine  = "QUARANTINE"
@@ -24,6 +28,12 @@ const (
 
 // Statuses — все статусы единицы в порядке справочника.
 var Statuses = []string{StatusInStock, StatusQuarantine, StatusIssued, StatusDiscarded, StatusTransferred}
+
+// UpdatedStatuses — статусы, допустимые в UnitUpdated: единица остаётся в учёте. Выбытие — только UnitWithdrawn.
+var UpdatedStatuses = []string{StatusInStock, StatusQuarantine}
+
+// WithdrawReasons — все причины выбытия в порядке схемы.
+var WithdrawReasons = []string{WithdrawIssued, WithdrawDiscarded, WithdrawTransferred, WithdrawExpired}
 
 // Причины выбытия (UnitWithdrawn). Система знает о выдаче единицы, но не о трансфузии: её фиксирует
 // клиника вне системы, поэтому причины TRANSFUSED нет.
@@ -57,7 +67,8 @@ func (UnitRegistered) MessageType() string { return "UnitRegistered" }
 // SchemaVersion реализует contracts.Payload.
 func (UnitRegistered) SchemaVersion() int { return 1 }
 
-// UnitUpdated — изменились статус, место хранения или срок годности единицы.
+// UnitUpdated — у единицы, остающейся в учёте, изменились статус (IN_STOCK ↔ QUARANTINE), место хранения
+// или срок годности. Выбытие этим событием не публикуется.
 type UnitUpdated struct {
 	UnitID          uuid.UUID  `json:"unit_id"`
 	ClinicID        int64      `json:"clinic_id"`
@@ -91,8 +102,9 @@ func (UnitWithdrawn) MessageType() string { return "UnitWithdrawn" }
 // SchemaVersion реализует contracts.Payload.
 func (UnitWithdrawn) SchemaVersion() int { return 1 }
 
-// ProtectedVolumePublished — защищённый объём источника по виду компонента в единицах (норматив + фоновая
-// потребность + обязательства). Считает planning, публикует inventory как владелец запаса; до появления
+// ProtectedVolumePublished — защищённый объём источника по виду компонента в единицах: норматив + фоновая
+// потребность, без подтверждённых обязательств — закреплённые единицы transfer учитывает в Остатке сам (ADR-0019).
+// Считает planning (ProtectedVolumeCalculated), публикует inventory как владелец запаса; до появления
 // planning — демо-эндпоинт inventory. Хранится с версией и основанием.
 type ProtectedVolumePublished struct {
 	ClinicID      int64  `json:"clinic_id"`

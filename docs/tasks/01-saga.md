@@ -4,13 +4,16 @@
 но уже как три сервиса с тремя базами. Требования: FR028, FR043 (приём задания), FR048, FR049; NFR004, NFR013, NFR017 (каркас).
 Спецификация: `docs/domain/obligation-states.md`, `docs/architecture/saga-confirmation.md`, Java-тесты
 `ConfirmationRaceFitnessTests`, `TransferScenarioTests`, `TransportSagaTests`, `TransportGatewayTests`.
+Отступления от канона и прототипа (карантин, отмена, `EscalationRaised`, причина `ISSUED`, uuid v5, отказ экстренному
+заданию при недоступном АИСТ-М): [ADR-0027](../adr/0027-stage1-deviations.md).
 
 ## Чеклист
 
 ### Контракты
-- [ ] `libs/contracts/transfer`: команды `OpenObligation`, `CancelObligation`; события по `events.md`. JSON Schema + примеры.
-- [ ] `libs/contracts/logistics`: `RequestTransport`, `CancelTransport`, `TransportAccepted`, `TransportRejected`, `TransportCancelled`.
-- [ ] `libs/contracts/inventory`: `UnitRegistered`, `UnitUpdated`, `UnitWithdrawn`, `ProtectedVolumePublished` (минимум для этапа).
+- [ ] `libs/contracts/transfer`: команды `OpenObligation`, `CancelObligation`; события по `events.md`, включая `TransferCancelled`, `TransferBroken(request_id, reason)`, `EscalationRaised`. JSON Schema + примеры.
+- [ ] `libs/contracts/logistics`: `RequestTransport` (с `temperature_regime`), `CancelTransport`, `TransportAccepted`, `TransportRejected`, `TransportCancelled`; `TransportDelivered` — заготовка этапа 7.
+- [ ] `libs/contracts/inventory`: `UnitRegistered`, `UnitUpdated`, `UnitWithdrawn` (причины `ISSUED`, `DISCARDED`, `TRANSFERRED`, `EXPIRED`), `ProtectedVolumePublished` (минимум для этапа).
+- [ ] Тест контрактов: ни одна схема этапа не содержит номера случая пациента.
 - [ ] OpenAPI `transfer`: `POST /obligations` (открыть, идемпотентно по `choice_id`), `POST /obligations/{id}/confirm`, `POST /obligations/{id}/replace`, `POST /obligations/{id}/cancel`, `GET /obligations/{id}`, `GET /obligations?requestId=|sourceClinicId=&status=`.
 - [ ] OpenAPI `inventory`: `GET /internal/units/status?ids=`, dev-эндпоинты имитации (профиль `dev`).
 
@@ -20,35 +23,40 @@
 
 ### inventory (минимум этапа)
 - [ ] Миграции: `unit`, `unit_status_history`, `sync_run`, `ref_*`, outbox/inbox, `audit_local`.
-- [ ] Опрос изменений C01 каждые N секунд (конфиг), запись единиц с проверкой `source_version`, публикация `UnitRegistered`/`UnitUpdated`/`UnitWithdrawn`.
+- [ ] Справочник `ref_unit_status` (`IN_STOCK`, `QUARANTINE`, `ISSUED`, `DISCARDED`, `TRANSFERRED`, признак `is_available`).
+- [ ] Опрос изменений C01 каждые N секунд (конфиг), запись единиц с проверкой `source_version`, публикация `UnitRegistered`/`UnitUpdated`/`UnitWithdrawn`. Строки `unit` не удаляются.
 - [ ] `GET /internal/units/status`: статус из C01 с таймаутом; при недоступности — ответ из копии с `source: copy` и `watermark`.
 - [ ] Публикация `ProtectedVolumePublished` из dev-эндпоинта (до появления `planning`).
 
 ### transfer
-- [ ] Миграции: `source_stock`, `unit_copy`, `obligation`, `allocation` (частичный уникальный индекс), outbox/inbox, `audit_local`.
+- [ ] Миграции: `source_stock`, `unit_copy`, `obligation`, `allocation` (частичный уникальный индекс, индекс `(unit_id, created_at)`, триггер запрета `DELETE`), outbox/inbox, `audit_local`. `clinic_id` — `bigint`.
 - [ ] Домен: `Obligation` с CAS-переходами, `ConfirmationResult`, `ReplacementResult`, спецификация замены, порядок блокировок.
-- [ ] Приложение: `Open`, `Confirm`, `Replace`, `Cancel`, `ExpireOverdue` (таймер 5 с), `OnUnitEvent` (проекция + компенсация BROKEN), `OnLogisticsReply`.
+- [ ] Приложение: `Open`, `Confirm`, `Replace`, `Cancel`, `ExpireOverdue` (таймер 5 с), `OnUnitEvent` (проекция + компенсация BROKEN при выбытии и карантине), `OnLogisticsReply`.
 - [ ] Адаптер `inventoryclient` с таймаутом 3 с и предохранителем; метрика отказов.
 - [ ] Consumer: `transfer.commands`, `inventory.events`, `logistics.replies`; relay outbox.
-- [ ] Фитнес-тесты (integration): четыре гонки; 50 параллельных подтверждений одной единицы; идемпотентность по ключу; `TaskWithdrawn`; `SourceSystemUnavailable`; эскалация с новым O07; правила замены (`NotAllowed`, `SpecMismatch`, `UnitUnavailable`, `UnitTaken`); команда уходит с ключом O07; дубль ответа отбрасывается inbox; нарушение шлёт `CancelTransport`; поздний `TransportAccepted` не оживляет BROKEN; `OUTCOME_UNKNOWN` оставляет CONFIRMED.
+- [ ] Сценарии (integration, по `TransferScenarioTests`): `repeatedChoiceDoesNotOpenSecondObligation`, `repeatedConfirmationWithSameKeyIsIdempotent`, `allUnitsWithdrawnRejectsObligation`, `aistMDownLeavesObligationPending`, `timerEscalatesToNextSourceAndExpiresWithoutOne`, `replacementFollowsSpecFromDoctorsChoice`, `replacementIsNotAllowedBeforeConfirmation`, `withdrawalOfAllocatedUnitBreaksObligationAndReleasesUnits`.
+- [ ] Сценарии ADR-0027 (новые): `quarantinedUnitIsNeverAllocated` (подтверждение и замена единицей на карантине не проходят), карантин закреплённой единицы → `BROKEN(QUARANTINE)` и `CancelTransport(UNIT_QUARANTINED)`, отмена из `PENDING`, `CONFIRMED` и `TRANSPORT_REQUESTED` (из двух последних ещё `CancelTransport`), повтор подтверждения с тем же ключом в `TRANSPORT_REQUESTED` → `Confirmed`, `DELETE` из `allocation` отклоняется, повтор отмены идемпотентен, отмена конечного O07 отклоняется, экстренное задание при недоступном АИСТ-М → `SourceSystemUnavailable`, `EscalationRaised(SOURCE_SYSTEM_UNAVAILABLE)` и запись аудита.
+- [ ] Сага с логистикой (integration, по `TransportSagaTests`): `confirmationPublishesRequestTransportKeyedByObligation`, `acceptedReplyMovesObligationOnceEvenIfDeliveredTwice`, `withdrawalAfterTransportRequestedCompensatesWithCancelTransport`, `lateAcceptanceDoesNotReviveBrokenObligation`, `unknownOutcomeKeepsConfirmedAndLateAcceptanceStillLands`.
+- [ ] Фитнес-тесты (integration, по `ConfirmationRaceFitnessTests`): гонка 1 — 50 подтверждений из одного Остатка, 40 `Confirmed` и 10 `ProtectedVolumeExceeded`; 50 параллельных подтверждений одной единицы → одно `Confirmed`, 49 `UnitsTaken`; гонка 2 — выдача во время подтверждения; гонка 3 — позднее подтверждение после эскалации; гонка 4 — замена против подтверждения; `partialConfirmationAndRemainderNeverShipOneUnitTwice`.
 
 ### logistics-gateway и sim-logistics (C03)
 - [ ] `sim-logistics`: заказы без дедупликации (нарочно), `GET /shipments?clientRef=`, `POST /shipments`, `DELETE /shipments/{ref}`, `GET /estimates`, `POST /dev/faults` (`failNextCalls`, `loseNextSubmitResponse`, `refuseNext`).
 - [ ] Миграции `transport_request`, `delivery_estimate`, outbox/inbox.
 - [ ] `TransportGateway.drive()`: inbox + REQUESTING в одной tx → аренда → сверка по `clientRef` → создать → исход и ответ в outbox, пока аренда наша; `Reconciler` для просроченных аренд и `UNKNOWN`; `max-attempts` → `OUTCOME_UNKNOWN`; надгробие при отмене, обогнавшей заказ.
-- [ ] Тесты (integration): одна команда трижды → один заказ; потерянный ответ → сверка; падение после REQUESTING; падение после ответа C03; восемь экземпляров; C03 лежит дольше лимита (две ветки); отмена после заказа / отмена обогнала / отказ перевозчика.
+- [ ] Тесты (integration, все одиннадцать из `TransportGatewayTests`): `commandFromKafkaGetsOneShipmentAndReplyInKafka`, `duplicateDeliveriesOfACommandCreateOneShipment`, `lostResponseIsReconciledInsteadOfResubmitted`, `crashAfterRecordingButBeforeCallingC03`, `crashAfterC03AcceptedButBeforeRecordingTheOutcome`, `twoGatewayInstancesDrivingTheSameRequestCreateOneShipment`, `carrierDownTooLongGivesHonestUnknownAndNoBlindResubmit`, `unknownOutcomeThatActuallyReachedCarrierEndsAccepted`, `cancelAfterAcceptanceCancelsAtCarrier`, `cancelOvertakingTheRequestPreventsTheShipment`, `carrierRefusalIsReported`.
 
 ### Сквозное
-- [ ] `tests/e2e/saga_test.go` на compose: четыре сценария `scripts/smoke.sh` Java-прототипа (подтверждение → заказ; выдача → BROKEN → отмена заказа; потерянный ответ; `docker compose kill logistics-gateway` → заказ уходит после старта).
+- [ ] `tests/e2e/saga_test.go` на compose, пять сценариев: четыре из `scripts/smoke.sh` Java-прототипа (подтверждение → заказ; выдача → BROKEN → отмена заказа; потерянный ответ C03 → ровно один заказ; шлюз остановлен → подтверждение проходит, заказ уходит после старта) и пятый — `docker compose kill logistics-gateway` посреди заказа (после записи `REQUESTING`) → после `docker compose start` у C03 ровно один заказ.
 - [ ] BPMN `confirm-transfer.bpmn` (черновик) + SVG; sequence-диаграммы в `saga-confirmation.md` сверены с кодом.
 - [ ] Образы трёх сервисов и двух имитаторов публикуются в ghcr.io с тегом `edge`.
 
 ## Критерий выхода
-`task test:fitness` зелёный; `task test:e2e` проходит четыре сценария, включая `kill -9` шлюза посреди заказа без второго заказа у C03.
+`task test:fitness` зелёный; `task test:e2e` проходит пять сценариев, включая `kill -9` шлюза посреди заказа без второго заказа у C03.
 
 ## Проверка «тест действительно проверяет»
 Убрать сверку → падают ≥ 3 теста шлюза. Убрать аренду → падают тесты двух экземпляров и падения. Убрать перепроверку
 копии под блокировкой → падает гонка 2. Убрать частичный уникальный индекс → падают гонка 4 и тест 50 подтверждений.
+Разрешить закрепление `QUARANTINE` → падает `quarantinedUnitIsNeverAllocated`.
 
 ### Фитнес-тесты transfer (WP8): ожидаемый результат по коду, прогон не выполнялся
 
@@ -62,5 +70,7 @@
 | Блокировка `source_stock` в обработчиках inventory (`lockUnitScope`) | `internal/app/inventory.go`, `stocklock.go` | `TestRace2…` (чётные раунды), `TestRaceQuarantine…` | выбытие пишет копию без ожидания транзакции подтверждения: подтверждение читает старую копию, обработчик не видит закрепления — закреплённая выбывшая единица, рассинхрон резерва. Падение зависит от чередования (15 раундов); если не воспроизводится — увеличить число раундов |
 | Блокировка `source_stock` в подтверждении (`LockStock` в `confirmLocked`) | `internal/app/confirm.go` | `TestRace1…` | параллельные подтверждения читают один и тот же свободный остаток: больше 40 `Confirmed`, ниже защищённого объёма (NFR013) |
 
-## Открытые вопросы
-- Экстренная заявка при недоступности АИСТ-М: подтверждать по копии с алертом (как в схеме 12) или всегда отказывать? Допущение этапа: отказывать (`SourceSystemUnavailable`), эскалация дежурному; флаг `BS_ALLOW_COPY_CONFIRM_EMERGENCY` по умолчанию `false`.
+## Решённые вопросы
+- Экстренная заявка при недоступности АИСТ-М: всегда отказ `SourceSystemUnavailable` и `EscalationRaised(SOURCE_SYSTEM_UNAVAILABLE)`;
+  флаг `BS_ALLOW_COPY_CONFIRM_EMERGENCY` по умолчанию `false` ([ADR-0027](../adr/0027-stage1-deviations.md), 23.10.2026).
+- Выбытие и карантин закреплённой единицы: сразу `BROKEN`, замена только до выбытия (решение владельца от 23.10.2026, ADR-0027).
