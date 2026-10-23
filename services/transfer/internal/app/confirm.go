@@ -124,8 +124,9 @@ func (s *Service) confirmLocked(ctx context.Context, tx pgx.Tx, o domain.Obligat
 		return nil, err
 	}
 
+	refs := refsAt(locked, locked.Version+1)
 	if err := s.event(ctx, tx, o.ID, TransferConfirmed{
-		ObligationID: o.ID, RequestID: o.RequestID, Units: present, Quantity: k, Operator: c.Operator,
+		ObligationID: o.ID, ObligationVersion: refs.version, SourceClinicID: refs.source, TargetClinicID: refs.target, RequestID: o.RequestID, Units: present, Quantity: k, Operator: c.Operator,
 	}); err != nil {
 		return nil, err
 	}
@@ -133,7 +134,7 @@ func (s *Service) confirmLocked(ctx context.Context, tx pgx.Tx, o domain.Obligat
 	if shortfall > 0 {
 		// Недопоставка: подбор или план предложит следующий источник только на остаток.
 		if err := s.event(ctx, tx, o.ID, TransferShortfallRecorded{
-			ObligationID: o.ID, RequestID: o.RequestID, ComponentKind: o.ComponentKind, Shortfall: shortfall,
+			ObligationID: o.ID, ObligationVersion: refs.version, SourceClinicID: refs.source, TargetClinicID: refs.target, RequestID: o.RequestID, ComponentKind: o.ComponentKind, Shortfall: shortfall,
 		}); err != nil {
 			return nil, err
 		}
@@ -191,7 +192,11 @@ func (s *Service) reject(ctx context.Context, o domain.Obligation, c ConfirmTran
 			res = domain.TaskWithdrawn{ObligationID: o.ID, Status: locked.Status}
 			return nil
 		}
-		if err := s.event(ctx, tx, o.ID, TransferRejected{ObligationID: o.ID, RequestID: o.RequestID, Reason: string(reason)}); err != nil {
+		r := refsAt(locked, locked.Version+1)
+		if err := s.event(ctx, tx, o.ID, TransferRejected{
+			ObligationID: o.ID, ObligationVersion: r.version, SourceClinicID: r.source, TargetClinicID: r.target,
+			RequestID: o.RequestID, Reason: string(reason),
+		}); err != nil {
 			return err
 		}
 		if err := s.audit(ctx, tx, c.Operator, ActionRejected, o, map[string]any{"reason": string(reason)}); err != nil {
@@ -223,8 +228,9 @@ func (s *Service) sourceUnavailable(ctx context.Context, o domain.Obligation, op
 			return err
 		}
 		reason := string(domain.EscalationSourceSystemUnavailable)
+		r := refsAt(o, o.Version)
 		if err := s.event(ctx, tx, o.ID, EscalationRaised{
-			ObligationID: o.ID, RequestID: o.RequestID, Reason: reason, At: s.clock.Now(),
+			ObligationID: o.ID, ObligationVersion: r.version, SourceClinicID: r.source, TargetClinicID: r.target, RequestID: o.RequestID, Reason: reason, At: s.clock.Now(),
 		}); err != nil {
 			return err
 		}

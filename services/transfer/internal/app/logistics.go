@@ -43,7 +43,11 @@ func (s *Service) transportAccepted(ctx context.Context, tx pgx.Tx, o domain.Obl
 		if err != nil || !ok {
 			return err
 		}
-		if err := s.event(ctx, tx, o.ID, TransportRequested{ObligationID: o.ID, ShipmentRef: r.ShipmentRef}); err != nil {
+		refs := refsAt(o, o.Version+1)
+		if err := s.event(ctx, tx, o.ID, TransportRequested{
+			ObligationID: o.ID, ObligationVersion: refs.version, SourceClinicID: refs.source, TargetClinicID: refs.target,
+			ShipmentRef: r.ShipmentRef,
+		}); err != nil {
 			return err
 		}
 		return s.audit(ctx, tx, actorLogistics, ActionTransportRequested, o, map[string]any{"shipment_ref": r.ShipmentRef})
@@ -74,13 +78,17 @@ func (s *Service) transportRejected(ctx context.Context, tx pgx.Tx, o domain.Obl
 			"reply": string(r.Kind), "reason": r.Reason, "status": string(o.Status),
 		})
 	}
+	refs := refsAt(o, o.Version) // статус и версия не меняются
 	if r.Reason == RejectRefused {
-		if err := s.event(ctx, tx, o.ID, TransportRequestFailed{ObligationID: o.ID, Reason: r.Reason, Details: r.Details}); err != nil {
+		if err := s.event(ctx, tx, o.ID, TransportRequestFailed{
+			ObligationID: o.ID, ObligationVersion: refs.version, SourceClinicID: refs.source, TargetClinicID: refs.target,
+			Reason: r.Reason, Details: r.Details,
+		}); err != nil {
 			return err
 		}
 	}
 	if err := s.event(ctx, tx, o.ID, EscalationRaised{
-		ObligationID: o.ID, RequestID: o.RequestID, Reason: string(escalation), At: s.clock.Now(),
+		ObligationID: o.ID, ObligationVersion: refs.version, SourceClinicID: refs.source, TargetClinicID: refs.target, RequestID: o.RequestID, Reason: string(escalation), At: s.clock.Now(),
 	}); err != nil {
 		return err
 	}

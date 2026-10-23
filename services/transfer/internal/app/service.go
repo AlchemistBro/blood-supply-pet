@@ -176,7 +176,7 @@ func (s *Service) openTx(ctx context.Context, tx pgx.Tx, n domain.NewObligation,
 		return existing, false, err
 	}
 	if err := s.event(ctx, tx, o.ID, ObligationOpened{
-		ObligationID: o.ID, RequestID: o.RequestID, Origin: string(o.Origin), SourceClinicID: o.SourceClinicID,
+		ObligationID: o.ID, ObligationVersion: refsAt(o, o.Version).version, RequestID: o.RequestID, Origin: string(o.Origin), SourceClinicID: o.SourceClinicID,
 		TargetClinicID: o.TargetClinicID, ComponentKind: o.ComponentKind, RequestedQty: o.RequestedQty, Deadline: o.Deadline,
 	}); err != nil {
 		return uuid.Nil, false, err
@@ -187,6 +187,18 @@ func (s *Service) openTx(ctx context.Context, tx pgx.Tx, n domain.NewObligation,
 		return uuid.Nil, false, err
 	}
 	return o.ID, true, nil
+}
+
+// eventRefs — необязательные поля событий transfer: версия O07 после перехода (проекции применяют событие,
+// только если версия выше сохранённой) и клиники обязательства (web фильтрует живые статусы по клинике).
+type eventRefs struct {
+	version, source, target *int64
+}
+
+// refsAt — поля для события о состоянии o с версией version.
+func refsAt(o domain.Obligation, version int64) eventRefs {
+	src, tgt := o.SourceClinicID, o.TargetClinicID
+	return eventRefs{version: &version, source: &src, target: &tgt}
 }
 
 // Find возвращает обязательство с действующими закреплениями.

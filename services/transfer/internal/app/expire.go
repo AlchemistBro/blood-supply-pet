@@ -79,7 +79,11 @@ func (s *Service) expire(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*Escalat
 		esc.NextID = &nextID
 	}
 
-	if err := s.event(ctx, tx, o.ID, TransferExpired{ObligationID: o.ID, RequestID: o.RequestID, NextObligationID: esc.NextID}); err != nil {
+	r := refsAt(o, o.Version+1)
+	if err := s.event(ctx, tx, o.ID, TransferExpired{
+		ObligationID: o.ID, ObligationVersion: r.version, SourceClinicID: r.source, TargetClinicID: r.target,
+		RequestID: o.RequestID, NextObligationID: esc.NextID,
+	}); err != nil {
 		return nil, err
 	}
 	details := map[string]any{"escalation": "дежурный смены"}
@@ -91,7 +95,7 @@ func (s *Service) expire(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*Escalat
 	}
 	if esc.NextID == nil {
 		if err := s.event(ctx, tx, o.ID, EscalationRaised{
-			ObligationID: o.ID, RequestID: o.RequestID, Reason: string(domain.EscalationExpiredNoFallback), At: now,
+			ObligationID: o.ID, ObligationVersion: r.version, SourceClinicID: r.source, TargetClinicID: r.target, RequestID: o.RequestID, Reason: string(domain.EscalationExpiredNoFallback), At: now,
 		}); err != nil {
 			return nil, err
 		}

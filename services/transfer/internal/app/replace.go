@@ -117,8 +117,9 @@ func (s *Service) replaceLocked(ctx context.Context, tx pgx.Tx, o domain.Obligat
 	if err := s.store.InsertAllocations(ctx, tx, o.ID, []uuid.UUID{c.NewUnitID}, now); err != nil {
 		return nil, err
 	}
+	r := refsAt(locked, locked.Version+1)
 	if err := s.event(ctx, tx, o.ID, TransferUnitReplaced{
-		ObligationID: o.ID, OldUnitID: c.OldUnitID, NewUnitID: c.NewUnitID, RuleVersion: o.Spec.RuleVersion,
+		ObligationID: o.ID, ObligationVersion: r.version, SourceClinicID: r.source, TargetClinicID: r.target, OldUnitID: c.OldUnitID, NewUnitID: c.NewUnitID, RuleVersion: o.Spec.RuleVersion,
 	}); err != nil {
 		return nil, err
 	}
