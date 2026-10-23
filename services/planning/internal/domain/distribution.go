@@ -80,13 +80,17 @@ type groupPart struct {
 
 // splitGroups относит целый объём к группам: вид без группы — одна часть с пустой группой; группа задана —
 // целиком к ней; группа не задана — по долям групп населения (демо, ADR-0010). Возвращает признак того,
-// что группа была не определена.
-func splitGroups(volume int64, kind Kind, group string, groups []GroupShare) ([]groupPart, bool) {
+// что группа была не определена. Без долей групп объём вида с группой разложить некуда — это ошибка входа,
+// а не молчаливая потеря потребности.
+func splitGroups(volume int64, kind Kind, group string, groups []GroupShare) ([]groupPart, bool, error) {
 	if !kind.GroupApplicable {
-		return []groupPart{{group: "", volume: volume}}, false
+		return []groupPart{{group: "", volume: volume}}, false, nil
 	}
 	if group != "" {
-		return []groupPart{{group: group, volume: volume}}, false
+		return []groupPart{{group: group, volume: volume}}, false, nil
+	}
+	if len(groups) == 0 {
+		return nil, true, fmt.Errorf("%w: вид %s с группой, группа не указана, а долей групп нет", ErrInvalidInput, kind.Code)
 	}
 	weights := make([]float64, len(groups))
 	for i, g := range groups {
@@ -97,7 +101,12 @@ func splitGroups(volume int64, kind Kind, group string, groups []GroupShare) ([]
 	for i, g := range groups {
 		out = append(out, groupPart{group: g.Group, volume: parts[i]})
 	}
-	return out, true
+	return out, true, nil
+}
+
+// badFloat — NaN, бесконечность, отрицательное или больше предела.
+func badFloat(v, limit float64) bool {
+	return math.IsNaN(v) || math.IsInf(v, 0) || v < 0 || v > limit
 }
 
 // sortedGroups возвращает доли групп по коду и проверяет их: повтор, отрицательная доля, сумма не 1.
@@ -106,7 +115,7 @@ func sortedGroups(groups []GroupShare) ([]GroupShare, error) {
 	slices.SortFunc(out, func(a, b GroupShare) int { return cmp.Compare(a.Group, b.Group) })
 	var sum float64
 	for i, g := range out {
-		if g.Group == "" || g.Share < 0 || math.IsNaN(g.Share) {
+		if g.Group == "" || badFloat(g.Share, maxShare) {
 			return nil, fmt.Errorf("%w: доля группы %q = %v", ErrInvalidInput, g.Group, g.Share)
 		}
 		if i > 0 && out[i-1].Group == g.Group {
@@ -133,12 +142,15 @@ func checkGroup(kind Kind, group string, groups []GroupShare) error {
 
 // clinicWeights считает долю каждой клиники в территории прогноза: Σ_r (вес района / сумма весов) · w(r, c).
 // Районы и клиники обходятся по возрастанию идентификатора — сумма float64 не зависит от порядка входа.
+// Район территории с положительным весом, у которого нет ни одной положительной доли «район → клиника», —
+// ошибка входа: иначе его часть сценарной потребности молча ушла бы другим районам или пропала.
+// Запись дефицита здесь не подходит: дефицит относится к клинике, а клиники у этой части нет.
 func clinicWeights(territory []DistrictWeight, shares []ClinicShare) ([]int64, []float64, error) {
 	terr := slices.Clone(territory)
 	slices.SortFunc(terr, func(a, b DistrictWeight) int { return cmp.Compare(a.DistrictID, b.DistrictID) })
 	var total float64
 	for i, d := range terr {
-		if d.Weight < 0 || math.IsNaN(d.Weight) {
+		if badFloat(d.Weight, maxWeight) {
 			return nil, nil, fmt.Errorf("%w: вес района %d = %v", ErrInvalidInput, d.DistrictID, d.Weight)
 		}
 		if i > 0 && terr[i-1].DistrictID == d.DistrictID {
@@ -155,10 +167,20 @@ func clinicWeights(territory []DistrictWeight, shares []ClinicShare) ([]int64, [
 	}
 	weight := map[int64]float64{}
 	for _, d := range terr {
+		if d.Weight == 0 {
+			continue
+		}
 		list := byDistrict[d.DistrictID]
 		slices.SortFunc(list, func(a, b ClinicShare) int { return cmp.Compare(a.ClinicID, b.ClinicID) })
+		positive := false
 		for _, s := range list {
-			weight[s.ClinicID] += d.Weight / total * s.Share
+			if s.Share > 0 {
+				positive = true
+				weight[s.ClinicID] += d.Weight / total * s.Share
+			}
+		}
+		if !positive {
+			return nil, nil, fmt.Errorf("%w: у района %d территории прогноза нет долей «район → клиника» (FR046)", ErrInvalidInput, d.DistrictID)
 		}
 	}
 	clinics := make([]int64, 0, len(weight))
@@ -177,7 +199,7 @@ func clinicWeights(territory []DistrictWeight, shares []ClinicShare) ([]int64, [
 func checkClinicShares(shares []ClinicShare) error {
 	seen := map[[2]int64]bool{}
 	for _, s := range shares {
-		if s.Share < 0 || math.IsNaN(s.Share) {
+		if badFloat(s.Share, maxShare) {
 			return fmt.Errorf("%w: доля клиники %d в районе %d = %v", ErrInvalidInput, s.ClinicID, s.DistrictID, s.Share)
 		}
 		key := [2]int64{s.DistrictID, s.ClinicID}
@@ -220,7 +242,7 @@ func distributeForecast(f *Forecast, shares []ClinicShare, kinds map[string]Kind
 		if !ok {
 			return nil, fmt.Errorf("%w: строка прогноза %s: неизвестный вид %q", ErrInvalidInput, l.LineID, l.Kind)
 		}
-		if l.VolumeML < 0 || math.IsNaN(l.VolumeML) || math.IsInf(l.VolumeML, 0) {
+		if badFloat(l.VolumeML, maxVolumeML) {
 			return nil, fmt.Errorf("%w: строка прогноза %s: объём %v", ErrInvalidInput, l.LineID, l.VolumeML)
 		}
 		if err := checkGroup(kind, l.Group, groups); err != nil {
@@ -245,7 +267,10 @@ func distributeForecast(f *Forecast, shares []ClinicShare, kinds map[string]Kind
 			clinics, parts, origin = roughClinics, splitByWeights(total, roughWeights), SourceDistrictShares
 		}
 		for ci, c := range clinics {
-			gparts, undetermined := splitGroups(parts[ci], kind, l.Group, groups)
+			gparts, undetermined, err := splitGroups(parts[ci], kind, l.Group, groups)
+			if err != nil {
+				return nil, fmt.Errorf("строка прогноза %s: %w", l.LineID, err)
+			}
 			for _, gp := range gparts {
 				if gp.volume <= 0 {
 					continue

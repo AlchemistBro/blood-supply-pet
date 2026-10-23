@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"math"
 	"testing"
 	"time"
 
@@ -162,8 +163,8 @@ func TestProtectedVolumeOfSource(t *testing.T) {
 	in.Background = []Background{{ClinicID: 5, Kind: "RBC", Group: "O+", VolumeML: 1000}}
 	in.Units = stock(1, 30, 5, "RBC", "O+", 300, 20, UnitStatusInStock)
 	in.Obligations = []Obligation{
-		{ObligationID: unitN(200), SourceClinicID: 5, TargetClinicID: 6, Kind: "RBC", Group: "O+", VolumeML: 600, Status: ObligationConfirmed},
-		{ObligationID: unitN(201), SourceClinicID: 5, TargetClinicID: 6, Kind: "RBC", Group: "A+", VolumeML: 300, Status: ObligationTransportRequested},
+		{ObligationID: unitN(200), SourceClinicID: 5, TargetClinicID: 6, Kind: "RBC", Group: "O+", VolumeML: 600, Units: 2, Status: ObligationConfirmed},
+		{ObligationID: unitN(201), SourceClinicID: 5, TargetClinicID: 6, Kind: "RBC", Group: "A+", VolumeML: 300, Units: 1, Status: ObligationTransportRequested},
 		{ObligationID: unitN(202), SourceClinicID: 5, TargetClinicID: 7, Kind: "RBC", Group: "O+", VolumeML: 900, Status: ObligationPending},
 		{ObligationID: unitN(203), SourceClinicID: 5, TargetClinicID: 7, Kind: "RBC", Group: "O+", VolumeML: 900, Status: "CANCELLED"},
 		{ObligationID: unitN(204), SourceClinicID: 8, TargetClinicID: 5, Kind: "RBC", Group: "O+", VolumeML: 900, Status: ObligationConfirmed},
@@ -184,7 +185,9 @@ func TestProtectedVolumeOfSource(t *testing.T) {
 		{"фон за период", pv.backgroundML, 1000},
 		{"подтверждённые исходящие обязательства (PENDING и чужие не в счёт)", pv.obligationsML, 900},
 		{"защищённый объём = норматив + фон + обязательства", pv.protectedML(), 4900},
-		{"защищённый объём в единицах, вверх по типовому объёму", pv.protectedUnits(), 17},
+		{"единицы подтверждённых обязательств", pv.obligationsUnits, 3},
+		{"для transfer: ceil((норматив + фон) / 300), без обязательств (ADR-0019)", pv.publishedUnits(), 14},
+		{"внутренний порог в единицах = опубликованный + единицы обязательств", pv.protectedUnits(), 17},
 		{"подтверждённый запас", pv.availableML, 9000},
 		{"подтверждённый запас в единицах", pv.availableUnits, 30},
 	}
@@ -224,6 +227,39 @@ func TestPrepareRejectsInvalidInput(t *testing.T) {
 			in.Delivery = []DeliveryEstimate{{SourceClinicID: 1, TargetClinicID: 2, Minutes: -1}}
 		}},
 		{"порог покрытия вне (0, 1]", func(in *Input) { in.Params.CoverageThreshold = 1.5 }},
+		{"обязательство вида с группой без группы", func(in *Input) {
+			in.Obligations = []Obligation{{ObligationID: unitN(1), SourceClinicID: 1, TargetClinicID: 2, Kind: "RBC", VolumeML: 300, Units: 1, Status: ObligationConfirmed}}
+		}},
+		{"обязательство: число единиц не совпадает с закреплёнными", func(in *Input) {
+			in.Obligations = []Obligation{{ObligationID: unitN(1), SourceClinicID: 1, TargetClinicID: 2, Kind: "RBC", Group: "O+",
+				VolumeML: 600, Units: 3, UnitIDs: []uuid.UUID{unitN(10), unitN(11)}, Status: ObligationConfirmed}}
+		}},
+		{"единица закреплена за двумя обязательствами", func(in *Input) {
+			in.Obligations = []Obligation{
+				{ObligationID: unitN(1), SourceClinicID: 1, TargetClinicID: 2, Kind: "RBC", Group: "O+", VolumeML: 300, UnitIDs: []uuid.UUID{unitN(10)}, Status: ObligationConfirmed},
+				{ObligationID: unitN(2), SourceClinicID: 1, TargetClinicID: 3, Kind: "RBC", Group: "O+", VolumeML: 300, UnitIDs: []uuid.UUID{unitN(10)}, Status: ObligationConfirmed},
+			}
+		}},
+		{"норматив вида с группой без долей групп", func(in *Input) {
+			in.GroupShares = nil
+			in.Norms = []Norm{{ClinicID: 1, Kind: "RBC", NormML: 600}}
+		}},
+		{"фон без группы у вида с группой без долей групп", func(in *Input) {
+			in.GroupShares = nil
+			in.Background = []Background{{ClinicID: 1, Kind: "RBC", VolumeML: 600}}
+		}},
+		{"норматив бесконечный", func(in *Input) { in.Norms = []Norm{{ClinicID: 1, Kind: "RBC", NormML: math.Inf(1)}} }},
+		{"фон NaN", func(in *Input) {
+			in.Background = []Background{{ClinicID: 1, Kind: "RBC", Group: "O+", VolumeML: math.NaN()}}
+		}},
+		{"норматив за пределом", func(in *Input) { in.Norms = []Norm{{ClinicID: 1, Kind: "RBC", NormML: 2e9}} }},
+		{"единица больше предела объёма", func(in *Input) { in.Units = stock(1, 1, 1, "RBC", "O+", 6000, 5, UnitStatusInStock) }},
+		{"время доставки больше недели", func(in *Input) {
+			in.Delivery = []DeliveryEstimate{{SourceClinicID: 1, TargetClinicID: 2, Minutes: 7*24*60 + 1}}
+		}},
+		{"доля группы больше 1", func(in *Input) {
+			in.GroupShares = []GroupShare{{Group: "O+", Share: 1.5}, {Group: "A+", Share: -0.5}}
+		}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

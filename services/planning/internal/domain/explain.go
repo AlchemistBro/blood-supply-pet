@@ -38,6 +38,8 @@ type Explanation struct {
 	ObligationsML  int64
 	ProtectedML    int64
 	ProtectedUnits int64
+	// PublishedUnits — защищённый объём, который видит transfer (без обязательств, ADR-0019).
+	PublishedUnits int64
 	// RemainingAfterPlanML и RemainingAfterPlanUnits — остаток вида у источника после всех предложений плана.
 	RemainingAfterPlanML    int64
 	RemainingAfterPlanUnits int64
@@ -58,8 +60,10 @@ func (e Explanation) Text() string {
 	b.WriteString("). ")
 	fmt.Fprintf(&b, "Подтверждённый запас вида у источника %d мл (%d ед.), избыток группы %d мл; ",
 		c.AvailableML, c.AvailableUnits, c.GroupSurplusML)
-	fmt.Fprintf(&b, "защищённый объём %d мл (%d ед.): норматив %d + фон %d + подтверждённые обязательства %d; после плана остаётся %d мл (%d ед.). ",
-		e.ProtectedML, e.ProtectedUnits, e.NormML, e.BackgroundML, e.ObligationsML, e.RemainingAfterPlanML, e.RemainingAfterPlanUnits)
+	fmt.Fprintf(&b, "защищённый объём %d мл (%d ед.): норматив %d + фон %d + подтверждённые обязательства %d "+
+		"(для transfer — %d ед. без обязательств); после плана остаётся %d мл (%d ед.). ",
+		e.ProtectedML, e.ProtectedUnits, e.NormML, e.BackgroundML, e.ObligationsML, e.PublishedUnits,
+		e.RemainingAfterPlanML, e.RemainingAfterPlanUnits)
 	fmt.Fprintf(&b, "Прибытие %s, ближайший срок годности переданных единиц %s. ",
 		e.ArrivalAt.UTC().Format(timeLayout), e.EarliestExpiry.UTC().Format(timeLayout))
 	if ex := e.Excluded.text(); ex != "" {
@@ -84,14 +88,17 @@ func (x Exclusions) text() string {
 }
 
 // deficitDetail — пояснение к записи дефицита: сколько источников было и почему потребность не покрыта.
-func deficitDetail(candidates int, ex Exclusions, covered, need int64) string {
+func deficitDetail(candidates int, ex Exclusions, covered, need int64, reason string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Покрыто %d из %d мл; пригодных источников %d", covered, need, candidates)
 	if t := ex.text(); t != "" {
 		fmt.Fprintf(&b, "; отсеяно: %s", t)
 	}
-	if candidates > 0 {
-		b.WriteString("; запас пригодных источников исчерпан или остаток потребности меньше свободной единицы (единица не делится)")
+	switch {
+	case reason == DeficitReasonBelowUnitRemainder:
+		b.WriteString("; остаток потребности меньше любой свободной единицы источников (единица не делится)")
+	case candidates > 0:
+		b.WriteString("; запас пригодных источников исчерпан защищённым объёмом или собственным целевым запасом")
 	}
 	b.WriteString(".")
 	return b.String()

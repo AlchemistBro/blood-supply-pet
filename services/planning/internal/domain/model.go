@@ -111,7 +111,12 @@ type Obligation struct {
 	Kind           string
 	Group          string
 	VolumeML       int64
-	Status         string
+	// Units — число единиц обязательства; если UnitIDs заданы, должно с ними совпадать или быть 0.
+	Units int
+	// UnitIDs — закреплённые единицы (TransferConfirmed.units[]). Они остаются в запасе источника
+	// (учёт в мл и единицах), но к передаче не предлагаются: годность и объяснение не опираются на них.
+	UnitIDs []uuid.UUID
+	Status  string
 }
 
 // DeliveryEstimate — оценка времени доставки «источник → получатель» из проекции logistics.events (ADR-0014).
@@ -130,7 +135,23 @@ type InputVersions struct {
 	StockWatermark   int64
 	StockSyncedAt    time.Time
 	RefdataVersion   int
+	// ObligationsWatermark — позиция проекции обязательств (transfer.events), по которой взяты Obligations.
+	ObligationsWatermark int64
+	// DeliveryEstimatesVersion — версия проекции оценок доставки (logistics.events); время самой старой
+	// использованной оценки план считает сам (PlanInputs.OldestEstimateAt).
+	DeliveryEstimatesVersion int64
 }
+
+// Верхние границы входных величин: за ними — ошибка данных, а не ЧС; заодно исключают переполнение int64
+// при суммировании.
+const (
+	maxVolumeML      = 1e9 // 1 000 м³ — заведомо больше любой потребности города
+	maxUnitVolumeML  = 5_000
+	maxWeight        = 1e12 // вес района — население или доля
+	maxShare         = 1.0
+	maxDeliveryMins  = 7 * 24 * 60
+	maxObligationQty = 10_000
+)
 
 // Params — параметры расчёта. Все значения демонстрационные (ADR-0010), заказчик их не задавал.
 type Params struct {

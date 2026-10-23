@@ -15,9 +15,14 @@ import (
 // AlgorithmVersion — версия правил расчёта плана; входит в версии входов решения (FR035, NFR009).
 const AlgorithmVersion = "planning-greedy-1 (демо)"
 
-// DeficitReasonNoSource — причина дефицита плана из словаря deficit_record.deficit_reason (data-model.md):
-// для непокрытой части нет подходящего источника.
-const DeficitReasonNoSource = "NO_SOURCE"
+// Причины дефицита плана из словаря deficit_record.deficit_reason (data-model.md, ADR-0019).
+const (
+	// DeficitReasonNoSource — для непокрытой части нет подходящего источника.
+	DeficitReasonNoSource = "NO_SOURCE"
+	// DeficitReasonBelowUnitRemainder — источник есть, но остаток потребности меньше любой единицы,
+	// которую он может отдать: единица не делится, а предложение не превышает потребность.
+	DeficitReasonBelowUnitRemainder = "BELOW_UNIT_REMAINDER"
+)
 
 // TargetStock — целевой запас клиники O06 по виду и группе (FR021, FR023) и итог подбора для неё.
 type TargetStock struct {
@@ -38,19 +43,24 @@ type TargetStock struct {
 }
 
 // ProtectedVolume — защищённый объём источника по виду (FR025) и его остаток после плана (NFR013).
-// Публикуется событием ProtectedVolumeCalculated (контракт — пакет S5-WP0).
+//
+// Два порога (ADR-0019): PublishedUnits уходит в transfer событием ProtectedVolumeCalculated
+// и не содержит подтверждённых обязательств — transfer вычитает закреплённые единицы сам. VolumeML и
+// VolumeUnits — внутренний порог плана, с обязательствами: VolumeUnits = PublishedUnits + ObligationsUnits.
 type ProtectedVolume struct {
-	ClinicID       int64
-	Kind           string
-	NormML         int64
-	BackgroundML   int64
-	ObligationsML  int64
-	VolumeML       int64
-	VolumeUnits    int64
-	AvailableML    int64
-	AvailableUnits int64
-	RemainingML    int64
-	RemainingUnits int64
+	ClinicID         int64
+	Kind             string
+	NormML           int64
+	BackgroundML     int64
+	ObligationsML    int64
+	ObligationsUnits int64
+	PublishedUnits   int64
+	VolumeML         int64
+	VolumeUnits      int64
+	AvailableML      int64
+	AvailableUnits   int64
+	RemainingML      int64
+	RemainingUnits   int64
 }
 
 // Proposal — предложение передачи (TransferProposed → OpenObligation, FR028). Основной источник и
@@ -312,7 +322,7 @@ func (st *state) fill(planID uuid.UUID, target *cell, need int64) ([]Proposal, *
 				Chosen:    st.factors(cd),
 				ArrivalAt: st.now.Add(time.Duration(cd.estimate.Minutes) * time.Minute), EarliestExpiry: earliest,
 				NormML: cd.src.normML, BackgroundML: cd.src.backgroundML, ObligationsML: cd.src.obligationsML,
-				ProtectedML: cd.src.protectedML(), ProtectedUnits: cd.src.protectedUnits(),
+				ProtectedML: cd.src.protectedML(), ProtectedUnits: cd.src.protectedUnits(), PublishedUnits: cd.src.publishedUnits(),
 			},
 		})
 	}
@@ -342,11 +352,32 @@ func (st *state) fill(planID uuid.UUID, target *cell, need int64) ([]Proposal, *
 		return proposals, nil
 	}
 	k := target.key
+	reason := DeficitReasonNoSource
+	if st.onlyIndivisible(cands) {
+		reason = DeficitReasonBelowUnitRemainder
+	}
 	return proposals, &Deficit{
 		DeficitID: uuid.NewSHA1(planID, fmt.Appendf(nil, "deficit:%d:%s:%s", k.clinic, k.kind, k.group)),
 		ClinicID:  k.clinic, Kind: k.kind, Group: k.group, UncoveredML: need - covered,
-		Reason: DeficitReasonNoSource, Detail: deficitDetail(len(cands), ex, covered, need),
+		Reason: reason, Detail: deficitDetail(len(cands), ex, covered, need, reason),
 	}
+}
+
+// onlyIndivisible — после подбора у кандидатов ещё есть единица, которую можно отдать без нарушения
+// защищённого объёма и собственного целевого запаса: значит, потребность не покрыта только потому, что
+// остаток меньше единицы (подбор берёт любую подходящую единицу, которая помещается в остаток).
+func (st *state) onlyIndivisible(cands []candidate) bool {
+	for _, cd := range cands {
+		for i, u := range cd.donor.units {
+			if cd.donor.taken[i] || u.ExpiresAt.Before(cd.threshold) {
+				continue
+			}
+			if cd.src.canGive(u.VolumeML) && cd.donor.surplusML()-u.VolumeML >= 0 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (st *state) factors(cd candidate) SourceFactors {
@@ -389,6 +420,7 @@ func (st *state) protectedVolumes() []ProtectedVolume {
 		s := st.sources[k]
 		out = append(out, ProtectedVolume{
 			ClinicID: k.clinic, Kind: k.kind, NormML: s.normML, BackgroundML: s.backgroundML, ObligationsML: s.obligationsML,
+			ObligationsUnits: s.obligationsUnits, PublishedUnits: s.publishedUnits(),
 			VolumeML: s.protectedML(), VolumeUnits: s.protectedUnits(),
 			AvailableML: s.availableML, AvailableUnits: s.availableUnits,
 			RemainingML: s.availableML - s.donatedML, RemainingUnits: s.availableUnits - s.donatedUnits,

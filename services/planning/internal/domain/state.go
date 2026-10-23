@@ -3,7 +3,6 @@ package domain
 import (
 	"cmp"
 	"fmt"
-	"math"
 	"slices"
 	"time"
 
@@ -67,26 +66,34 @@ func (c *cell) surplusML() int64 { return c.stockML() - c.donatedML - c.targetML
 
 // source — остаток источника по виду и его защищённый объём (FR025).
 type source struct {
-	key            kindKey
-	typicalML      int64
-	normML         int64
-	backgroundML   int64
-	obligationsML  int64
-	availableML    int64
-	availableUnits int64
-	donatedML      int64
-	donatedUnits   int64
+	key              kindKey
+	typicalML        int64
+	normML           int64
+	backgroundML     int64
+	obligationsML    int64
+	obligationsUnits int64
+	availableML      int64
+	availableUnits   int64
+	donatedML        int64
+	donatedUnits     int64
 }
 
 // protectedML — защищённый объём источника (FR025, NFR013): норматив + фоновая потребность источника
-// за период + подтверждённые обязательства.
+// за период + подтверждённые обязательства. Внутренний порог плана в мл.
 func (s *source) protectedML() int64 { return s.normML + s.backgroundML + s.obligationsML }
 
-// protectedUnits — защищённый объём в единицах, вверх по типовому объёму: transfer проверяет остаток
-// источника в единицах (source_stock), поэтому план держит оба порога.
-func (s *source) protectedUnits() int64 {
-	return (s.protectedML() + s.typicalML - 1) / s.typicalML
+// publishedUnits — защищённый объём для transfer (ADR-0019): ceil((норматив + фон) / типовой объём),
+// без подтверждённых обязательств — transfer сам вычитает закреплённые единицы (free = available − reserved),
+// иначе обязательства вычлись бы дважды.
+func (s *source) publishedUnits() int64 {
+	return (s.normML + s.backgroundML + s.typicalML - 1) / s.typicalML
 }
+
+// protectedUnits — внутренний порог плана в единицах: опубликованный защищённый объём плюс единицы
+// подтверждённых обязательств. Условие available − donated ≥ protectedUnits равносильно проверке transfer
+// (available − reserved) − k ≥ published (obligation-states.md, шаг 5), поэтому план не предлагает того,
+// что transfer отклонит как ProtectedVolumeExceeded.
+func (s *source) protectedUnits() int64 { return s.publishedUnits() + s.obligationsUnits }
 
 // canGive проверяет, что после передачи ещё одной единицы объёмом v остаток не ниже защищённого объёма
 // ни в мл, ни в единицах.
@@ -161,8 +168,6 @@ func validateParams(p Params) error {
 	return nil
 }
 
-func badVolume(v float64) bool { return v < 0 || math.IsNaN(v) || math.IsInf(v, 0) }
-
 // prepare проверяет вход и раскладывает его по ячейкам и остаткам источников. Все обходы — по
 // отсортированным ключам: результат не зависит от порядка элементов во входе.
 func prepare(in Input, now time.Time) (*state, error) {
@@ -219,12 +224,15 @@ func prepare(in Input, now time.Time) (*state, error) {
 			return nil, fmt.Errorf("%w: норматив клиники %d по виду %s повторяется", ErrInvalidInput, n.ClinicID, n.Kind)
 		}
 		seenNorm[kk] = true
-		if badVolume(n.NormML) {
+		if badFloat(n.NormML, maxVolumeML) {
 			return nil, fmt.Errorf("%w: норматив клиники %d: %v", ErrInvalidInput, n.ClinicID, n.NormML)
 		}
 		total := ceilML(n.NormML)
 		st.source(kk).normML += total
-		parts, _ := splitGroups(total, kind, "", groups)
+		parts, _, err := splitGroups(total, kind, "", groups)
+		if err != nil {
+			return nil, fmt.Errorf("норматив клиники %d: %w", n.ClinicID, err)
+		}
 		for _, p := range parts {
 			st.cell(cellKey{clinic: n.ClinicID, kind: n.Kind, group: p.group}).normML += p.volume
 		}
@@ -235,7 +243,7 @@ func prepare(in Input, now time.Time) (*state, error) {
 		if err != nil {
 			return nil, err
 		}
-		if badVolume(b.VolumeML) {
+		if badFloat(b.VolumeML, maxVolumeML) {
 			return nil, fmt.Errorf("%w: фоновая потребность клиники %d: %v", ErrInvalidInput, b.ClinicID, b.VolumeML)
 		}
 		group := st.groupKey(kind, b.Group)
@@ -244,44 +252,27 @@ func prepare(in Input, now time.Time) (*state, error) {
 		}
 		total := roundML(b.VolumeML)
 		st.source(kindKey{clinic: b.ClinicID, kind: b.Kind}).backgroundML += total
-		parts, _ := splitGroups(total, kind, group, groups)
+		parts, _, err := splitGroups(total, kind, group, groups)
+		if err != nil {
+			return nil, fmt.Errorf("фоновая потребность клиники %d: %w", b.ClinicID, err)
+		}
 		for _, p := range parts {
 			st.cell(cellKey{clinic: b.ClinicID, kind: b.Kind, group: p.group}).backgroundML += p.volume
 		}
 	}
 
-	if err := st.addUnits(in.Units); err != nil {
+	reserved, err := st.addObligations(in.Obligations)
+	if err != nil {
+		return nil, err
+	}
+	if err := st.addUnits(in.Units, reserved); err != nil {
 		return nil, err
 	}
 
-	seenObl := map[uuid.UUID]bool{}
-	for _, o := range in.Obligations {
-		kind, err := kindOf(o.Kind, "обязательство")
-		if err != nil {
-			return nil, err
-		}
-		if seenObl[o.ObligationID] {
-			return nil, fmt.Errorf("%w: обязательство %s повторяется", ErrInvalidInput, o.ObligationID)
-		}
-		seenObl[o.ObligationID] = true
-		if o.SourceClinicID == o.TargetClinicID || o.VolumeML < 0 {
-			return nil, fmt.Errorf("%w: обязательство %s: источник совпадает с получателем или объём отрицательный", ErrInvalidInput, o.ObligationID)
-		}
-		group := st.groupKey(kind, o.Group)
-		if err := checkGroup(kind, group, groups); err != nil {
-			return nil, fmt.Errorf("обязательство %s: %w", o.ObligationID, err)
-		}
-		if !heldOutgoing(o.Status) {
-			continue
-		}
-		st.cell(cellKey{clinic: o.SourceClinicID, kind: o.Kind, group: group}).outgoingML += o.VolumeML
-		st.source(kindKey{clinic: o.SourceClinicID, kind: o.Kind}).obligationsML += o.VolumeML
-		st.cell(cellKey{clinic: o.TargetClinicID, kind: o.Kind, group: group}).inboundML += o.VolumeML
-	}
-
 	for _, d := range in.Delivery {
-		if d.Minutes < 0 {
-			return nil, fmt.Errorf("%w: время доставки %d → %d отрицательное", ErrInvalidInput, d.SourceClinicID, d.TargetClinicID)
+		if d.Minutes < 0 || d.Minutes > maxDeliveryMins {
+			return nil, fmt.Errorf("%w: время доставки %d → %d = %d мин вне [0, %d]", ErrInvalidInput,
+				d.SourceClinicID, d.TargetClinicID, d.Minutes, maxDeliveryMins)
 		}
 		route := [2]int64{d.SourceClinicID, d.TargetClinicID}
 		if _, dup := st.routes[route]; dup {
@@ -310,9 +301,64 @@ func prepare(in Input, now time.Time) (*state, error) {
 	return st, nil
 }
 
+// addObligations учитывает подтверждённые обязательства: у источника — в защищённом объёме (мл и единицы)
+// и в собственном запасе группы, у получателя — как входящее пополнение. Возвращает единицы, закреплённые
+// за этими обязательствами: их нельзя предлагать повторно.
+func (st *state) addObligations(obligations []Obligation) (map[uuid.UUID]bool, error) {
+	reserved := map[uuid.UUID]bool{}
+	seen := map[uuid.UUID]bool{}
+	for _, o := range obligations {
+		kind, ok := st.kinds[o.Kind]
+		if !ok {
+			return nil, fmt.Errorf("%w: обязательство %s: неизвестный вид %q", ErrInvalidInput, o.ObligationID, o.Kind)
+		}
+		if seen[o.ObligationID] {
+			return nil, fmt.Errorf("%w: обязательство %s повторяется", ErrInvalidInput, o.ObligationID)
+		}
+		seen[o.ObligationID] = true
+		if o.SourceClinicID == o.TargetClinicID {
+			return nil, fmt.Errorf("%w: обязательство %s: источник совпадает с получателем", ErrInvalidInput, o.ObligationID)
+		}
+		if o.VolumeML < 0 || o.VolumeML > maxVolumeML || o.Units < 0 || o.Units > maxObligationQty {
+			return nil, fmt.Errorf("%w: обязательство %s: объём %d мл, единиц %d", ErrInvalidInput, o.ObligationID, o.VolumeML, o.Units)
+		}
+		units := int64(o.Units)
+		if len(o.UnitIDs) > 0 {
+			if o.Units != 0 && o.Units != len(o.UnitIDs) {
+				return nil, fmt.Errorf("%w: обязательство %s: единиц %d, а закреплено %d", ErrInvalidInput, o.ObligationID, o.Units, len(o.UnitIDs))
+			}
+			units = int64(len(o.UnitIDs))
+		}
+		group := st.groupKey(kind, o.Group)
+		// Как у единицы: у вида с группой обязательство без группы не отнести ни к одной ячейке запаса.
+		if kind.GroupApplicable && group == "" {
+			return nil, fmt.Errorf("%w: обязательство %s вида %s без группы", ErrInvalidInput, o.ObligationID, o.Kind)
+		}
+		if err := checkGroup(kind, group, st.groups); err != nil {
+			return nil, fmt.Errorf("обязательство %s: %w", o.ObligationID, err)
+		}
+		if !heldOutgoing(o.Status) {
+			continue
+		}
+		for _, id := range o.UnitIDs {
+			if reserved[id] {
+				return nil, fmt.Errorf("%w: единица %s закреплена за двумя обязательствами", ErrInvalidInput, id)
+			}
+			reserved[id] = true
+		}
+		st.cell(cellKey{clinic: o.SourceClinicID, kind: o.Kind, group: group}).outgoingML += o.VolumeML
+		s := st.source(kindKey{clinic: o.SourceClinicID, kind: o.Kind})
+		s.obligationsML += o.VolumeML
+		s.obligationsUnits += units
+		st.cell(cellKey{clinic: o.TargetClinicID, kind: o.Kind, group: group}).inboundML += o.VolumeML
+	}
+	return reserved, nil
+}
+
 // addUnits раскладывает доступные единицы по ячейкам. Недоступные (карантин, выданные, списанные,
 // просроченные к моменту расчёта) в запас не входят и к передаче не предлагаются (ПП РФ № 641, п. 62 а).
-func (st *state) addUnits(units []Unit) error {
+// Закреплённые за подтверждёнными обязательствами входят в запас источника, но к передаче не предлагаются.
+func (st *state) addUnits(units []Unit, reserved map[uuid.UUID]bool) error {
 	seen := make(map[uuid.UUID]bool, len(units))
 	for _, u := range units {
 		kind, ok := st.kinds[u.Kind]
@@ -323,8 +369,8 @@ func (st *state) addUnits(units []Unit) error {
 			return fmt.Errorf("%w: единица %s повторяется", ErrInvalidInput, u.UnitID)
 		}
 		seen[u.UnitID] = true
-		if u.VolumeML <= 0 {
-			return fmt.Errorf("%w: единица %s без объёма", ErrInvalidInput, u.UnitID)
+		if u.VolumeML <= 0 || u.VolumeML > maxUnitVolumeML {
+			return fmt.Errorf("%w: единица %s: объём %d мл вне (0, %d]", ErrInvalidInput, u.UnitID, u.VolumeML, maxUnitVolumeML)
 		}
 		group := st.groupKey(kind, u.Group)
 		if kind.GroupApplicable && group == "" {
@@ -337,7 +383,9 @@ func (st *state) addUnits(units []Unit) error {
 			continue
 		}
 		c := st.cell(cellKey{clinic: u.ClinicID, kind: u.Kind, group: group})
-		c.units = append(c.units, u)
+		if !reserved[u.UnitID] {
+			c.units = append(c.units, u)
+		}
 		c.availableML += u.VolumeML
 		s := st.source(kindKey{clinic: u.ClinicID, kind: u.Kind})
 		s.availableML += u.VolumeML

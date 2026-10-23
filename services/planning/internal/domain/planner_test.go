@@ -70,10 +70,12 @@ type wantProposal struct {
 	fallback       []int64
 }
 
+// wantDeficit — ожидаемая запись дефицита; пустая причина означает NO_SOURCE.
 type wantDeficit struct {
 	clinic    int64
 	group     string
 	uncovered int64
+	reason    string
 }
 
 func TestSourceSelection(t *testing.T) {
@@ -146,7 +148,7 @@ func TestSourceSelection(t *testing.T) {
 				in.Forecast = &Forecast{Lines: []ForecastLine{emergencyAt(1, 1, "RBC", "O+", 3000)}}
 				in.Norms = []Norm{{ClinicID: 2, Kind: "RBC", NormML: 2100}}
 				in.Units = stock(1, 10, 2, "RBC", "O+", 300, 20, UnitStatusInStock)
-				in.Obligations = []Obligation{{ObligationID: unitN(500), SourceClinicID: 2, TargetClinicID: 4, Kind: "RBC", Group: "O+", VolumeML: 600, Status: ObligationConfirmed}}
+				in.Obligations = []Obligation{{ObligationID: unitN(500), SourceClinicID: 2, TargetClinicID: 4, Kind: "RBC", Group: "O+", VolumeML: 600, Units: 2, Status: ObligationConfirmed}}
 				in.Delivery = []DeliveryEstimate{route(2, 1, 30)}
 				return in
 			},
@@ -201,7 +203,7 @@ func TestSourceSelection(t *testing.T) {
 				return in
 			},
 			proposals: []wantProposal{{source: 2, target: 1, group: "O+", units: 3, volume: 900, minutes: 30}},
-			deficits:  []wantDeficit{{clinic: 1, group: "O+", uncovered: 100}},
+			deficits:  []wantDeficit{{clinic: 1, group: "O+", uncovered: 100, reason: DeficitReasonBelowUnitRemainder}},
 			coverage:  0.9,
 		},
 		{
@@ -273,10 +275,11 @@ func TestSourceSelection(t *testing.T) {
 			}
 			gotDef := make([]wantDeficit, 0, len(plan.Deficits))
 			for _, d := range plan.Deficits {
-				if d.Reason != DeficitReasonNoSource {
-					t.Fatalf("причина дефицита плана %q, ожидали %q", d.Reason, DeficitReasonNoSource)
+				reason := d.Reason
+				if reason == DeficitReasonNoSource {
+					reason = ""
 				}
-				gotDef = append(gotDef, wantDeficit{clinic: d.ClinicID, group: d.Group, uncovered: d.UncoveredML})
+				gotDef = append(gotDef, wantDeficit{clinic: d.ClinicID, group: d.Group, uncovered: d.UncoveredML, reason: reason})
 			}
 			slices.SortFunc(gotDef, func(a, b wantDeficit) int {
 				return compareCellKey(cellKey{clinic: a.clinic, group: a.group}, cellKey{clinic: b.clinic, group: b.group})
@@ -315,6 +318,89 @@ func TestProtectedVolumeRemainsAfterPlan(t *testing.T) {
 	ts := targetOf(t, plan, 1, "RBC", "O+")
 	if ts.TargetML != 3000 || ts.NeedML != 3000 || ts.ProposedML != 900 || ts.UncoveredML != 2100 {
 		t.Fatalf("целевой запас получателя %+v", ts)
+	}
+}
+
+// TestPlanningThresholdMatchesTransfer — ADR-0019: внутренний порог плана (с обязательствами) и проверка
+// transfer по опубликованному объёму (без обязательств) дают одно и то же число единиц, которое можно отдать.
+// transfer: free = available − reserved; подтверждение k единиц проходит, если free − k ≥ published
+// (obligation-states.md, шаг 5), то есть maxConfirmable = free − published.
+func TestPlanningThresholdMatchesTransfer(t *testing.T) {
+	cases := []struct {
+		name               string
+		available          int
+		normPlusBgML       float64
+		reserved           int
+		wantPublished      int64
+		wantMaxConfirmable int
+	}{
+		{"обязательства и норматив не кратный единице", 10, 2000, 2, 7, 1},
+		{"пример ADR-0027: 60 единиц, защищённый объём 20", 60, 6000, 0, 20, 40},
+		{"обязательства съедают весь избыток", 10, 2100, 3, 7, 0},
+		{"без норматива, только обязательства", 12, 0, 5, 0, 7},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			in := baseInput()
+			in.GroupShares = []GroupShare{{Group: "O+", Share: 1}}
+			in.Forecast = &Forecast{Lines: []ForecastLine{emergencyAt(1, 1, "RBC", "O+", 30000)}}
+			if tc.normPlusBgML > 0 {
+				in.Norms = []Norm{{ClinicID: 2, Kind: "RBC", NormML: tc.normPlusBgML}}
+			}
+			in.Units = stock(1, tc.available, 2, "RBC", "O+", 300, 20, UnitStatusInStock)
+			if tc.reserved > 0 {
+				ids := make([]uuid.UUID, 0, tc.reserved)
+				for i := 0; i < tc.reserved; i++ {
+					ids = append(ids, unitN(1+i))
+				}
+				in.Obligations = []Obligation{{ObligationID: unitN(900), SourceClinicID: 2, TargetClinicID: 7, Kind: "RBC", Group: "O+",
+					VolumeML: int64(300 * tc.reserved), UnitIDs: ids, Status: ObligationConfirmed}}
+			}
+			in.Delivery = []DeliveryEstimate{route(2, 1, 30)}
+			plan := build(t, in)
+			pv := protectedOf(t, plan, 2, "RBC")
+			if pv.PublishedUnits != tc.wantPublished || pv.VolumeUnits != tc.wantPublished+int64(tc.reserved) {
+				t.Fatalf("опубликовано %d ед., внутренний порог %d ед.; ожидали %d и %d",
+					pv.PublishedUnits, pv.VolumeUnits, tc.wantPublished, tc.wantPublished+int64(tc.reserved))
+			}
+			transferMax := (tc.available - tc.reserved) - int(pv.PublishedUnits)
+			if transferMax != tc.wantMaxConfirmable {
+				t.Fatalf("пример посчитан неверно: transfer допускает %d", transferMax)
+			}
+			proposed := 0
+			for _, p := range plan.Proposals {
+				if p.SourceClinicID == 2 {
+					proposed += p.Units
+				}
+			}
+			if proposed != tc.wantMaxConfirmable {
+				t.Fatalf("план предлагает %d ед., transfer подтвердит не больше %d", proposed, tc.wantMaxConfirmable)
+			}
+		})
+	}
+}
+
+func TestReservedUnitsAreNotProposed(t *testing.T) {
+	in := baseInput()
+	in.Forecast = &Forecast{Lines: []ForecastLine{emergencyAt(1, 1, "RBC", "O+", 600)}}
+	in.Units = append(stock(1, 2, 2, "RBC", "O+", 300, 3, UnitStatusInStock), stock(10, 2, 2, "RBC", "O+", 300, 20, UnitStatusInStock)...)
+	in.Obligations = []Obligation{{ObligationID: unitN(900), SourceClinicID: 2, TargetClinicID: 7, Kind: "RBC", Group: "O+",
+		VolumeML: 600, UnitIDs: []uuid.UUID{unitN(1), unitN(2)}, Status: ObligationConfirmed}}
+	in.Delivery = []DeliveryEstimate{route(2, 1, 30)}
+	plan := build(t, in)
+	if len(plan.Proposals) != 1 {
+		t.Fatalf("предложений %d, ожидали одно", len(plan.Proposals))
+	}
+	p := plan.Proposals[0]
+	if !reflect.DeepEqual(p.UnitIDs, []uuid.UUID{unitN(10), unitN(11)}) {
+		t.Fatalf("предложены %v, а закреплённые unitN(1), unitN(2) должны быть исключены", p.UnitIDs)
+	}
+	if p.Explanation.EarliestExpiry.Before(t0.Add(20 * 24 * time.Hour)) {
+		t.Fatalf("объяснение опирается на закреплённую единицу: срок %s", p.Explanation.EarliestExpiry)
+	}
+	pv := protectedOf(t, plan, 2, "RBC")
+	if pv.AvailableML != 1200 || pv.AvailableUnits != 4 || pv.ObligationsUnits != 2 || pv.RemainingUnits != 2 {
+		t.Fatalf("учёт закреплённых в запасе источника: %+v", pv)
 	}
 }
 

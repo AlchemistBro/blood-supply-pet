@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"math"
 	"reflect"
 	"testing"
 
@@ -156,6 +157,60 @@ func TestDistributeForecastRejectsBadInput(t *testing.T) {
 				t.Fatalf("ожидали ErrInvalidInput, получили %v", err)
 			}
 		})
+	}
+}
+
+// Сценарная потребность не теряется молча: всё, что нельзя разложить, — ошибка входа.
+func TestDistributeForecastNeverDropsDemandSilently(t *testing.T) {
+	groups := []GroupShare{{Group: "O+", Share: 1}}
+	shares := []ClinicShare{{DistrictID: 1, ClinicID: 10, Share: 1}, {DistrictID: 2, ClinicID: 20, Share: 0}}
+	rough := func(v float64) []ForecastLine {
+		return []ForecastLine{{LineID: lineA, Kind: "RBC", Group: "O+", VolumeML: v}}
+	}
+	cases := []struct {
+		name     string
+		forecast Forecast
+		groups   []GroupShare
+		shares   []ClinicShare
+	}{
+		{"район территории без положительных долей", Forecast{
+			Territory: []DistrictWeight{{DistrictID: 1, Weight: 1}, {DistrictID: 2, Weight: 1}}, Lines: rough(100),
+		}, groups, shares},
+		{"район территории без долей вовсе", Forecast{
+			Territory: []DistrictWeight{{DistrictID: 3, Weight: 1}}, Lines: rough(100),
+		}, groups, shares},
+		{"вид с группой без групп и без долей групп", Forecast{
+			Lines: []ForecastLine{{LineID: lineA, ClinicID: 10, Kind: "RBC", VolumeML: 100}},
+		}, nil, shares},
+		{"вес района NaN", Forecast{
+			Territory: []DistrictWeight{{DistrictID: 1, Weight: math.NaN()}}, Lines: rough(100),
+		}, groups, shares},
+		{"вес района бесконечный", Forecast{
+			Territory: []DistrictWeight{{DistrictID: 1, Weight: math.Inf(1)}}, Lines: rough(100),
+		}, groups, shares},
+		{"доля клиники больше 1", Forecast{
+			Territory: []DistrictWeight{{DistrictID: 1, Weight: 1}}, Lines: rough(100),
+		}, groups, []ClinicShare{{DistrictID: 1, ClinicID: 10, Share: 1.5}}},
+		{"объём строки бесконечный", Forecast{
+			Lines: []ForecastLine{{LineID: lineA, ClinicID: 10, Kind: "RBC", Group: "O+", VolumeML: math.Inf(1)}},
+		}, groups, shares},
+		{"объём строки за пределом", Forecast{
+			Lines: []ForecastLine{{LineID: lineA, ClinicID: 10, Kind: "RBC", Group: "O+", VolumeML: 2e9}},
+		}, groups, shares},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := distributeForecast(&tc.forecast, tc.shares, distributionKinds(), tc.groups)
+			if !errors.Is(err, ErrInvalidInput) {
+				t.Fatalf("ожидали ErrInvalidInput, получили %v", err)
+			}
+		})
+	}
+	// Район с нулевым весом не требует долей.
+	ok := Forecast{Territory: []DistrictWeight{{DistrictID: 1, Weight: 1}, {DistrictID: 2, Weight: 0}}, Lines: rough(100)}
+	got, err := distributeForecast(&ok, shares, distributionKinds(), groups)
+	if err != nil || len(got) != 1 || got[0].ClinicID != 10 || got[0].VolumeML != 100 {
+		t.Fatalf("район с нулевым весом: %+v, %v", got, err)
 	}
 }
 

@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"errors"
 	"math"
 	"reflect"
 	"testing"
@@ -39,7 +40,9 @@ func genInput(t *rapid.T) Input {
 			in.Norms = append(in.Norms, Norm{ClinicID: c, Kind: "CRYO", NormML: rapid.Float64Range(0, 200).Draw(t, "norm CRYO ml")})
 		}
 		district := c%2 + 1
-		in.ClinicShares = append(in.ClinicShares, ClinicShare{DistrictID: district, ClinicID: c, Share: rapid.Float64Range(0, 1).Draw(t, "clinic share")})
+		// Доли положительные: нулевые доли района — отдельный случай с ожиданием ошибки
+		// (TestPropertyZeroDistrictSharesAreRejected).
+		in.ClinicShares = append(in.ClinicShares, ClinicShare{DistrictID: district, ClinicID: c, Share: rapid.Float64Range(0.01, 1).Draw(t, "clinic share")})
 	}
 	for i, nb := 0, rapid.IntRange(0, 6).Draw(t, "background"); i < nb; i++ {
 		in.Background = append(in.Background, Background{
@@ -76,18 +79,39 @@ func genInput(t *rapid.T) Input {
 			Status:    rapid.SampledFrom([]string{UnitStatusInStock, UnitStatusInStock, UnitStatusInStock, UnitStatusQuarantine, "ISSUED"}).Draw(t, "status"),
 		})
 	}
+	reserved := map[uuid.UUID]bool{}
 	for i, no := 0, rapid.IntRange(0, 6).Draw(t, "obligations"); i < no; i++ {
 		src := clinic.Draw(t, "obl source")
 		tgt := clinic.Draw(t, "obl target")
 		if tgt == src {
 			tgt = src%int64(n) + 1
 		}
-		in.Obligations = append(in.Obligations, Obligation{
+		o := Obligation{
 			ObligationID: unitN(5000 + i), SourceClinicID: src, TargetClinicID: tgt,
-			Kind: kind.Draw(t, "obl kind"), Group: group.Draw(t, "obl group"), VolumeML: rapid.Int64Range(0, 1500).Draw(t, "obl ml"),
+			Kind: kind.Draw(t, "obl kind"), Group: group.Draw(t, "obl group"),
 			Status: rapid.SampledFrom([]string{ObligationConfirmed, ObligationConfirmed, ObligationTransportRequested,
 				ObligationDispatched, ObligationPending, "CANCELLED"}).Draw(t, "obl status"),
-		})
+		}
+		if rapid.Bool().Draw(t, "obl with units") {
+			// Закреплённые единицы источника (TransferConfirmed.units[]): их план предлагать не должен.
+			want := rapid.IntRange(1, 3).Draw(t, "obl units")
+			for _, u := range in.Units {
+				if len(o.UnitIDs) == want {
+					break
+				}
+				if u.ClinicID == src && u.Kind == o.Kind && (u.Kind == "CRYO" || u.Group == o.Group) &&
+					u.Status == UnitStatusInStock && !reserved[u.UnitID] {
+					reserved[u.UnitID] = true
+					o.UnitIDs = append(o.UnitIDs, u.UnitID)
+					o.VolumeML += u.VolumeML
+				}
+			}
+		}
+		if len(o.UnitIDs) == 0 {
+			o.Units = rapid.IntRange(0, 5).Draw(t, "obl qty")
+			o.VolumeML = rapid.Int64Range(0, 1500).Draw(t, "obl ml")
+		}
+		in.Obligations = append(in.Obligations, o)
 	}
 	for s := int64(1); s <= int64(n); s++ {
 		for d := int64(1); d <= int64(n); d++ {
@@ -113,10 +137,33 @@ func buildProp(t *rapid.T, in Input) *Plan {
 
 // refSource — эталон остатка источника по канону: доступные единицы (IN_STOCK, годные на момент
 // расчёта) и защищённый объём = норматив + фон за период + подтверждённые обязательства (FR025).
+// publishedUnits — то, что получает transfer (ADR-0019): ceil((норматив + фон) / типовой объём);
+// reservedUnits — единицы подтверждённых обязательств (reserved в source_stock transfer).
 type refSource struct {
 	availML, availUnits int64
 	protectedML         int64
 	protectedUnits      int64
+	normBgML            int64
+	publishedUnits      int64
+	reservedUnits       int64
+}
+
+// heldStatus — «подтверждённые обязательства» эталона.
+func heldStatus(s string) bool {
+	return s == "CONFIRMED" || s == "TRANSPORT_REQUESTED" || s == "DISPATCHED"
+}
+
+// reservedIDs — единицы, закреплённые за подтверждёнными обязательствами.
+func reservedIDs(in Input) map[uuid.UUID]bool {
+	out := map[uuid.UUID]bool{}
+	for _, o := range in.Obligations {
+		if heldStatus(o.Status) {
+			for _, id := range o.UnitIDs {
+				out[id] = true
+			}
+		}
+	}
+	return out
 }
 
 func referenceSources(in Input) map[kindKey]*refSource {
@@ -140,19 +187,26 @@ func referenceSources(in Input) map[kindKey]*refSource {
 		}
 	}
 	for _, n := range in.Norms {
-		get(n.ClinicID, n.Kind).protectedML += int64(math.Ceil(n.NormML))
+		get(n.ClinicID, n.Kind).normBgML += int64(math.Ceil(n.NormML))
 	}
 	for _, b := range in.Background {
-		get(b.ClinicID, b.Kind).protectedML += int64(math.Round(b.VolumeML))
+		get(b.ClinicID, b.Kind).normBgML += int64(math.Round(b.VolumeML))
 	}
 	for _, o := range in.Obligations {
-		switch o.Status {
-		case "CONFIRMED", "TRANSPORT_REQUESTED", "DISPATCHED":
-			get(o.SourceClinicID, o.Kind).protectedML += o.VolumeML
+		if heldStatus(o.Status) {
+			r := get(o.SourceClinicID, o.Kind)
+			r.protectedML += o.VolumeML
+			if len(o.UnitIDs) > 0 {
+				r.reservedUnits += int64(len(o.UnitIDs))
+			} else {
+				r.reservedUnits += int64(o.Units)
+			}
 		}
 	}
 	for k, r := range out {
-		r.protectedUnits = int64(math.Ceil(float64(r.protectedML) / float64(typical[k.kind])))
+		r.protectedML += r.normBgML
+		r.publishedUnits = int64(math.Ceil(float64(r.normBgML) / float64(typical[k.kind])))
+		r.protectedUnits = r.publishedUnits + r.reservedUnits
 	}
 	return out
 }
@@ -180,6 +234,16 @@ func TestPropertyProposalNeverBreachesProtectedVolume(t *testing.T) {
 			if r.availUnits-donatedUnits[k] < r.protectedUnits {
 				t.Fatalf("источник %d/%s: после плана %d ед. ниже защищённого объёма %d ед.", k.clinic, k.kind, r.availUnits-donatedUnits[k], r.protectedUnits)
 			}
+			// Проверка transfer по опубликованному объёму (ADR-0019): free − k ≥ published.
+			if free := r.availUnits - r.reservedUnits; free-donatedUnits[k] < r.publishedUnits {
+				t.Fatalf("источник %d/%s: transfer отклонит %d ед. (свободно %d, опубликовано %d)", k.clinic, k.kind, donatedUnits[k], free, r.publishedUnits)
+			}
+		}
+		for _, pv := range plan.Protected {
+			r := ref[kindKey{clinic: pv.ClinicID, kind: pv.Kind}]
+			if r == nil || pv.PublishedUnits != r.publishedUnits || pv.VolumeUnits != r.protectedUnits || pv.VolumeML != r.protectedML {
+				t.Fatalf("защищённый объём %d/%s: %+v, эталон %+v", pv.ClinicID, pv.Kind, pv, r)
+			}
 		}
 	})
 }
@@ -193,6 +257,7 @@ func TestPropertyOnlyAvailableUnitsAreProposed(t *testing.T) {
 			units[u.UnitID] = u
 		}
 		groupKind := map[string]bool{"RBC": true}
+		held := reservedIDs(in)
 		used := map[uuid.UUID]bool{}
 		for _, p := range plan.Proposals {
 			if p.SourceClinicID == p.TargetClinicID {
@@ -210,6 +275,9 @@ func TestPropertyOnlyAvailableUnitsAreProposed(t *testing.T) {
 				}
 				if used[id] {
 					t.Fatalf("единица %s предложена дважды", id)
+				}
+				if held[id] {
+					t.Fatalf("предложена единица %s, закреплённая за подтверждённым обязательством", id)
 				}
 				used[id] = true
 				if u.ClinicID != p.SourceClinicID || u.Kind != p.Kind || (groupKind[u.Kind] && u.Group != p.Group) {
@@ -330,20 +398,18 @@ func assertNoUsableUnitLeft(t *rapid.T, in Input, plan *Plan, deficits map[cellK
 	for _, d := range in.Delivery {
 		routes[[2]int64{d.SourceClinicID, d.TargetClinicID}] = d.Minutes
 	}
+	held := reservedIDs(in)
 	for k, d := range deficits {
 		for _, u := range in.Units {
 			group := u.Group
 			if u.Kind == "CRYO" {
 				group = ""
 			}
-			if used[u.UnitID] || u.Status != "IN_STOCK" || u.ClinicID == k.clinic || u.Kind != k.kind || group != k.group {
+			if used[u.UnitID] || held[u.UnitID] || u.Status != "IN_STOCK" || u.ClinicID == k.clinic || u.Kind != k.kind || group != k.group {
 				continue
 			}
 			minutes, ok := routes[[2]int64{u.ClinicID, k.clinic}]
 			if !ok || u.ExpiresAt.Before(t0.Add(time.Duration(minutes)*time.Minute+plan.Params.MinShelfLifeAtArrival)) {
-				continue
-			}
-			if u.VolumeML > d.UncoveredML {
 				continue
 			}
 			sk := kindKey{clinic: u.ClinicID, kind: u.Kind}
@@ -355,7 +421,13 @@ func assertNoUsableUnitLeft(t *rapid.T, in Input, plan *Plan, deficits map[cellK
 			if own.StockML-donatedGroup[cellKey{clinic: u.ClinicID, kind: u.Kind, group: group}]-u.VolumeML < own.TargetML {
 				continue
 			}
-			t.Fatalf("дефицит %+v (%d мл), хотя единица %s клиники %d (%d мл) пригодна", k, d.UncoveredML, u.UnitID, u.ClinicID, u.VolumeML)
+			if u.VolumeML <= d.UncoveredML {
+				t.Fatalf("дефицит %+v (%d мл), хотя единица %s клиники %d (%d мл) пригодна", k, d.UncoveredML, u.UnitID, u.ClinicID, u.VolumeML)
+			}
+			// Отдать можно, но единица больше остатка: причина — неделимость единицы, а не отсутствие источника.
+			if d.Reason != DeficitReasonBelowUnitRemainder {
+				t.Fatalf("дефицит %+v: причина %s, хотя единица %s (%d мл) больше остатка %d мл", k, d.Reason, u.UnitID, u.VolumeML, d.UncoveredML)
+			}
 		}
 	}
 }
@@ -400,6 +472,48 @@ func TestPropertyEmergencyNotAboveForecast(t *testing.T) {
 			if float64(perLine[l.LineID]) > l.VolumeML {
 				t.Fatalf("строка %s: распределено %d мл, в прогнозе %.2f (FR024)", l.LineID, perLine[l.LineID], l.VolumeML)
 			}
+			// Доли положительные: ничего не теряется, распределено ровно floor(объёма строки).
+			if want := int64(math.Floor(l.VolumeML)); perLine[l.LineID] != want {
+				t.Fatalf("строка %s: распределено %d мл, ожидали %d (потеря сценарной потребности)", l.LineID, perLine[l.LineID], want)
+			}
+		}
+	})
+}
+
+// Район территории с положительным весом без положительных долей «район → клиника» — ошибка входа,
+// а не молчаливая потеря части прогноза.
+func TestPropertyZeroDistrictSharesAreRejected(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		in := genInput(t)
+		zero := rapid.Int64Range(1, 2).Draw(t, "zero district")
+		for i := range in.ClinicShares {
+			if in.ClinicShares[i].DistrictID == zero {
+				in.ClinicShares[i].Share = 0
+			}
+		}
+		in.Forecast = &Forecast{
+			ForecastID: uuid.NewSHA1(uuid.NameSpaceURL, []byte("forecast")), ScenarioVersion: "prop-zero",
+			Territory: []DistrictWeight{{DistrictID: zero, Weight: rapid.Float64Range(0.1, 3).Draw(t, "w")}},
+			Lines: []ForecastLine{{LineID: unitN(9100), Kind: "RBC", Group: "O+",
+				VolumeML: rapid.Float64Range(1, 6000).Draw(t, "ml")}},
+		}
+		if _, err := NewPlanner(clock.NewMutable(t0)).Build(in); !errors.Is(err, ErrInvalidInput) {
+			t.Fatalf("нулевые доли района %d приняты: %v", zero, err)
+		}
+	})
+}
+
+// Обязательство вида с группой без группы отклоняется, как и единица без группы.
+func TestPropertyObligationWithoutGroupIsRejected(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		in := genInput(t)
+		in.Obligations = append(in.Obligations, Obligation{
+			ObligationID: unitN(5999), SourceClinicID: 1, TargetClinicID: 2, Kind: "RBC",
+			VolumeML: rapid.Int64Range(0, 1500).Draw(t, "ml"), Units: rapid.IntRange(0, 5).Draw(t, "qty"),
+			Status: rapid.SampledFrom([]string{ObligationConfirmed, ObligationPending, "CANCELLED"}).Draw(t, "status"),
+		})
+		if _, err := NewPlanner(clock.NewMutable(t0)).Build(in); !errors.Is(err, ErrInvalidInput) {
+			t.Fatalf("обязательство без группы принято: %v", err)
 		}
 	})
 }
