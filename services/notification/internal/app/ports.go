@@ -31,8 +31,6 @@ type Store interface {
 	MarkSent(ctx context.Context, tx pgx.Tx, id uuid.UUID, at time.Time) (bool, error)
 	MarkRetry(ctx context.Context, tx pgx.Tx, id uuid.UUID, next time.Time, lastErr string) (bool, error)
 	MarkFailed(ctx context.Context, tx pgx.Tx, id uuid.UUID, lastErr string) (bool, error)
-	// Get возвращает запись по идентификатору.
-	Get(ctx context.Context, id uuid.UUID) (domain.Notification, error)
 	// List — записи по фильтру, новые сначала.
 	List(ctx context.Context, f ListFilter) ([]domain.Notification, error)
 }
@@ -65,6 +63,3 @@ type Mailer interface {
 // ErrRejected — сервер отклонил письмо окончательно (код 5xx): повтор бессмыслен. Остальные ошибки отправки
 // (нет соединения, таймаут, код 4xx) — временные.
 var ErrRejected = errors.New("почтовый сервер отклонил письмо")
-
-// ErrNotFound — записи нет.
-var ErrNotFound = errors.New("запись не найдена")

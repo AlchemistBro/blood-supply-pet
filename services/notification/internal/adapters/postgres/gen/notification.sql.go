@@ -81,44 +81,6 @@ func (q *Queries) ClaimDue(ctx context.Context, arg ClaimDueParams) ([]Notificat
 	return items, nil
 }
 
-const getNotification = `-- name: GetNotification :one
-SELECT notification_id, kind, obligation_id, request_id, source_message_id, recipient_role, recipient_clinic_id,
-       recipient_email, subject, source_clinic_id, target_clinic_id, component_kind_code, quantity, urgency_code,
-       deadline, reason, status, attempts, next_attempt_at, last_error, created_at, sent_at
-FROM notification
-WHERE notification_id = $1
-`
-
-func (q *Queries) GetNotification(ctx context.Context, notificationID uuid.UUID) (Notification, error) {
-	row := q.db.QueryRow(ctx, getNotification, notificationID)
-	var i Notification
-	err := row.Scan(
-		&i.NotificationID,
-		&i.Kind,
-		&i.ObligationID,
-		&i.RequestID,
-		&i.SourceMessageID,
-		&i.RecipientRole,
-		&i.RecipientClinicID,
-		&i.RecipientEmail,
-		&i.Subject,
-		&i.SourceClinicID,
-		&i.TargetClinicID,
-		&i.ComponentKindCode,
-		&i.Quantity,
-		&i.UrgencyCode,
-		&i.Deadline,
-		&i.Reason,
-		&i.Status,
-		&i.Attempts,
-		&i.NextAttemptAt,
-		&i.LastError,
-		&i.CreatedAt,
-		&i.SentAt,
-	)
-	return i, err
-}
-
 const getObligation = `-- name: GetObligation :one
 SELECT obligation_id, request_id, origin, source_clinic_id, target_clinic_id, component_kind_code,
        requested_qty, urgency_code, deadline, opened_at

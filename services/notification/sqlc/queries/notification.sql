@@ -55,13 +55,6 @@ UPDATE notification
 SET status = 'FAILED', last_error = sqlc.arg('last_error')
 WHERE notification_id = sqlc.arg('notification_id') AND status = 'PENDING';
 
--- name: GetNotification :one
-SELECT notification_id, kind, obligation_id, request_id, source_message_id, recipient_role, recipient_clinic_id,
-       recipient_email, subject, source_clinic_id, target_clinic_id, component_kind_code, quantity, urgency_code,
-       deadline, reason, status, attempts, next_attempt_at, last_error, created_at, sent_at
-FROM notification
-WHERE notification_id = $1;
-
 -- name: ListNotifications :many
 SELECT notification_id, kind, obligation_id, request_id, source_message_id, recipient_role, recipient_clinic_id,
        recipient_email, subject, source_clinic_id, target_clinic_id, component_kind_code, quantity, urgency_code,
