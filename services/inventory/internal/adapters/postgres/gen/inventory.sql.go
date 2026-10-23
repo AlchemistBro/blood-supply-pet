@@ -31,33 +31,89 @@ func (q *Queries) AdvanceSyncRun(ctx context.Context, arg AdvanceSyncRunParams) 
 	return err
 }
 
-const finishSyncRun = `-- name: FinishSyncRun :exec
+const correctUnitFromSnapshot = `-- name: CorrectUnitFromSnapshot :execrows
+UPDATE unit
+SET clinic_id           = $1,
+    storage_location    = $2,
+    component_kind_code = $3,
+    volume_ml           = $4,
+    blood_group_code    = $5,
+    phenotype           = $6,
+    expires_at          = $7,
+    unit_status_code    = $8,
+    status_received_at  = $9,
+    source_version      = $10
+WHERE unit_id = $11 AND source_version <= $10
+`
+
+type CorrectUnitFromSnapshotParams struct {
+	ClinicID          int64
+	StorageLocation   string
+	ComponentKindCode string
+	VolumeMl          int64
+	BloodGroupCode    string
+	Phenotype         *string
+	ExpiresAt         time.Time
+	UnitStatusCode    string
+	StatusReceivedAt  time.Time
+	SourceVersion     int64
+	UnitID            uuid.UUID
+}
+
+// Снимок — полный срез АИСТ-М: при той же версии он исправляет копию; старшая версия копии остаётся.
+func (q *Queries) CorrectUnitFromSnapshot(ctx context.Context, arg CorrectUnitFromSnapshotParams) (int64, error) {
+	result, err := q.db.Exec(ctx, correctUnitFromSnapshot,
+		arg.ClinicID,
+		arg.StorageLocation,
+		arg.ComponentKindCode,
+		arg.VolumeMl,
+		arg.BloodGroupCode,
+		arg.Phenotype,
+		arg.ExpiresAt,
+		arg.UnitStatusCode,
+		arg.StatusReceivedAt,
+		arg.SourceVersion,
+		arg.UnitID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const finishSyncRun = `-- name: FinishSyncRun :execrows
 UPDATE sync_run
-SET finished_at = $1,
-    sync_result = $2,
-    error_text  = $3
-WHERE sync_run_id = $4 AND finished_at IS NULL
+SET finished_at         = $1,
+    sync_result         = $2,
+    error_text          = $3,
+    discrepancies_count = $4::integer
+WHERE sync_run_id = $5 AND finished_at IS NULL
 `
 
 type FinishSyncRunParams struct {
-	FinishedAt *time.Time
-	SyncResult *string
-	ErrorText  *string
-	SyncRunID  uuid.UUID
+	FinishedAt         *time.Time
+	SyncResult         *string
+	ErrorText          *string
+	DiscrepanciesCount int32
+	SyncRunID          uuid.UUID
 }
 
-func (q *Queries) FinishSyncRun(ctx context.Context, arg FinishSyncRunParams) error {
-	_, err := q.db.Exec(ctx, finishSyncRun,
+func (q *Queries) FinishSyncRun(ctx context.Context, arg FinishSyncRunParams) (int64, error) {
+	result, err := q.db.Exec(ctx, finishSyncRun,
 		arg.FinishedAt,
 		arg.SyncResult,
 		arg.ErrorText,
+		arg.DiscrepanciesCount,
 		arg.SyncRunID,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getSyncRun = `-- name: GetSyncRun :one
-SELECT sync_run_id, sync_kind, requested_by, started_at, finished_at, sync_result, changes_count, error_text, source_version FROM sync_run WHERE sync_run_id = $1
+SELECT sync_run_id, sync_kind, requested_by, started_at, finished_at, sync_result, changes_count, error_text, source_version, clinic_id, discrepancies_count, sync_seq FROM sync_run WHERE sync_run_id = $1
 `
 
 func (q *Queries) GetSyncRun(ctx context.Context, syncRunID uuid.UUID) (SyncRun, error) {
@@ -73,6 +129,9 @@ func (q *Queries) GetSyncRun(ctx context.Context, syncRunID uuid.UUID) (SyncRun,
 		&i.ChangesCount,
 		&i.ErrorText,
 		&i.SourceVersion,
+		&i.ClinicID,
+		&i.DiscrepanciesCount,
+		&i.SyncSeq,
 	)
 	return i, err
 }
@@ -221,14 +280,69 @@ func (q *Queries) InsertUnit(ctx context.Context, arg InsertUnitParams) (int64, 
 	return result.RowsAffected(), nil
 }
 
+const lastDataSyncRun = `-- name: LastDataSyncRun :one
+SELECT sync_run_id, sync_kind, requested_by, started_at, finished_at, sync_result, changes_count, error_text, source_version, clinic_id, discrepancies_count, sync_seq FROM sync_run
+WHERE sync_kind IN ('CHANGES', 'ON_DEMAND', 'DAILY_SNAPSHOT')
+ORDER BY started_at DESC, sync_run_id DESC
+LIMIT 1
+`
+
+func (q *Queries) LastDataSyncRun(ctx context.Context) (SyncRun, error) {
+	row := q.db.QueryRow(ctx, lastDataSyncRun)
+	var i SyncRun
+	err := row.Scan(
+		&i.SyncRunID,
+		&i.SyncKind,
+		&i.RequestedBy,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.SyncResult,
+		&i.ChangesCount,
+		&i.ErrorText,
+		&i.SourceVersion,
+		&i.ClinicID,
+		&i.DiscrepanciesCount,
+		&i.SyncSeq,
+	)
+	return i, err
+}
+
+const lastSuccessfulDataSyncRun = `-- name: LastSuccessfulDataSyncRun :one
+SELECT sync_run_id, sync_kind, requested_by, started_at, finished_at, sync_result, changes_count, error_text, source_version, clinic_id, discrepancies_count, sync_seq FROM sync_run
+WHERE sync_kind IN ('CHANGES', 'ON_DEMAND', 'DAILY_SNAPSHOT') AND sync_result = 'SUCCESS'
+ORDER BY finished_at DESC, sync_run_id DESC
+LIMIT 1
+`
+
+func (q *Queries) LastSuccessfulDataSyncRun(ctx context.Context) (SyncRun, error) {
+	row := q.db.QueryRow(ctx, lastSuccessfulDataSyncRun)
+	var i SyncRun
+	err := row.Scan(
+		&i.SyncRunID,
+		&i.SyncKind,
+		&i.RequestedBy,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.SyncResult,
+		&i.ChangesCount,
+		&i.ErrorText,
+		&i.SourceVersion,
+		&i.ClinicID,
+		&i.DiscrepanciesCount,
+		&i.SyncSeq,
+	)
+	return i, err
+}
+
 const lastSuccessfulSync = `-- name: LastSuccessfulSync :one
 SELECT finished_at FROM sync_run
-WHERE sync_kind = 'CHANGES' AND sync_result = 'SUCCESS'
+WHERE sync_kind IN ('CHANGES', 'ON_DEMAND', 'DAILY_SNAPSHOT') AND sync_result = 'SUCCESS'
 ORDER BY finished_at DESC
 LIMIT 1
 `
 
-// Водяной знак копии: окончание последнего успешного сеанса CHANGES.
+// Водяной знак копии: окончание последнего успешного сеанса, получившего данные из АИСТ-М
+// (изменения по расписанию, по запросу оператора или суточный снимок, FR001).
 func (q *Queries) LastSuccessfulSync(ctx context.Context) (*time.Time, error) {
 	row := q.db.QueryRow(ctx, lastSuccessfulSync)
 	var finished_at *time.Time
@@ -237,7 +351,7 @@ func (q *Queries) LastSuccessfulSync(ctx context.Context) (*time.Time, error) {
 }
 
 const lastSuccessfulSyncRunOfKind = `-- name: LastSuccessfulSyncRunOfKind :one
-SELECT sync_run_id, sync_kind, requested_by, started_at, finished_at, sync_result, changes_count, error_text, source_version FROM sync_run
+SELECT sync_run_id, sync_kind, requested_by, started_at, finished_at, sync_result, changes_count, error_text, source_version, clinic_id, discrepancies_count, sync_seq FROM sync_run
 WHERE sync_kind = $1 AND sync_result = 'SUCCESS'
 ORDER BY finished_at DESC, sync_run_id DESC
 LIMIT 1
@@ -256,18 +370,22 @@ func (q *Queries) LastSuccessfulSyncRunOfKind(ctx context.Context, syncKind stri
 		&i.ChangesCount,
 		&i.ErrorText,
 		&i.SourceVersion,
+		&i.ClinicID,
+		&i.DiscrepanciesCount,
+		&i.SyncSeq,
 	)
 	return i, err
 }
 
 const lastSyncCursor = `-- name: LastSyncCursor :one
 SELECT source_version FROM sync_run
-WHERE sync_kind = 'CHANGES'
+WHERE sync_kind IN ('CHANGES', 'ON_DEMAND')
 ORDER BY started_at DESC, sync_run_id DESC
 LIMIT 1
 `
 
-// Курсор — версия последнего сеанса CHANGES (не максимум): после перезапуска АИСТ-М курсор сбрасывается в 0.
+// Курсор — версия последнего сеанса опроса изменений (CHANGES или ON_DEMAND — тот же опрос вне расписания),
+// а не максимум: после перезапуска АИСТ-М курсор сбрасывается в 0.
 func (q *Queries) LastSyncCursor(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, lastSyncCursor)
 	var source_version int64
@@ -276,7 +394,7 @@ func (q *Queries) LastSyncCursor(ctx context.Context) (int64, error) {
 }
 
 const lastSyncRunOfKind = `-- name: LastSyncRunOfKind :one
-SELECT sync_run_id, sync_kind, requested_by, started_at, finished_at, sync_result, changes_count, error_text, source_version FROM sync_run
+SELECT sync_run_id, sync_kind, requested_by, started_at, finished_at, sync_result, changes_count, error_text, source_version, clinic_id, discrepancies_count, sync_seq FROM sync_run
 WHERE sync_kind = $1
 ORDER BY started_at DESC, sync_run_id DESC
 LIMIT 1
@@ -295,6 +413,9 @@ func (q *Queries) LastSyncRunOfKind(ctx context.Context, syncKind string) (SyncR
 		&i.ChangesCount,
 		&i.ErrorText,
 		&i.SourceVersion,
+		&i.ClinicID,
+		&i.DiscrepanciesCount,
+		&i.SyncSeq,
 	)
 	return i, err
 }
@@ -331,7 +452,7 @@ func (q *Queries) ListStatusHistory(ctx context.Context, unitID uuid.UUID) ([]Un
 }
 
 const listSyncRuns = `-- name: ListSyncRuns :many
-SELECT sync_run_id, sync_kind, requested_by, started_at, finished_at, sync_result, changes_count, error_text, source_version FROM sync_run
+SELECT sync_run_id, sync_kind, requested_by, started_at, finished_at, sync_result, changes_count, error_text, source_version, clinic_id, discrepancies_count, sync_seq FROM sync_run
 WHERE ($1::varchar IS NULL OR sync_kind = $1::varchar)
   AND ($2::uuid IS NULL OR sync_run_id < $2::uuid)
 ORDER BY sync_run_id DESC
@@ -364,6 +485,48 @@ func (q *Queries) ListSyncRuns(ctx context.Context, arg ListSyncRunsParams) ([]S
 			&i.ChangesCount,
 			&i.ErrorText,
 			&i.SourceVersion,
+			&i.ClinicID,
+			&i.DiscrepanciesCount,
+			&i.SyncSeq,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUnitKeys = `-- name: ListUnitKeys :many
+SELECT unit_id, aist_unit_code, clinic_id, component_kind_code, blood_group_code FROM unit
+`
+
+type ListUnitKeysRow struct {
+	UnitID            uuid.UUID
+	AistUnitCode      string
+	ClinicID          int64
+	ComponentKindCode string
+	BloodGroupCode    string
+}
+
+// Все единицы копии для поиска тех, кого нет в снимке.
+func (q *Queries) ListUnitKeys(ctx context.Context) ([]ListUnitKeysRow, error) {
+	rows, err := q.db.Query(ctx, listUnitKeys)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUnitKeysRow{}
+	for rows.Next() {
+		var i ListUnitKeysRow
+		if err := rows.Scan(
+			&i.UnitID,
+			&i.AistUnitCode,
+			&i.ClinicID,
+			&i.ComponentKindCode,
+			&i.BloodGroupCode,
 		); err != nil {
 			return nil, err
 		}
@@ -423,9 +586,10 @@ func (q *Queries) NextProtectedVolumeVersion(ctx context.Context) (int64, error)
 	return column_1, err
 }
 
-const startSyncRun = `-- name: StartSyncRun :exec
-INSERT INTO sync_run (sync_run_id, sync_kind, requested_by, started_at, source_version)
-VALUES ($1, $2, $3, $4, $5)
+const startSyncRun = `-- name: StartSyncRun :one
+INSERT INTO sync_run (sync_run_id, sync_kind, requested_by, started_at, source_version, clinic_id)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING sync_seq
 `
 
 type StartSyncRunParams struct {
@@ -434,17 +598,21 @@ type StartSyncRunParams struct {
 	RequestedBy   string
 	StartedAt     time.Time
 	SourceVersion int64
+	ClinicID      *int64
 }
 
-func (q *Queries) StartSyncRun(ctx context.Context, arg StartSyncRunParams) error {
-	_, err := q.db.Exec(ctx, startSyncRun,
+func (q *Queries) StartSyncRun(ctx context.Context, arg StartSyncRunParams) (*int64, error) {
+	row := q.db.QueryRow(ctx, startSyncRun,
 		arg.SyncRunID,
 		arg.SyncKind,
 		arg.RequestedBy,
 		arg.StartedAt,
 		arg.SourceVersion,
+		arg.ClinicID,
 	)
-	return err
+	var sync_seq *int64
+	err := row.Scan(&sync_seq)
+	return sync_seq, err
 }
 
 const updateUnitIfNewer = `-- name: UpdateUnitIfNewer :execrows

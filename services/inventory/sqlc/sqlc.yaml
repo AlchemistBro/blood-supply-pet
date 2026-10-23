@@ -6,6 +6,7 @@ sql:
     schema:
       - ../migrations/00100_inventory.sql
       - ../migrations/00110_norm.sql
+      - ../migrations/00120_sync_run.sql
     queries: queries
     gen:
       go:

@@ -97,7 +97,7 @@ func (s *Store) UnitsByIDs(ctx context.Context, ids []uuid.UUID) ([]domain.Unit,
 
 // StartSyncRun открывает сеанс обмена.
 func (s *Store) StartSyncRun(ctx context.Context, run app.SyncRun) error {
-	err := s.q.StartSyncRun(ctx, gen.StartSyncRunParams{
+	_, err := s.q.StartSyncRun(ctx, gen.StartSyncRunParams{
 		SyncRunID: run.ID, SyncKind: run.Kind, RequestedBy: run.RequestedBy, StartedAt: run.StartedAt,
 		SourceVersion: run.SourceVersion,
 	})
@@ -122,7 +122,7 @@ func (s *Store) AdvanceSyncRun(ctx context.Context, tx pgx.Tx, id uuid.UUID, sou
 
 // FinishSyncRun закрывает сеанс с результатом и примечанием (ошибка или пересинхронизация).
 func (s *Store) FinishSyncRun(ctx context.Context, id uuid.UUID, finishedAt time.Time, result string, note *string) error {
-	err := s.q.FinishSyncRun(ctx, gen.FinishSyncRunParams{FinishedAt: &finishedAt, SyncResult: &result, ErrorText: note, SyncRunID: id})
+	_, err := s.q.FinishSyncRun(ctx, gen.FinishSyncRunParams{FinishedAt: &finishedAt, SyncResult: &result, ErrorText: note, SyncRunID: id})
 	if err != nil {
 		return fmt.Errorf("окончание сеанса обмена: %w", err)
 	}
