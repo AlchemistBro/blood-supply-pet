@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: logistics-gateway
   version: 0.1.0
-  description: Контракт сервиса logistics-gateway. Источник истины для HTTP: код сервера генерируется из этого файла.
+  description: "Шлюз перевозчика C03. Бизнес-эндпоинтов нет: команды и ответы идут через Kafka (logistics.commands, logistics.replies); служебные /healthz, /readyz, /metrics отдаёт libs/runtime."
 servers:
   - url: http://localhost:8106
 paths: {}
