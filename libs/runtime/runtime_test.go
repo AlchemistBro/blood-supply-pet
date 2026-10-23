@@ -3,10 +3,12 @@ package runtime
 import (
 	"io"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 	"testing/fstest"
 
+	"github.com/AlchemistBro/blood-supply-pet/libs/httpx"
 	"github.com/AlchemistBro/blood-supply-pet/libs/httpx/auth"
 )
 
@@ -35,4 +37,54 @@ func TestDenyWithoutDatabaseDoesNotPanic(t *testing.T) {
 	rt := &Runtime{Log: slog.New(slog.NewTextHandler(io.Discard, nil)), Name: "sim"}
 	req := httptest.NewRequest("GET", "/x", nil)
 	rt.Deny()(req, &auth.Principal{Username: "u", Roles: []auth.Role{auth.RoleOperator}}, auth.OpViewStock)
+}
+
+// Своя цепочка (web, ADR-0018) заменяет bearer JWT; без неё при CustomAuth запуск останавливается,
+// а Use без CustomAuth — ошибка конфигурации.
+func TestAuthChain(t *testing.T) {
+	custom := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-Custom-Auth", "yes")
+			next.ServeHTTP(w, r)
+		})
+	}
+	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+
+	rt := &Runtime{}
+	if _, err := authChain(Spec{Name: "web", CustomAuth: true}, rt); err == nil {
+		t.Fatal("CustomAuth без цепочки должен останавливать запуск")
+	}
+
+	rt.Use(custom)
+	if _, err := authChain(Spec{Name: "svc"}, rt); err == nil {
+		t.Fatal("Use без CustomAuth должен останавливать запуск")
+	}
+
+	mws, err := authChain(Spec{Name: "web", CustomAuth: true}, rt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	httpx.Chain(ok, mws...).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/page", nil))
+	if rec.Code != http.StatusNoContent || rec.Header().Get("X-Custom-Auth") != "yes" {
+		t.Fatalf("без bearer-токена запрос проходит через свою цепочку: %d", rec.Code)
+	}
+
+	// По умолчанию — прежняя проверка bearer JWT: без токена 401, с токеном проходит.
+	mws, err = authChain(Spec{Name: "svc"}, &Runtime{Verifier: devVerifier{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec = httptest.NewRecorder()
+	httpx.Chain(ok, mws...).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/x", nil))
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("без токена ожидался 401, получен %d", rec.Code)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	req.Header.Set("Authorization", "Bearer dev:u1:IT_SERVICE")
+	rec = httptest.NewRecorder()
+	httpx.Chain(ok, mws...).ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("с токеном ожидался 204, получен %d", rec.Code)
+	}
 }

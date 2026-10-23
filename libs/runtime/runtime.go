@@ -2,6 +2,8 @@
 // подключение к PostgreSQL (кроме сервисов со Spec.NoDB), миграции (платформа + справочники + свои), сид справочников, проверка JWT,
 // служебные маршруты (/healthz, /readyz, /metrics, /openapi.yaml), ретранслятор outbox, фоновые воркеры,
 // мягкая остановка по сигналу. Сервису остаётся собрать зависимости и зарегистрировать маршруты.
+// Сервис со своей проверкой входа (web: сессия в cookie вместо bearer JWT, ADR-0018) объявляет
+// Spec.CustomAuth и ставит цепочку через Runtime.Use.
 package runtime
 
 import (
@@ -67,6 +69,10 @@ type Spec struct {
 	OpenAPI []byte
 	// Setup собирает зависимости, регистрирует маршруты на rt.Mux и возвращает фоновые воркеры.
 	Setup func(ctx context.Context, rt *Runtime) ([]Worker, error)
+	// CustomAuth — сервис сам проверяет вход (web: сессия в cookie, ADR-0018): в Setup вызывает Runtime.Use
+	// со своей цепочкой, она заменяет проверку bearer JWT; проверяющий токены рантайм не создаёт.
+	// Без цепочки запуск останавливается, чтобы маршруты не открылись без проверки по ошибке.
+	CustomAuth bool
 }
 
 // Worker — фоновая работа, живущая до отмены контекста (consumer, таймер).
@@ -85,6 +91,30 @@ type Runtime struct {
 	Obs      *observability.Observability
 	Refdata  *refdata.Set
 	Name     string
+
+	// middleware — своя цепочка проверки входа (Spec.CustomAuth), задаётся через Use.
+	middleware []httpx.Middleware
+}
+
+// Use задаёт цепочку проверки входа вместо bearer JWT. Допустим только при Spec.CustomAuth: иначе запуск
+// останавливается, чтобы проверку токенов нельзя было тихо подменить. Цепочка оборачивает все маршруты,
+// включая служебные (/healthz, /metrics), поэтому её заголовки безопасности есть на всех ответах.
+func (rt *Runtime) Use(mws ...httpx.Middleware) {
+	rt.middleware = append(rt.middleware, mws...)
+}
+
+// authChain — проверка входа для всех маршрутов: своя цепочка сервиса или bearer JWT.
+func authChain(spec Spec, rt *Runtime) ([]httpx.Middleware, error) {
+	switch {
+	case spec.CustomAuth && len(rt.middleware) == 0:
+		return nil, fmt.Errorf("%s: CustomAuth без цепочки проверки входа (Runtime.Use)", spec.Name)
+	case !spec.CustomAuth && len(rt.middleware) > 0:
+		return nil, fmt.Errorf("%s: Runtime.Use допустим только при CustomAuth", spec.Name)
+	case spec.CustomAuth:
+		return rt.middleware, nil
+	default:
+		return []httpx.Middleware{auth.Authenticate(rt.Verifier)}, nil
+	}
 }
 
 // Run запускает сервис и блокируется до SIGINT/SIGTERM. Ошибка инициализации завершает процесс.
@@ -141,7 +171,10 @@ func run(ctx context.Context, spec Spec) error {
 		rt.Health.AddReadiness("kafka", func(ctx context.Context) error { return messaging.Ping(ctx, cfg.KafkaBrokers) })
 	}
 
-	if !cfg.AuthDisabled {
+	switch {
+	case spec.CustomAuth:
+		// Проверку входа ставит сервис через Runtime.Use; bearer JWT рантайм не проверяет.
+	case !cfg.AuthDisabled:
 		if cfg.OIDCIssuer == "" {
 			return errors.New("BS_OIDC_ISSUER не задан (или BS_AUTH_DISABLED=true для локальной отладки)")
 		}
@@ -150,7 +183,7 @@ func run(ctx context.Context, spec Spec) error {
 			return err
 		}
 		rt.Verifier = verifier
-	} else {
+	default:
 		log.Warn("проверка JWT отключена (BS_AUTH_DISABLED=true): только для локальной отладки")
 		rt.Verifier = devVerifier{}
 	}
@@ -169,7 +202,14 @@ func run(ctx context.Context, spec Spec) error {
 		return fmt.Errorf("инициализация %s: %w", spec.Name, err)
 	}
 
-	handler := httpx.Chain(rt.Mux, append(httpx.Standard(log), observability.HTTPMiddleware(spec.Name), auth.Authenticate(rt.Verifier))...)
+	authMWs, err := authChain(spec, rt)
+	if err != nil {
+		return fmt.Errorf("инициализация %s: %w", spec.Name, err)
+	}
+	chain := httpx.Standard(log)
+	chain = append(chain, observability.HTTPMiddleware(spec.Name))
+	chain = append(chain, authMWs...)
+	handler := httpx.Chain(rt.Mux, chain...)
 	server := httpx.NewServer(cfg.HTTPAddr, handler, log)
 
 	g, gctx := errgroup.WithContext(ctx)
