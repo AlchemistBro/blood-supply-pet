@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/transfer/TransferRejected.v1.json",
+  "title": "TransferRejected",
+  "description": "Событие transfer.events: обязательство отклонено (PENDING → REJECTED): все единицы выбыли или источник отказал.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["obligation_id", "request_id", "reason"],
+  "properties": {
+    "obligation_id": { "type": "string", "format": "uuid" },
+    "request_id": { "type": "string", "format": "uuid" },
+    "reason": { "type": "string", "enum": ["UNITS_WITHDRAWN", "SOURCE_REFUSED"] }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/transfer/TransferBroken.v1.json",
+  "title": "TransferBroken",
+  "description": "Событие transfer.events: закреплённая единица выбыла в АИСТ-М, обязательство нарушено (→ BROKEN), закрепления сняты, ушла CancelTransport. reason — причина выбытия из UnitWithdrawn.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["obligation_id", "request_id", "unit_id", "reason"],
+  "properties": {
+    "obligation_id": { "type": "string", "format": "uuid" },
+    "request_id": { "type": "string", "format": "uuid" },
+    "unit_id": { "type": "string", "format": "uuid" },
+    "reason": { "type": "string", "enum": ["ISSUED", "DISCARDED", "TRANSFERRED", "EXPIRED"] }
+  }
+}

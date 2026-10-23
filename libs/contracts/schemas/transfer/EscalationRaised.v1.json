@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/transfer/EscalationRaised.v1.json",
+  "title": "EscalationRaised",
+  "description": "Событие transfer.events: ситуация передана дежурному смены.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["obligation_id", "request_id", "reason", "at"],
+  "properties": {
+    "obligation_id": { "type": "string", "format": "uuid" },
+    "request_id": { "type": "string", "format": "uuid" },
+    "reason": { "type": "string", "enum": ["EXPIRED_NO_FALLBACK", "TRANSPORT_REFUSED", "TRANSPORT_OUTCOME_UNKNOWN", "SOURCE_SYSTEM_UNAVAILABLE"] },
+    "at": { "type": "string", "format": "date-time" }
+  }
+}
