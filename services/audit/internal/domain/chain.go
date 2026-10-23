@@ -62,7 +62,7 @@ type canonical struct {
 // ComputeHash возвращает sha256(prevHash || canonical(record)).
 func ComputeHash(prevHash []byte, r Record) ([]byte, error) {
 	body, err := json.Marshal(canonical{
-		ID: r.ID.String(), Seq: r.Seq, OccurredAt: r.OccurredAt.UTC().Format(time.RFC3339Nano),
+		ID: r.ID.String(), Seq: r.Seq, OccurredAt: canonicalTime(r.OccurredAt),
 		UserID: r.UserID, Role: r.Role, ClinicID: r.ClinicID, Module: r.Module, Action: r.Action,
 		ObjectType: r.ObjectType, ObjectID: r.ObjectID, Result: r.Result, Details: r.Details,
 		CorrelationID: r.CorrelationID, Producer: r.Producer, SourceMessageID: r.SourceMessageID.String(),
@@ -76,11 +76,19 @@ func ComputeHash(prevHash []byte, r Record) ([]byte, error) {
 	return h.Sum(nil), nil
 }
 
+// canonicalTime — время в фиксированном виде с точностью до микросекунд.
+// PostgreSQL хранит timestamptz с микросекундами: если хешировать наносекунды, сохранённая запись
+// не совпадёт с собственным хешем и проверка сочтёт её изменённой (найдено e2e-тестом).
+func canonicalTime(t time.Time) string {
+	return t.UTC().Truncate(time.Microsecond).Format("2006-01-02T15:04:05.000000Z")
+}
+
 // Link присваивает записи следующий номер и хеш поверх головы цепочки.
 func Link(headSeq int64, headHash []byte, r Record) (Record, error) {
 	if len(headHash) != sha256.Size {
 		return Record{}, fmt.Errorf("хеш головы цепочки имеет длину %d", len(headHash))
 	}
+	r.OccurredAt = r.OccurredAt.UTC().Truncate(time.Microsecond)
 	r.Seq = headSeq + 1
 	r.PrevHash = headHash
 	hash, err := ComputeHash(headHash, r)

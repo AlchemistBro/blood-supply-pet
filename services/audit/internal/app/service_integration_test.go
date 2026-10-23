@@ -170,3 +170,24 @@ func TestTamperingIsDetectedByVerify(t *testing.T) {
 		t.Fatalf("до разрыва проверено %d записей, ожидали 2", rep.Checked)
 	}
 }
+
+// Время с наносекундами (как time.Now) должно давать цепочку, которую проверка принимает.
+// PostgreSQL хранит микросекунды: без усечения при записи хеш расходился с сохранённым.
+func TestNanosecondTimestampsStillVerify(t *testing.T) {
+	svc, _ := setup(t)
+	ctx := context.Background()
+	for i := 1; i <= 3; i++ {
+		rec := record(i)
+		rec.OccurredAt = time.Now().UTC()
+		if _, err := svc.AppendDirect(ctx, rec, "test"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rep, err := svc.Verify(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !rep.OK || rep.Checked != 3 {
+		t.Fatalf("цепочка с наносекундными метками не проходит проверку: %+v", rep)
+	}
+}
