@@ -12,14 +12,15 @@ import (
 	"github.com/AlchemistBro/blood-supply-pet/services/transfer/internal/domain"
 )
 
-// Проекция inventory.events. Каждое событие сначала блокирует ту же строку source_stock, что и подтверждение
+// Проекция inventory.events. Каждое событие сначала блокирует те же строки source_stock, что и подтверждение
 // (как InventoryProjection прототипа): иначе выдача единицы во время подтверждения даёт рассинхрон резерва и NFR013.
+// Строки берутся по копии единицы и по обязательству, за которым она закреплена, а не только по событию
+// (lockUnitScope): порядок «Остаток, затем O07» соблюдается, даже если событие и копия расходятся.
 // msg — входящее сообщение для inbox (nil при прямом вызове).
 
 // OnUnitRegistered — единица появилась в копии запаса; может прийти сразу на карантине (тогда в наличие не входит).
 // Пустой статус — IN_STOCK (событие регистрации без статуса означает «в наличии»).
-// Известное ограничение: если новая версия регистрации переносит единицу в другую клинику или вид, наличие
-// в прежнем Остатке не пересчитывается (блокировка двух строк Остатка потребовала бы своего порядка; этап 3).
+// Если новая версия переносит единицу в другую клинику или вид, пересчитываются оба Остатка.
 func (s *Service) OnUnitRegistered(ctx context.Context, msg *messaging.Message, e UnitRegistered) error {
 	if e.UnitID == uuid.Nil || e.ComponentKind == "" {
 		return deliveryErr(msg, fmt.Errorf("%w: UnitRegistered без unit_id или вида", ErrInvalidEvent))
@@ -33,7 +34,8 @@ func (s *Service) OnUnitRegistered(ctx context.Context, msg *messaging.Message, 
 	}
 	err = s.inTx(ctx, msg, func(ctx context.Context, tx pgx.Tx) error {
 		now := s.clock.Now()
-		if _, err := s.store.LockStock(ctx, tx, e.ClinicID, e.ComponentKind); err != nil {
+		scope, err := s.lockUnitScope(ctx, tx, e.UnitID, stockKey{clinicID: e.ClinicID, kind: e.ComponentKind})
+		if err != nil {
 			return err
 		}
 		applied, err := s.store.UpsertUnitCopy(ctx, tx, domain.UnitCopy{
@@ -44,8 +46,10 @@ func (s *Service) OnUnitRegistered(ctx context.Context, msg *messaging.Message, 
 		if err != nil || !applied {
 			return err // устаревшая версия ничего не меняет
 		}
-		if err := s.store.RecountAvailable(ctx, tx, e.ClinicID, e.ComponentKind); err != nil {
-			return err
+		for _, k := range scope.keys {
+			if err := s.store.RecountAvailable(ctx, tx, k.clinicID, k.kind); err != nil {
+				return err
+			}
 		}
 		// Повторная регистрация уже закреплённой единицы с недоступным статусом нарушает обязательство так же,
 		// как UnitUpdated.
@@ -85,14 +89,18 @@ func (s *Service) applyUnitStatus(ctx context.Context, msg *messaging.Message, u
 	}
 	err := s.inTx(ctx, msg, func(ctx context.Context, tx pgx.Tx) error {
 		now := s.clock.Now()
-		if _, err := s.store.LockStock(ctx, tx, clinicID, kind); err != nil {
+		scope, err := s.lockUnitScope(ctx, tx, unitID, stockKey{clinicID: clinicID, kind: kind})
+		if err != nil {
 			return err
+		}
+		if scope.copyKey == nil {
+			return nil // единица неизвестна копии: без регистрации статус применить не к чему
 		}
 		applied, err := s.store.SetUnitCopyStatus(ctx, tx, unitID, status, reason, version, now)
 		if err != nil || !applied {
-			return err // дубль, устаревшая версия или неизвестная копии единица
+			return err // дубль или устаревшая версия
 		}
-		if err := s.store.RecountAvailable(ctx, tx, clinicID, kind); err != nil {
+		if err := s.store.RecountAvailable(ctx, tx, scope.copyKey.clinicID, scope.copyKey.kind); err != nil {
 			return err
 		}
 		if breakReason, breaks := domain.BreakReasonFor(status); breaks {
