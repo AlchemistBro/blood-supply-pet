@@ -2,7 +2,7 @@
 
 Целевая среда по ADR-0009: kind локально и в CI, манифесты kustomize, PostgreSQL под CloudNativePG.
 Спецификация — `docs/architecture/deployment.md`, задачи этапа — `docs/tasks/08-kubernetes.md`.
-Сейчас здесь только платформа; сервисы приложения, ingress и NetworkPolicy добавляются отдельно.
+Здесь платформа, сервисы приложения и имитаторы; ingress и NetworkPolicy добавляются отдельно.
 
 ## Что разворачивается
 
@@ -36,10 +36,12 @@ deploy/k8s/
     platform/kafka/        StatefulSet, сервисы, topics.txt и Job создания топиков
     platform/keycloak/     Deployment, realm ConfigMap (копия realm из compose), адрес KC_HOSTNAME
     platform/observability/ otel-lgtm
-    kustomization.yaml     место под services/ и ingress/ отмечено комментарием
+    services/              <svc>/ deployment, service, pdb, hpa; общие ConfigMap окружения
+    kustomization.yaml     место под ingress/ отмечено комментарием
   components/
-    demo-secrets/          ДЕМО-секреты (secretGenerator): роли PostgreSQL, MinIO, Keycloak
-    sims/                  namespace bs-sims и Mailpit; сюда же — имитаторы C01, C02, C03
+    go-service/            стандарт пода сервиса на Go: пробы, securityContext, /tmp, Downward API
+    demo-secrets/          ДЕМО-секреты (secretGenerator): роли PostgreSQL, MinIO, Keycloak, сервисы
+    sims/                  namespace bs-sims, Mailpit, sim-aist, sim-emergency, sim-logistics
   overlays/
     local/                 base + демо-секреты + имитаторы
     ci/                    то же с урезанными ресурсами и томами
@@ -80,7 +82,9 @@ kubectl kustomize deploy/k8s/overlays/ci
    - `Cluster pg`: primary, затем реплика; архив WAL начинает уходить в MinIO; `ScheduledBackup pg-daily`
      с `immediate: true` сразу снимает первую базовую копию; объекты `Database` создают базы сервисов;
    - Keycloak ждёт базу `keycloak` (перезапускается, пока `pg-rw` не готов), импортирует realm;
-   - Kafka; Job `kafka-topics` ждёт брокер и создаёт топики.
+   - Kafka; Job `kafka-topics` ждёт брокер и создаёт топики;
+   - сервисы перезапускаются, пока недоступны база или Kafka, затем применяют миграции и становятся готовыми
+     (`/readyz`); имитаторы готовы сразу.
 3. Ожидание готовности:
 
    ```
@@ -88,29 +92,95 @@ kubectl kustomize deploy/k8s/overlays/ci
    kubectl wait --for=condition=complete job/minio-setup -n bs-data --timeout=300s
    kubectl wait --for=condition=complete job/kafka-topics -n bs-app --timeout=300s
    kubectl rollout status deployment/keycloak -n bs-edge --timeout=600s
+   kubectl wait --for=condition=Available deployment --all -n bs-app --timeout=600s
    ```
 
-Сервисы приложения должны стартовать после Job `kafka-topics`: сервис сам вызывает `messaging.EnsureTopics`
-с одной партицией, и если он успеет первым, топик останется с одной партицией.
+Сервисы должны создать свои топики позже Job `kafka-topics`: сервис сам вызывает `messaging.EnsureTopics`
+с одной партицией, и если успеет первым, топик останется с одной партицией. На практике сервис доходит
+до Kafka только после базы и миграций, а `Cluster pg` готовится дольше брокера; надёжный порядок даст
+`task k8s:up` (применить платформу, дождаться Job, затем сервисы).
 
 Образы для kind заранее загружаются в узлы (`kind load docker-image …`), список — таблица выше и образ
 оператора `ghcr.io/cloudnative-pg/cloudnative-pg:1.27.0`.
 
-## Что нужно знать сервисам и следующим манифестам
+## Сервисы приложения
 
-- `BS_DB_URL`: `postgres://<роль>:<пароль>@pg-rw.bs-data.svc:5432/<база>?sslmode=require`.
-  CloudNativePG включает TLS на сервере; без TLS подключение тоже пройдёт (`host` в pg_hba), но в кластере его
-  стоит требовать. Secret `pg-role-*` лежит в `bs-data` и из `bs-app` не виден: сервису нужен свой Secret
-  в `bs-app` с тем же паролем (в демо — генератор с теми же значениями).
-- `BS_KAFKA_BROKERS`: `kafka.bs-app.svc:9092`.
-- `BS_OIDC_ISSUER`: `https://localhost/auth/realms/blood-supply` (значение `KC_HOSTNAME` + путь realm);
-  `BS_OIDC_JWKS_URL`: `http://keycloak.bs-edge.svc:8080/auth/realms/blood-supply/protocol/openid-connect/certs`.
-  В compose у Keycloak нет префикса `/auth`; в k8s он нужен, чтобы ingress отдавал `/auth` Keycloak на том же хосте.
-- `BS_OTEL_ENDPOINT`: `otel-lgtm.bs-observability.svc:4318`. `BS_SMTP_ADDR`: `mailpit.bs-sims.svc:1025`.
+Образы `ghcr.io/alchemistbro/blood-supply-<сервис>:edge` (deploy/docker/Dockerfile: distroless static,
+пользователь 65532). Сервис слушает порт из `docs/PLAN.md` (`BS_HTTP_ADDR`), Service отдаёт его же.
+
+| Сервис | Namespace | Порт | База и роль | Реплики | Особые переменные |
+| --- | --- | --- | --- | --- | --- |
+| `web` | `bs-app` | 8080 | — (ADR-0018) | HPA 2–3 | `BS_PUBLIC_URL`, `BS_OIDC_CLIENT_ID`, `BS_OIDC_CLIENT_SECRET`, `BS_SESSION_KEY`, служебный клиент, `BS_<СЕРВИС>_URL` |
+| `inventory` | `bs-app` | 8101 | `inventory` | HPA 2–3 | `BS_AIST_URL`, `BS_K1_KEYS` |
+| `demand` | `bs-app` | 8102 | `demand` | 1 | — |
+| `planning` | `bs-app` | 8103 | `planning` | 1 | — (ИНТ-02 принимает по HTTP) |
+| `matching` | `bs-app` | 8104 | `matching` | HPA 2–3 | `BS_K1_KEYS` |
+| `transfer` | `bs-app` | 8105 | `transfer` | 1 | `BS_INVENTORY_URL`, служебный клиент (ADR-0004) |
+| `logistics-gateway` | `bs-app` | 8106 | `logistics` | 1 | `BS_C03_URL` |
+| `notification` | `bs-app` | 8107 | `notification` | 1 | `BS_SMTP_ADDR` (ADR-0021) |
+| `audit` | `bs-app` | 8108 | `audit` | 1 | — |
+| `sim-aist` (C01) | `bs-sims` | 8201 | — | 1 | — |
+| `sim-emergency` (C02) | `bs-sims` | 8202 | — | 1 | `BS_FORECAST_URL` |
+| `sim-logistics` (C03) | `bs-sims` | 8203 | — | 1 | — |
+
+### Стандарт пода (`components/go-service`)
+
+Компонент накладывает патч на каждый Deployment с меткой `blood-supply.io/runtime=go-service`:
+`startupProbe` и `livenessProbe` на `/healthz`, `readinessProbe` на `/readyz`; `runAsNonRoot` (65532),
+`readOnlyRootFilesystem`, `drop: [ALL]`, seccomp `RuntimeDefault`, без токена ServiceAccount и без
+переменных ссылок на сервисы; `/tmp` — `emptyDir`; `POD_NAME`, `POD_NAMESPACE` через Downward API;
+`RollingUpdate` с `maxUnavailable: 0`; аннотации `prometheus.io/scrape|path|port` (ServiceMonitor не
+используется: CRD Prometheus Operator в кластере нет; метрики и так уходят по OTLP в otel-lgtm).
+Условия: контейнер называется `app`, порт — `http`; ресурсы и реплики задаёт манифест сервиса.
+
+Каждому сервису — PodDisruptionBudget `maxUnavailable: 1` (при одной реплике не мешает обслуживанию узла).
+HPA по CPU (70 %) у `web`, `inventory`, `matching` (docs/tasks/08-kubernetes.md). `maxReplicas: 3` —
+по числу партиций рабочих топиков: потребители одной группы сверх числа партиций простаивают, а если топик
+успел создать сам сервис (одна партиция), читает одна реплика, остальные в резерве. В `ci` `minReplicas: 1`.
+
+### Переменные окружения
+
+Общие — ConfigMap `platform-env` (`envFrom`, `base/services/kustomization.yaml`):
+
+| Переменная | Значение |
+| --- | --- |
+| `BS_ENV` | `k8s` в base, `local` / `ci` в overlay |
+| `BS_LOG_LEVEL`, `BS_LOG_FORMAT` | `info`, `json` |
+| `BS_KAFKA_BROKERS` | `kafka.bs-app.svc:9092` |
+| `BS_OIDC_ISSUER` | `https://localhost/auth/realms/blood-supply` — внешний адрес Keycloak (`KC_HOSTNAME`) + realm |
+| `BS_OIDC_JWKS_URL` | `http://keycloak.bs-edge.svc:8080/auth/realms/blood-supply/protocol/openid-connect/certs` |
+| `BS_OIDC_TOKEN_URL` | `http://keycloak.bs-edge.svc:8080/auth/realms/blood-supply/protocol/openid-connect/token` |
+| `BS_OIDC_AUDIENCE` | `blood-supply-api` |
+| `BS_OTEL_ENDPOINT` | `otel-lgtm.bs-observability.svc:4318` |
+
+В compose у Keycloak нет префикса `/auth`; в k8s он нужен, чтобы ingress отдавал `/auth` Keycloak на том же хосте.
+
+Адреса — ConfigMap `service-endpoints` (`BS_PUBLIC_URL`, `BS_<СЕРВИС>_URL`) и `external-systems`
+(`BS_AIST_URL`, `BS_C03_URL`, `BS_SMTP_ADDR`; на стенде указывают на имитаторы в `bs-sims`). Сервис берёт
+только нужные ключи (`configMapKeyRef`). Имитаторы читают свой ConfigMap `sims-env` в `bs-sims`.
+
+Секреты (в `local`/`ci` — `components/demo-secrets`, в реальном развёртывании — внешний менеджер):
+
+| Secret (`bs-app`) | Ключи | Кому |
+| --- | --- | --- |
+| `<сервис>-db` | `BS_DB_URL` = `postgres://<роль>:<пароль>@pg-rw.bs-data.svc:5432/<база>?sslmode=require` | сервису с базой |
+| `web-secrets` | `BS_OIDC_CLIENT_SECRET`, `BS_SESSION_KEY` (32 байта, base64) | `web` |
+| `service-client` | `BS_SERVICE_CLIENT_ID`, `BS_SERVICE_CLIENT_SECRET` (клиент `services`, client credentials) | `web` (аудит, ADR-0017), `transfer` (ADR-0004) |
+| `k1-keys` | `BS_K1_KEYS` (`идентификатор:ключ-base64`, через запятую для ротации) | только `matching` и `inventory` (ADR-0020) |
+
+Пароль в `<сервис>-db` совпадает с `pg-role-<роль>` в `bs-data`: секреты между namespace не видны, поэтому
+значение хранится в двух местах. CloudNativePG включает TLS на сервере; `sslmode=require` шифрует канал без
+проверки сертификата (CA оператора в демо не раздаётся).
+
+## Что нужно знать следующим манифестам
+
 - NetworkPolicy должна пропускать, кроме `bs-app → bs-data`:
   Keycloak (`bs-edge`) → `pg-rw:5432` (его база в общем кластере); оператор `cnpg-system` → поды `pg` (порт 8000)
   и поды `pg` между собой (5432, репликация); поды `pg` → MinIO (9000); Job `minio-setup` → MinIO;
-  все сегменты → `bs-observability` (4317/4318); `bs-app` → `bs-sims`.
+  все сегменты → `bs-observability` (4317/4318); `bs-app` → `bs-sims` (8201–8203, SMTP 1025);
+  `bs-app` → Keycloak (8080, JWKS и токены); `sim-emergency` (`bs-sims`) → `planning:8103` (ИНТ-02);
+  ingress → `web:8080`, `planning:8103` (`/api/int/forecast`), Keycloak.
+- Поды с данными K1 помечены `blood-supply.io/data-class=k1` (`matching`, `inventory`) — для отдельной политики.
 
 ## Резервное копирование и PITR (NFR005–NFR007, NFR012)
 
@@ -155,7 +225,15 @@ kubectl kustomize deploy/k8s/overlays/ci
 9. **MinIO**: образ закреплён на последнем выпуске с публичной сборкой в Docker Hub; клиент `mc` берётся из того же
    образа. При замене образа — проверить наличие `mc` или вынести Job на `minio/mc`.
 10. **Роль `audit_writer`** (только INSERT, security.md) не создана: сервис `audit` пока её не использует.
-11. **Пробы**: у Kafka и otel-lgtm — TCP и HTTP-проверки порта; пробы сервисов (`/readyz`, `/healthz`) задаются
-    в их манифестах.
+11. **Пробы**: у Kafka и otel-lgtm — TCP и HTTP-проверки порта; пробы сервисов задаёт `components/go-service`.
 12. Ни один образ и ни один CRD при подготовке манифестов не скачивались; теги образов `minio/minio`,
     `ghcr.io/cloudnative-pg/postgresql:16.9` и `apache/kafka:3.9.1` проверяются при первой загрузке.
+13. **Переменные ещё не написанных сервисов** (`web`, `sim-emergency`, ключи K1) названы по документам и
+    решениям этапов заранее: `BS_PUBLIC_URL`, `BS_OIDC_CLIENT_ID`/`_SECRET`, `BS_SESSION_KEY`,
+    `BS_SERVICE_CLIENT_ID`/`_SECRET`, `BS_OIDC_TOKEN_URL`, `BS_<СЕРВИС>_URL`, `BS_K1_KEYS`, `BS_FORECAST_URL`.
+    Если код сервиса выберет другое имя или формат, правится манифест, а не код. Сервисы, которых ещё нет
+    в `services/`, не соберутся в образ — их Deployment будет ждать образа (`ErrImagePull`), остальное работает.
+14. **Тег `edge`** подвижный (`imagePullPolicy: IfNotPresent`); для воспроизводимого стенда автоматизации
+    стоит подменять его на собранный тег (`kustomize edit set image`, `kind load docker-image`).
+15. **Имитаторы**: состояние в памяти, одна реплика, без PDB; `/dev/*` маршруты открыты внутри кластера —
+    закрывает NetworkPolicy и ingress (наружу не публикуются).
