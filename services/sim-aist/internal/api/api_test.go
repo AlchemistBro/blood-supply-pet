@@ -272,6 +272,79 @@ func TestChangesSinceReturnsOnlyNewVersions(t *testing.T) {
 	expect(t, e.do(http.MethodGet, "/units/changes?limit=0", nil), http.StatusBadRequest)
 }
 
+// TestChangesPagingWithUpdatesBetweenPages — так inventory опрашивает ИНТ-01: страница за страницей по
+// last_version, пока has_more. Между страницами меняются уже выданные единицы. Каждая страница должна
+// идти строго по возрастанию версий без повторов, а объединение страниц — совпасть с текущим состоянием.
+func TestChangesPagingWithUpdatesBetweenPages(t *testing.T) {
+	e := newEnv(t)
+	codes := []string{"U-1", "U-2", "U-3", "U-4", "U-5", "U-6"}
+	for _, c := range codes {
+		e.createUnit(c)
+	}
+	// Изменения после страницы с данным номером (с нуля): трогают единицы, уже отданные клиенту.
+	mutations := map[int]func(){
+		0: func() {
+			expect(t, e.do(http.MethodPost, "/dev/units/U-1/status", map[string]string{"status": "QUARANTINE"}), http.StatusOK)
+		},
+		1: func() {
+			expect(t, e.do(http.MethodPost, "/dev/units/U-3/withdraw", map[string]string{"reason": "DISCARDED"}), http.StatusOK)
+			expect(t, e.do(http.MethodPost, "/dev/units/U-1/status", map[string]string{"status": "IN_STOCK"}), http.StatusOK)
+		},
+	}
+
+	var cursor int64
+	seen := map[string]state.Unit{}
+	for pageNo := 0; ; pageNo++ {
+		if pageNo > 20 {
+			t.Fatal("обход не закончился за 20 страниц")
+		}
+		rec := e.do(http.MethodGet, "/units/changes?limit=2&since="+itoa(cursor), nil)
+		expect(t, rec, http.StatusOK)
+		page := decode[changesResponse](t, rec)
+		inPage := map[string]bool{}
+		prev := cursor
+		for _, u := range page.Units {
+			if u.Version <= prev {
+				t.Fatalf("страница %d: версия %d не больше предыдущей %d: %+v", pageNo, u.Version, prev, page.Units)
+			}
+			if inPage[u.AistUnitCode] {
+				t.Fatalf("страница %d: %s дважды: %+v", pageNo, u.AistUnitCode, page.Units)
+			}
+			inPage[u.AistUnitCode] = true
+			prev = u.Version
+			seen[u.AistUnitCode] = u
+		}
+		if len(page.Units) > 0 && page.LastVersion != page.Units[len(page.Units)-1].Version {
+			t.Fatalf("страница %d: last_version %d не равен версии последней единицы", pageNo, page.LastVersion)
+		}
+		if !page.HasMore && page.CurrentVersion != page.LastVersion {
+			t.Fatalf("страница %d: has_more=false, но current_version %d больше last_version %d",
+				pageNo, page.CurrentVersion, page.LastVersion)
+		}
+		cursor = page.LastVersion
+		if m, ok := mutations[pageNo]; ok {
+			m()
+		}
+		if !page.HasMore {
+			break
+		}
+	}
+
+	rec := e.do(http.MethodGet, "/units/status?ids="+strings.Join(codes, ","), nil)
+	expect(t, rec, http.StatusOK)
+	actual := decode[statusResponse](t, rec)
+	if len(seen) != len(codes) || len(actual.Units) != len(codes) {
+		t.Fatalf("обход собрал %d единиц, в состоянии %d, ожидали %d", len(seen), len(actual.Units), len(codes))
+	}
+	for _, a := range actual.Units {
+		got := seen[a.AistUnitCode]
+		if got.Version != a.Version || got.Status != a.Status {
+			t.Fatalf("%s: обход дал версию %d и статус %s, в состоянии версия %d и статус %s",
+				a.AistUnitCode, got.Version, got.Status, a.Version, a.Status)
+		}
+	}
+}
+
 func TestQuarantineIsVisibleInStatus(t *testing.T) {
 	e := newEnv(t)
 	e.createUnit("U-1")
