@@ -3,6 +3,7 @@ package carrier_test
 import (
 	"context"
 	"errors"
+	"runtime"
 	"testing"
 	"time"
 
@@ -179,6 +180,37 @@ func TestSlowSubmitHonoursContext(t *testing.T) {
 	}
 	if len(c.All("")) != 0 {
 		t.Fatal("заказ не создаётся, если клиент ушёл во время задержки")
+	}
+}
+
+// Задержка отправки идёт вне блокировки: пока первый экземпляр шлюза ждёт ответа, сверка второго отвечает сразу.
+// Иначе окно для дубля закрылось бы, и тест двух экземпляров шлюза проверял бы имитатор, а не аренду.
+// Реального ожидания нет: задержка в час; если бы она держала блокировку, FindActive завис бы и тест упал по таймауту.
+func TestFindActiveAnswersDuringSlowSubmit(t *testing.T) {
+	c := carrier.New(clock.NewMutable(start))
+	if _, err := c.Submit(context.Background(), order("o07-9")); err != nil {
+		t.Fatal(err)
+	}
+	c.UpdateFaults(func(f *carrier.Faults) { f.Slow = time.Hour })
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		_, err := c.Submit(ctx, order("o07-9"))
+		done <- err
+	}()
+	for range 100 {
+		runtime.Gosched()
+		active, err := c.FindActive("o07-9")
+		if err != nil || len(active) != 1 {
+			t.Fatalf("сверка во время медленной отправки: %v, %+v", err, active)
+		}
+	}
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatalf("медленная отправка: ожидали отмену контекста, получили %v", err)
+	}
+	if got := len(c.All("o07-9")); got != 1 {
+		t.Fatalf("прерванная отправка создала заказ: всего %d", got)
 	}
 }
 
