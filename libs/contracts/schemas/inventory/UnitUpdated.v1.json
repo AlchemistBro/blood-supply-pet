@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/inventory/UnitUpdated.v1.json",
+  "title": "UnitUpdated",
+  "description": "Событие inventory.events: изменились статус, место хранения или срок годности единицы. Единица в QUARANTINE недоступна для закрепления (ПП РФ № 641, п. 62).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["unit_id", "clinic_id", "component_kind", "status", "version", "changed_at"],
+  "properties": {
+    "unit_id": { "type": "string", "format": "uuid" },
+    "clinic_id": { "type": "integer", "minimum": 1 },
+    "component_kind": { "type": "string", "enum": ["RBC", "FFP", "PLT", "CRYO"] },
+    "status": { "type": "string", "enum": ["IN_STOCK", "QUARANTINE", "ISSUED", "DISCARDED", "TRANSFERRED"] },
+    "expires_at": { "type": "string", "format": "date-time" },
+    "storage_location": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "version": { "type": "integer", "minimum": 1 },
+    "changed_at": { "type": "string", "format": "date-time" }
+  }
+}

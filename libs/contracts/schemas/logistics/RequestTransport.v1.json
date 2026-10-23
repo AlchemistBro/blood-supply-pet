@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/logistics/RequestTransport.v1.json",
+  "title": "RequestTransport",
+  "description": "Команда logistics.commands: заказать перевозку по подтверждённому обязательству. Номеров единиц нет: маршрут, вид, число контейнеров, температурный режим (ПП РФ № 641; диапазоны демо).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["obligation_id", "request_id", "source_clinic_id", "target_clinic_id", "component_kind", "quantity", "temperature_regime"],
+  "properties": {
+    "obligation_id": { "type": "string", "format": "uuid" },
+    "request_id": { "type": "string", "format": "uuid" },
+    "source_clinic_id": { "type": "integer", "minimum": 1 },
+    "target_clinic_id": { "type": "integer", "minimum": 1 },
+    "component_kind": { "type": "string", "enum": ["RBC", "FFP", "PLT", "CRYO"] },
+    "quantity": { "type": "integer", "minimum": 1, "description": "Число контейнеров" },
+    "temperature_regime": { "type": "string", "enum": ["COLD_2_6", "FROZEN_MINUS_25", "ROOM_20_24"] }
+  }
+}
