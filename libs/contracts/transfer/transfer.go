@@ -39,6 +39,20 @@ const (
 	RejectSourceRefused  = "SOURCE_REFUSED"
 )
 
+// Причины нарушения обязательства (TransferBroken). Первые четыре повторяют причины выбытия единицы
+// (inventory.UnitWithdrawn), QUARANTINE — закреплённая единица ушла на карантин: она не выбыла, но выдавать
+// и передавать её нельзя (ПП РФ № 641, п. 62 а; ADR-0027). Поэтому перечисление своё, а не общее с UnitWithdrawn.
+const (
+	BrokenIssued      = "ISSUED"
+	BrokenDiscarded   = "DISCARDED"
+	BrokenTransferred = "TRANSFERRED"
+	BrokenExpired     = "EXPIRED"
+	BrokenQuarantine  = "QUARANTINE"
+)
+
+// BrokenReasons — все причины нарушения в порядке схемы.
+var BrokenReasons = []string{BrokenIssued, BrokenDiscarded, BrokenTransferred, BrokenExpired, BrokenQuarantine}
+
 // Причины эскалации дежурному (EscalationRaised).
 const (
 	EscalationExpiredNoFallback       = "EXPIRED_NO_FALLBACK"
@@ -183,8 +197,8 @@ func (TransferCancelled) MessageType() string { return "TransferCancelled" }
 // SchemaVersion реализует contracts.Payload.
 func (TransferCancelled) SchemaVersion() int { return 1 }
 
-// TransferBroken — закреплённая единица выбыла в АИСТ-М, обязательство нарушено (→ BROKEN).
-// Reason — причина выбытия из inventory.UnitWithdrawn.
+// TransferBroken — закреплённая единица выбыла в АИСТ-М или ушла на карантин, обязательство нарушено (→ BROKEN).
+// Reason — одна из BrokenReasons.
 type TransferBroken struct {
 	ObligationID uuid.UUID `json:"obligation_id"`
 	RequestID    uuid.UUID `json:"request_id"`
