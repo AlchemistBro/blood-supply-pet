@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/AlchemistBro/blood-supply-pet/libs/clock"
@@ -244,9 +245,23 @@ func (s *Service) view(ctx context.Context, o domain.Obligation) (ObligationView
 }
 
 // permanentIfInvalid помечает ошибки, которые повтор не исправит: consumer отправит сообщение в DLT.
+// Нарушения внешнего ключа и CHECK (неизвестная клиника или вид, отрицательный остаток) тоже постоянны:
+// без этого сообщение повторялось бы бесконечно и остановило бы раздел Kafka.
 func permanentIfInvalid(err error) error {
-	if errors.Is(err, ErrInvalidEvent) || errors.Is(err, ErrNotFound) || errors.Is(err, domain.ErrInvalidObligation) {
+	if errors.Is(err, ErrInvalidEvent) || errors.Is(err, ErrNotFound) || errors.Is(err, domain.ErrInvalidObligation) ||
+		isConstraintViolation(err) {
 		return messaging.Permanent(err)
 	}
 	return err
+}
+
+// SQLSTATE нарушений, которые повтор не исправит.
+const (
+	sqlStateForeignKey = "23503"
+	sqlStateCheck      = "23514"
+)
+
+func isConstraintViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && (pgErr.Code == sqlStateForeignKey || pgErr.Code == sqlStateCheck)
 }

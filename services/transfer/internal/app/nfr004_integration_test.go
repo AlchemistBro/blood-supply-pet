@@ -8,8 +8,23 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/AlchemistBro/blood-supply-pet/libs/messaging"
+	"github.com/AlchemistBro/blood-supply-pet/services/transfer/internal/app"
 	"github.com/AlchemistBro/blood-supply-pet/services/transfer/internal/domain"
 )
+
+// Нарушение FK во входящем событии (неизвестная клиника) — постоянная ошибка: сообщение уйдёт в DLT,
+// а не будет повторяться бесконечно и не остановит раздел Kafka.
+func TestConstraintViolationInEventIsPermanent(t *testing.T) {
+	h := setup(t)
+	err := h.svc.OnUnitRegistered(h.ctx, delivery(), app.UnitRegistered{
+		UnitID: uuid.New(), ClinicID: 999999, ComponentKind: "RBC", BloodGroup: "A", RhPositive: true,
+		ExpiresAt: h.inDays(10), Version: h.versions.Add(1),
+	})
+	if err == nil || !messaging.IsPermanent(err) {
+		t.Fatalf("ожидали постоянную ошибку, получили %v", err)
+	}
+}
 
 // NFR004 без гонки: единственное, что не пускает единицу во второе обязательство, — частичный уникальный
 // индекс allocation_one_confirmed_per_unit. Остаток больше единицы и защищённый объём 0, чтобы раньше
