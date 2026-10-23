@@ -5,6 +5,8 @@
 Спецификация: `docs/domain/obligation-states.md`, `docs/architecture/saga-confirmation.md`, Java-тесты
 `ConfirmationRaceFitnessTests`, `TransferScenarioTests`, `TransportSagaTests`, `TransportGatewayTests`.
 
+Задание для агентов по пакетам работ, порядок и правила окружения: [01-saga-agents.md](01-saga-agents.md).
+
 ## Чеклист
 
 ### Контракты
