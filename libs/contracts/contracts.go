@@ -26,13 +26,15 @@ const (
 	TopicLogisticsReplies  = "logistics.replies"
 	TopicLogisticsEvents   = "logistics.events"
 	TopicAuditEvents       = "audit.events"
+	// TopicSecurityEvents — подозрения на инциденты с ПДн от детектора (этап 7, ADR-0025).
+	TopicSecurityEvents = "security.events"
 )
 
 // AllTopics — полный список для создания при старте стенда.
 var AllTopics = []string{
 	TopicInventoryEvents, TopicInventoryCommands, TopicDemandEvents, TopicPlanningEvents,
 	TopicMatchingEvents, TopicTransferCommands, TopicTransferEvents, TopicLogisticsCommands,
-	TopicLogisticsReplies, TopicLogisticsEvents, TopicAuditEvents,
+	TopicLogisticsReplies, TopicLogisticsEvents, TopicAuditEvents, TopicSecurityEvents,
 }
 
 // PatientCaseSealedPattern — шаблон зашифрованного конверта номера случая пациента v1.<kid>.<base64url>

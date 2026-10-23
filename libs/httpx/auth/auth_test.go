@@ -46,6 +46,11 @@ func TestObligationOperations(t *testing.T) {
 		{auth.OpBuildPlan, []auth.Role{auth.RoleAnalyst, auth.RoleDuty}},
 		// этап 6: заявки и варианты видят врач и дежурный; номер случая — отдельная операция READ_PATIENT_CASE
 		{auth.OpViewRequests, []auth.Role{auth.RolePhysician, auth.RoleDuty}},
+		// этап 7: состояние интеграций — ИТ-служба и дежурный; прослеживаемость выданных единиц за 12 месяцев
+		// (ПП РФ № 641, п. 54) — оператор клиники и дежурный; эскалации — только дежурный
+		{auth.OpViewIntegrations, []auth.Role{auth.RoleITService, auth.RoleDuty}},
+		{auth.OpTraceUnits, []auth.Role{auth.RoleOperator, auth.RoleDuty}},
+		{auth.OpHandleEscalation, []auth.Role{auth.RoleDuty}},
 	}
 	all := []auth.Role{auth.RolePhysician, auth.RoleOperator, auth.RoleAnalyst, auth.RoleDuty, auth.RoleITService, auth.RoleService}
 	for _, c := range cases {

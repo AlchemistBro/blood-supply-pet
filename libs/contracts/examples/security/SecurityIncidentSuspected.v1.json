@@ -1,0 +1,9 @@
+{
+  "incident_id": "0192f3a1-7b2c-7d4e-8f90-900000000001",
+  "rule": "PATIENT_CASE_READ_BURST",
+  "user_id": "operator-c001",
+  "count": 42,
+  "window_seconds": 600,
+  "first_seen_at": "2026-10-23T09:20:00Z",
+  "detected_at": "2026-10-23T09:30:00Z"
+}

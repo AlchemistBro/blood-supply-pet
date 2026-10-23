@@ -49,6 +49,8 @@ const (
 	OpInternalUnitStatus Operation = "INTERNAL_UNIT_STATUS"
 	OpReceiveForecast    Operation = "RECEIVE_FORECAST"
 	OpDevPanel           Operation = "DEV_PANEL"
+	OpViewIntegrations   Operation = "VIEW_INTEGRATIONS"
+	OpTraceUnits         Operation = "TRACE_UNITS"
 )
 
 // policy — матрица: операция → роли, которым она разрешена.
@@ -84,6 +86,8 @@ var policy = map[Operation][]Role{
 	OpInternalUnitStatus: {RoleService},
 	OpReceiveForecast:    {RoleService},
 	OpDevPanel:           {RolePhysician, RoleOperator, RoleAnalyst, RoleDuty, RoleITService},
+	OpViewIntegrations:   {RoleITService, RoleDuty},
+	OpTraceUnits:         {RoleOperator, RoleDuty},
 }
 
 // Allowed сообщает, разрешена ли операция хотя бы одной из ролей.

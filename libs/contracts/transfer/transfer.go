@@ -72,11 +72,13 @@ const (
 	EscalationTransportRefused        = "TRANSPORT_REFUSED"
 	EscalationTransportOutcomeUnknown = "TRANSPORT_OUTCOME_UNKNOWN"
 	EscalationSourceSystemUnavailable = "SOURCE_SYSTEM_UNAVAILABLE"
+	// EscalationTemperatureExcursion — нарушены условия перевозки (ПП РФ № 641, п. 69, 98; ADR-0022), этап 7.
+	EscalationTemperatureExcursion = "TEMPERATURE_EXCURSION"
 )
 
 // EscalationReasons — все причины эскалации в порядке схемы.
 var EscalationReasons = []string{EscalationExpiredNoFallback, EscalationTransportRefused,
-	EscalationTransportOutcomeUnknown, EscalationSourceSystemUnavailable}
+	EscalationTransportOutcomeUnknown, EscalationSourceSystemUnavailable, EscalationTemperatureExcursion}
 
 // ReplacementSpec — спецификация допустимой замены единицы (ADR-0011). Её считает matching
 // (или planning) по правилам O15, transfer только проверяет кандидата. Пустое поле — «любой».

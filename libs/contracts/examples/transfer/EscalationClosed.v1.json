@@ -1,0 +1,9 @@
+{
+  "obligation_id": "0192f3a1-7b2c-7d4e-8f90-300000000001",
+  "obligation_version": 5,
+  "request_id": "0192f3a1-7b2c-7d4e-8f90-200000000001",
+  "reason": "TRANSPORT_REFUSED",
+  "resolution": "MANUAL_TRANSPORT_ASSIGNED",
+  "closed_by": "duty1",
+  "at": "2026-10-23T10:21:00Z"
+}
