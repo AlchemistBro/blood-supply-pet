@@ -195,6 +195,7 @@ type fixture struct {
 func settings() app.Settings {
 	return app.Settings{
 		Lease:          30 * time.Second,
+		CallTimeout:    5 * time.Second,
 		Retry:          domain.RetryPolicy{MaxAttempts: 3, Backoff: time.Second, UnknownRecheck: time.Minute},
 		ReconcileBatch: 100,
 		// Сверщик в тестах не запускается: его шаг вызывает сам тест (ReconcileDue).
@@ -226,9 +227,29 @@ func newFixture(t *testing.T) *fixture {
 
 // newGateway — ещё один экземпляр шлюза над той же базой: своё соединение с C03, свои владельцы аренды.
 func (f *fixture) newGateway() *app.Gateway {
-	journal := messaging.NewJournal("logistics-gateway", auditc.ModuleLogistics, f.clock)
+	return f.newGatewayWithClock(f.clock)
+}
+
+func (f *fixture) newGatewayWithClock(clk clock.Clock) *app.Gateway {
+	journal := messaging.NewJournal("logistics-gateway", auditc.ModuleLogistics, clk)
 	return app.New(f.pool, f.store, c03.New(simURL, 5*time.Second), kafka.Outbox{Journal: journal, Topic: f.replies},
-		f.clock, f.log, settings())
+		clk, f.log, settings())
+}
+
+// steppingClock — часы, которые сдвигаются на step при каждом чтении: так между арендой и отправкой
+// «проходит» время без реального ожидания.
+type steppingClock struct {
+	mu   sync.Mutex
+	now  time.Time
+	step time.Duration
+}
+
+func (c *steppingClock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	t := c.now
+	c.now = c.now.Add(c.step)
+	return t
 }
 
 // withKafka запускает consumer шлюза на топике команд и ретранслятор outbox, как в рабочем сервисе.
@@ -789,6 +810,37 @@ func TestCancelDuringRefusedSubmitIsAnswered(t *testing.T) {
 	}
 	assertShipments(t, f.shipments(c.ObligationID), 0)
 	assertReplies(t, f.repliesOf(c.ObligationID), "TransportRejected", "TransportCancelled")
+}
+
+// Сверка съела аренду (часы сдвигаются на 26 с при каждом чтении, до конца аренды меньше таймаута C03):
+// заказ не отправляется, ход отпущен без засчитанной попытки, и следующий drive доводит заказ до конца.
+func TestSubmitIsSkippedWhenLeaseIsRunningOut(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	c := command()
+	f.insert(c)
+	slow := f.newGatewayWithClock(&steppingClock{now: start, step: 26 * time.Second})
+
+	if err := slow.Drive(ctx, c.ObligationID); err != nil {
+		t.Fatalf("drive: %v", err)
+	}
+	assertShipments(t, f.shipments(c.ObligationID), 0)
+	r := f.row(c.ObligationID)
+	if r.Status != domain.StatusRequesting || r.Attempts != 0 {
+		t.Fatalf("строка после отпущенного хода: %+v", r)
+	}
+	var leased bool
+	if err := f.pool.QueryRow(ctx, `SELECT lease_owner IS NOT NULL FROM transport_request WHERE obligation_id = $1`,
+		c.ObligationID).Scan(&leased); err != nil {
+		t.Fatal(err)
+	}
+	if leased {
+		t.Fatal("аренда не отпущена")
+	}
+
+	f.drive(c.ObligationID)
+	assertShipments(t, f.shipments(c.ObligationID), 1)
+	assertReplies(t, f.repliesOf(c.ObligationID), "TransportAccepted")
 }
 
 // Приём команды и запрос отмены попадают в аудит теми же транзакциями; повтор команды второй записи не даёт.

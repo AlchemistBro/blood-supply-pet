@@ -59,6 +59,7 @@ func (c config) validate() error {
 func (c config) settings() app.Settings {
 	return app.Settings{
 		Lease:             c.Lease,
+		CallTimeout:       c.C03Timeout,
 		Retry:             domain.RetryPolicy{MaxAttempts: c.MaxAttempts, Backoff: c.Backoff, UnknownRecheck: c.UnknownRecheck},
 		ReconcileBatch:    c.ReconcileBatch,
 		ReconcileInterval: c.ReconcileInterval,

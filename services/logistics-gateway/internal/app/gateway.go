@@ -41,6 +41,8 @@ type Store interface {
 	// FailAttempt засчитывает неудачную попытку, только если аренда всё ещё у owner и статус равен expected.
 	FailAttempt(ctx context.Context, tx pgx.Tx, obligationID, owner uuid.UUID, expected, status domain.Status, lastError string,
 		nextAttemptAt, now time.Time) (bool, error)
+	// Release отпускает аренду owner без исхода и без засчитанной попытки.
+	Release(ctx context.Context, obligationID, owner uuid.UUID, now time.Time) error
 	// Due — строки, которым пора к C03, по next_attempt_at.
 	Due(ctx context.Context, now time.Time, limit int) ([]uuid.UUID, error)
 	// Find читает строку.
@@ -81,10 +83,18 @@ type Outbox interface {
 }
 
 // Settings — параметры шлюза (BS_LOGISTICS_*), значения по умолчанию из прототипа.
+//
+// Допущение (как в прототипе): аренда сравнивается по часам экземпляра, который её берёт или проверяет.
+// Экземпляры обязаны синхронизировать время (NTP), а расхождение часов должно быть много меньше запаса
+// «аренда − 2 × таймаут вызова C03» (около 20 с при значениях по умолчанию). Иначе экземпляр с убежавшими
+// вперёд часами сочтёт чужую аренду истёкшей и заговорит с C03 одновременно с владельцем.
 type Settings struct {
 	// Lease — аренда строки; должна быть дольше всех вызовов C03 одного Drive (до трёх таймаутов клиента).
 	Lease time.Duration
-	Retry domain.RetryPolicy
+	// CallTimeout — таймаут одного вызова C03. Перед отправкой заказа drive проверяет, что до конца аренды
+	// остаётся не меньше CallTimeout; ноль отключает проверку.
+	CallTimeout time.Duration
+	Retry       domain.RetryPolicy
 	// ReconcileBatch — сколько строк сверщик берёт за проход.
 	ReconcileBatch int
 	// ReconcileInterval — период сверщика.
@@ -95,6 +105,7 @@ type Settings struct {
 func DefaultSettings() Settings {
 	return Settings{
 		Lease:             30 * time.Second,
+		CallTimeout:       5 * time.Second,
 		Retry:             domain.RetryPolicy{MaxAttempts: 5, Backoff: time.Second, UnknownRecheck: time.Minute},
 		ReconcileBatch:    100,
 		ReconcileInterval: time.Second,
@@ -219,11 +230,19 @@ func (g *Gateway) Drive(ctx context.Context, obligationID uuid.UUID) error {
 	if !ok {
 		return nil // делать нечего или строку держит другой экземпляр
 	}
-	outcome, err := g.decide(ctx, row)
+	outcome, err := g.decide(ctx, row, start)
 	if err != nil {
 		if ctx.Err() != nil {
 			// Остановка процесса — не недоступность C03: попытку не засчитываем, аренда истечёт сама.
 			return fmt.Errorf("drive прерван: %w", ctx.Err())
+		}
+		if errors.Is(err, errLeaseRunningOut) {
+			g.log.WarnContext(ctx, "аренды не хватит на отправку заказа, ход отпущен сверщику",
+				"obligation_id", obligationID)
+			if err := g.store.Release(ctx, obligationID, owner, g.clock.Now()); err != nil {
+				return err
+			}
+			return nil
 		}
 		if errors.Is(err, ErrCarrierUnavailable) {
 			return g.recordFailure(ctx, row, owner, err)
@@ -258,8 +277,11 @@ func (g *Gateway) Drive(ctx context.Context, obligationID uuid.UUID) error {
 	})
 }
 
-// decide — все вызовы C03 здесь, вне транзакции. Сверка всегда раньше отправки.
-func (g *Gateway) decide(ctx context.Context, row domain.Row) (domain.Outcome, error) {
+// errLeaseRunningOut — до конца аренды меньше таймаута вызова C03: отправлять заказ нельзя.
+var errLeaseRunningOut = errors.New("аренда заказа перевозки на исходе")
+
+// decide — все вызовы C03 здесь, вне транзакции. Сверка всегда раньше отправки. leaseStart — момент аренды.
+func (g *Gateway) decide(ctx context.Context, row domain.Row, leaseStart time.Time) (domain.Outcome, error) {
 	ref := domain.ClientRef(row.ObligationID)
 	d := row.Begin()
 	if d.Step == domain.StepReconcile {
@@ -276,6 +298,13 @@ func (g *Gateway) decide(ctx context.Context, row domain.Row) (domain.Outcome, e
 		}
 		return d.Outcome, nil
 	case domain.StepSubmit:
+		// Сверка могла съесть почти всю аренду (медленная C03). Если отправка не успеет до её конца, аренда
+		// истечёт посреди вызова, другой экземпляр сверится, не увидит ещё не созданный заказ и отправит второй.
+		// Поэтому без запаса в один таймаут не отправляем: отпускаем ход, сверщик начнёт заново со сверки.
+		if g.settings.CallTimeout > 0 &&
+			g.clock.Now().After(leaseStart.Add(g.settings.Lease-g.settings.CallTimeout)) {
+			return domain.Outcome{}, errLeaseRunningOut
+		}
 		res, err := g.carrier.Submit(ctx, Order{ClientRef: ref, Request: row.Request})
 		if err != nil {
 			return domain.Outcome{}, fmt.Errorf("заказ у C03: %w", err)
