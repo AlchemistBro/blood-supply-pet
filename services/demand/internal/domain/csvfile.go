@@ -114,6 +114,42 @@ const (
 	columnEnd        = "period_end"
 )
 
+// Пределы файла (docs/ui/csv-formats.md): превышение отклоняет файл целиком. Защищают сервис от
+// случайно выбранного не того файла и от разбора гигантских полей при сбитых кавычках.
+const (
+	MaxFileBytes  = 5 << 20
+	MaxDataRows   = 50_000
+	maxCellLen    = 1024
+	maxShownValue = 64
+)
+
+func unclosedQuote(pe *csv.ParseError) string {
+	return fmt.Sprintf("в строке %d не закрыта кавычка: поле в кавычках тянется до строки %d или до конца файла. "+
+		"Закройте кавычку или уберите её", pe.StartLine, pe.Line)
+}
+
+func tooManyRows() string {
+	return fmt.Sprintf("в файле больше %d строк данных: разделите данные на несколько файлов", MaxDataRows)
+}
+
+// blankRecord — строка из одних разделителей и пробелов (Excel дописывает такие в конце); пропускается.
+func blankRecord(rec []string) bool {
+	for _, v := range rec {
+		if strings.TrimSpace(v) != "" {
+			return false
+		}
+	}
+	return true
+}
+
+// shown — значение ячейки для текста ошибки, не длиннее 64 символов.
+func shown(v string) string {
+	if utf8.RuneCountInString(v) <= maxShownValue {
+		return v
+	}
+	return string([]rune(v)[:maxShownValue]) + "…"
+}
+
 // csvRow — строка данных с номером строки файла и значениями по именам колонок.
 type csvRow struct {
 	line   int
@@ -125,6 +161,9 @@ func (r csvRow) get(col string) string { return r.values[col] }
 // readCSV читает файл по общим правилам docs/ui/csv-formats.md. Ошибка заголовка или кодировки
 // возвращается как fileErr; битые строки — как ошибки строк, остальные строки читаются дальше.
 func readCSV(data []byte, columns []string) (rows []csvRow, rowErrs []RowError, fileErr string) {
+	if len(data) > MaxFileBytes {
+		return nil, nil, fmt.Sprintf("файл больше %d МиБ: разделите данные на несколько файлов", MaxFileBytes>>20)
+	}
 	data = bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))
 	if !utf8.Valid(data) {
 		return nil, nil, "файл не в кодировке UTF-8: сохраните его как «CSV UTF-8»"
@@ -145,21 +184,49 @@ func readCSV(data []byte, columns []string) (rows []csvRow, rowErrs []RowError, 
 	for i := range header {
 		header[i] = strings.TrimSpace(header[i])
 	}
+	// quoteAtEnd — ошибка кавычек в последней прочитанной записи: если за ней конец файла, кавычка могла
+	// «съесть» хвост файла, и строки после неё пропали бы молча.
+	var quoteAtEnd *csv.ParseError
 	for {
 		rec, err := r.Read()
 		if errors.Is(err, io.EOF) {
+			if quoteAtEnd != nil {
+				return nil, nil, unclosedQuote(quoteAtEnd)
+			}
 			break
 		}
+		quoteAtEnd = nil
 		if err != nil {
 			var pe *csv.ParseError
-			if errors.As(err, &pe) {
-				rowErrs = append(rowErrs, RowError{Row: pe.StartLine, Message: csvErrorText(err)})
-				rows = append(rows, csvRow{line: pe.StartLine})
-				continue
+			if !errors.As(err, &pe) {
+				return nil, nil, "не удалось прочитать файл: " + err.Error()
 			}
-			return nil, nil, "не удалось прочитать файл: " + err.Error()
+			// Ошибка, захватившая несколько строк, — незакрытая кавычка: дальнейшие строки ненадёжны.
+			if pe.Line != pe.StartLine {
+				return nil, nil, unclosedQuote(pe)
+			}
+			if errors.Is(pe.Err, csv.ErrQuote) {
+				quoteAtEnd = pe
+			}
+			if len(rows) >= MaxDataRows {
+				return nil, nil, tooManyRows()
+			}
+			rowErrs = append(rowErrs, RowError{Row: pe.StartLine, Message: csvErrorText(err)})
+			rows = append(rows, csvRow{line: pe.StartLine})
+			continue
 		}
 		line, _ := r.FieldPos(0)
+		if blankRecord(rec) {
+			continue
+		}
+		if len(rows) >= MaxDataRows {
+			return nil, nil, tooManyRows()
+		}
+		for _, v := range rec {
+			if utf8.RuneCountInString(v) > maxCellLen {
+				return nil, nil, fmt.Sprintf("в строке %d поле длиннее %d символов: проверьте разделители и кавычки", line, maxCellLen)
+			}
+		}
 		if len(rec) != len(header) {
 			rowErrs = append(rowErrs, RowError{Row: line,
 				Message: fmt.Sprintf("в строке полей %d, ожидается %d", len(rec), len(header))})
@@ -194,9 +261,9 @@ func checkHeader(header, columns []string) string {
 		h = strings.TrimSpace(h)
 		switch {
 		case seen[h]:
-			problems = append(problems, fmt.Sprintf("колонка «%s» повторяется", h))
+			problems = append(problems, fmt.Sprintf("колонка «%s» повторяется", shown(h)))
 		case !want[h]:
-			problems = append(problems, fmt.Sprintf("неизвестная колонка «%s»", h))
+			problems = append(problems, fmt.Sprintf("неизвестная колонка «%s»", shown(h)))
 		}
 		seen[h] = true
 	}

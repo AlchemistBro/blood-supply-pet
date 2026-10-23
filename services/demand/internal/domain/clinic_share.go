@@ -39,8 +39,8 @@ var clinicShareColumns = []string{columnDistrict, columnClinic, columnClinicShar
 
 // ParseClinicShares разбирает и проверяет доли район → клиника (FR046): район и клиника из справочника,
 // пара без повторов, доля больше 0 и не больше 1, основание, источник и период. Затем сумма долей района
-// по принятым строкам сверяется с 1 ± 0,0001; вне допуска отклоняются все строки района: доли района
-// принимаются целиком или никак, иначе потребность района разошлась бы не полностью (FR019).
+// сверяется с 1 ± 0,0001. Доли района принимаются целиком или никак (FR019: потребность района должна
+// разойтись полностью): если отклонена любая строка района или сумма вне допуска, отклоняются все его строки.
 func ParseClinicShares(data []byte, ref *Reference) ClinicShareFile {
 	if ref == nil {
 		return ClinicShareFile{Check: rejectFile(msgNoReference)}
@@ -51,11 +51,12 @@ func ParseClinicShares(data []byte, ref *Reference) ClinicShareFile {
 	}
 	type pair struct{ district, clinic int64 }
 	var (
-		sum       summary
-		valid     []ClinicShare
-		firstRow  = map[pair]int{}
-		districts []int64
-		units     = map[int64]int64{}
+		sum      summary
+		valid    []ClinicShare
+		firstRow = map[pair]int{}
+		units    = map[int64]int64{}
+		// brokenRow — первая отклонённая строка распознанного района: такой район отклоняется целиком.
+		brokenRow = map[int64]int{}
 	)
 	for _, row := range rows {
 		if row.values == nil {
@@ -68,14 +69,14 @@ func ParseClinicShares(data []byte, ref *Reference) ClinicShareFile {
 			if d, known := ref.District(code); known {
 				s.DistrictID, s.DistrictCode = d.ID, d.Code
 			} else {
-				c.fail(columnDistrict, fmt.Sprintf("неизвестный район «%s»", code))
+				c.fail(columnDistrict, fmt.Sprintf("неизвестный район «%s»", shown(code)))
 			}
 		}
 		if code, ok := c.required(columnClinic); ok {
 			if cl, known := ref.Clinic(code); known {
 				s.ClinicID, s.ClinicCode = cl.ID, cl.Code
 			} else {
-				c.fail(columnClinic, fmt.Sprintf("неизвестная клиника «%s»", code))
+				c.fail(columnClinic, fmt.Sprintf("неизвестная клиника «%s»", shown(code)))
 			}
 		}
 		if v, ok := c.share(columnClinicShare); ok {
@@ -88,7 +89,6 @@ func ParseClinicShares(data []byte, ref *Reference) ClinicShareFile {
 		s.Basis = c.text(columnBasis)
 		s.DataSource = c.text(columnDataSource)
 		s.Period, _ = c.period()
-		sum.add(s.DataSource, s.Period)
 
 		if s.DistrictID != 0 && s.ClinicID != 0 {
 			key := pair{s.DistrictID, s.ClinicID}
@@ -101,30 +101,32 @@ func ParseClinicShares(data []byte, ref *Reference) ClinicShareFile {
 		}
 		if !c.ok() {
 			errs = append(errs, c.errs...)
+			if s.DistrictID != 0 && brokenRow[s.DistrictID] == 0 {
+				brokenRow[s.DistrictID] = row.line
+			}
 			continue
-		}
-		if _, seen := units[s.DistrictID]; !seen {
-			districts = append(districts, s.DistrictID)
 		}
 		units[s.DistrictID] += s.Share.TenThousandths()
 		valid = append(valid, s)
 	}
 
-	badDistrict := map[int64]bool{}
-	for _, d := range districts {
-		badDistrict[d] = !ShareSumWithinTolerance(units[d])
-	}
 	var out ClinicShareFile
 	var bases []string
 	seenBasis := map[string]bool{}
 	for _, s := range valid {
-		if badDistrict[s.DistrictID] {
+		if broken := brokenRow[s.DistrictID]; broken != 0 {
+			errs = append(errs, RowError{Row: s.Row, Field: columnDistrict,
+				Message: fmt.Sprintf("доли района %s отклонены целиком: в строке %d этого района ошибка", s.DistrictCode, broken)})
+			continue
+		}
+		if !ShareSumWithinTolerance(units[s.DistrictID]) {
 			errs = append(errs, RowError{Row: s.Row, Field: columnClinicShare,
 				Message: fmt.Sprintf("сумма долей района %s по клиникам %s вне допуска 1 ± 0,0001",
 					s.DistrictCode, formatShareUnits(units[s.DistrictID]))})
 			continue
 		}
 		out.Shares = append(out.Shares, s)
+		sum.add(s.DataSource, s.Period)
 		if !seenBasis[s.Basis] {
 			seenBasis[s.Basis] = true
 			bases = append(bases, s.Basis)

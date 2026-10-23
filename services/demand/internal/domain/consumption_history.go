@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"sort"
 )
 
 // HistorySource — откуда история расхода (consumption_history.history_source).
@@ -46,8 +47,7 @@ func ParseConsumptionHistory(data []byte, ref *Reference) ConsumptionHistoryFile
 	if fileErr != "" {
 		return ConsumptionHistoryFile{Check: rejectFile(fileErr)}
 	}
-	var out ConsumptionHistoryFile
-	var sum summary
+	var candidates []ConsumptionRecord
 	for _, row := range rows {
 		if row.values == nil {
 			continue
@@ -59,39 +59,81 @@ func ParseConsumptionHistory(data []byte, ref *Reference) ConsumptionHistoryFile
 			if k, known := ref.Kind(code); known {
 				r.KindCode = k.Code
 			} else {
-				c.fail(columnKind, fmt.Sprintf("неизвестный вид компонента «%s»", code))
+				c.fail(columnKind, fmt.Sprintf("неизвестный вид компонента «%s»", shown(code)))
 			}
 		}
-		p, periodOK := c.period()
-		r.Period = p
+		r.Period, _ = c.period()
 		if v, ok := c.intInRange(columnConsumed, 0, maxConsumedML, "объём должен быть целым числом мл не меньше 0"); ok {
 			r.ConsumedVolumeML = v
 		}
 		r.DataSource = c.text(columnDataSource)
-		sum.add(r.DataSource, r.Period)
-
-		if periodOK && r.KindCode != "" {
-			for _, prev := range out.Records {
-				if prev.KindCode == r.KindCode && prev.Period.Overlaps(r.Period) {
-					c.fail(columnStart, fmt.Sprintf("период пересекается с периодом строки %d того же вида", prev.Row))
-					break
-				}
-			}
-		}
 		if !c.ok() {
 			errs = append(errs, c.errs...)
 			continue
 		}
-		out.Records = append(out.Records, r)
+		candidates = append(candidates, r)
 	}
-	finish(&out.Check, len(rows), len(out.Records), errs, sum)
+	accepted, overlapErrs := rejectOverlaps(candidates)
+	errs = append(errs, overlapErrs...)
+	out := ConsumptionHistoryFile{Records: accepted}
+	finish(&out.Check, len(rows), len(accepted), errs, historySummary(accepted))
 	return out
 }
 
-// RejectRecords отклоняет принятые строки, для которых reject возвращает причину, и пересчитывает статус.
-// Нужна приложению: строку, чей период уже загружен другим файлом, видно только по сохранённой истории.
+// rejectOverlaps отклоняет строки, чей период пересекается с более ранней (по началу периода) строкой
+// того же вида. Сортировка по виду и началу периода: O(n log n), а не попарное сравнение.
+// Порядок принятых строк — как в файле.
+func rejectOverlaps(records []ConsumptionRecord) ([]ConsumptionRecord, []RowError) {
+	idx := make([]int, len(records))
+	for i := range idx {
+		idx[i] = i
+	}
+	sort.SliceStable(idx, func(a, b int) bool {
+		x, y := records[idx[a]], records[idx[b]]
+		if x.KindCode != y.KindCode {
+			return x.KindCode < y.KindCode
+		}
+		if !x.Period.Start.Equal(y.Period.Start) {
+			return x.Period.Start.Before(y.Period.Start)
+		}
+		return x.Row < y.Row
+	})
+	rejected := make([]bool, len(records))
+	var errs []RowError
+	last := -1 // принятая строка того же вида с самым поздним концом периода
+	for _, i := range idx {
+		r := records[i]
+		if last >= 0 && records[last].KindCode == r.KindCode && !records[last].Period.End.Before(r.Period.Start) {
+			rejected[i] = true
+			errs = append(errs, RowError{Row: r.Row, Field: columnStart,
+				Message: fmt.Sprintf("период пересекается с периодом строки %d того же вида", records[last].Row)})
+			continue
+		}
+		if last < 0 || records[last].KindCode != r.KindCode || r.Period.End.After(records[last].Period.End) {
+			last = i
+		}
+	}
+	accepted := make([]ConsumptionRecord, 0, len(records))
+	for i, r := range records {
+		if !rejected[i] {
+			accepted = append(accepted, r)
+		}
+	}
+	return accepted, errs
+}
+
+func historySummary(records []ConsumptionRecord) summary {
+	var sum summary
+	for _, r := range records {
+		sum.add(r.DataSource, r.Period)
+	}
+	return sum
+}
+
+// RejectRecords отклоняет принятые строки, для которых reject возвращает причину, и пересчитывает статус
+// и сводку. Нужна приложению: конфликт с уже сохранённой историей виден только по базе.
 func (f *ConsumptionHistoryFile) RejectRecords(reject func(ConsumptionRecord) (field, msg string, bad bool)) {
-	kept := f.Records[:0]
+	kept := make([]ConsumptionRecord, 0, len(f.Records))
 	errs := append([]RowError(nil), f.RowErrors...)
 	for _, r := range f.Records {
 		if field, msg, bad := reject(r); bad {
@@ -101,9 +143,5 @@ func (f *ConsumptionHistoryFile) RejectRecords(reject func(ConsumptionRecord) (f
 		kept = append(kept, r)
 	}
 	f.Records = kept
-	sum := summary{period: f.Period}
-	if f.DataSource != "" {
-		sum.sources = []string{f.DataSource}
-	}
-	finish(&f.Check, f.TotalRows, len(kept), errs, sum)
+	finish(&f.Check, f.TotalRows, len(kept), errs, historySummary(kept))
 }

@@ -294,11 +294,34 @@ func TestParseClinicShares_DistrictAcceptedWholeOrNotAtAll(t *testing.T) {
 		t.Fatalf("статус %s, долей %d: %+v", f.Status, len(f.Shares), f.RowErrors)
 	}
 	requireRowError(t, f.Check, 3, "clinic_code", "неизвестная клиника «C099»")
-	requireRowError(t, f.Check, 2, "clinic_share", "0,7000")
+	requireRowError(t, f.Check, 2, "district_code", "доли района D01 отклонены целиком: в строке 3")
 	for _, s := range f.Shares {
 		if s.DistrictID != 2 {
 			t.Fatalf("принята доля района %d, ожидали только D02", s.DistrictID)
 		}
+	}
+	if f.DataSource != "ДЕМО: решение" || f.Period.Start != date(2026, 1, 1) {
+		t.Fatalf("сводка по принятым строкам: %q %+v", f.DataSource, f.Period)
+	}
+}
+
+// Ревью: строки 0,6 и 0,4 в сумме дают 1, но третья строка района (0,2) отклонена из-за пустого
+// основания — район отклоняется целиком, а не принимается по «оставшейся» сумме.
+func TestParseClinicShares_AnyRejectedRowRejectsDistrict(t *testing.T) {
+	f := ParseClinicShares(csvOf(
+		shareHeader,
+		shareRow("D01", "C001", "0,6"),             // 2
+		shareRow("D01", "C002", "0,4"),             // 3
+		"D01;C003;0,2;;ДЕМО;2026-01-01;2026-12-31", // 4: нет основания
+	), testRef(t))
+	if f.Status != StatusRejected || len(f.Shares) != 0 || f.RejectedRows() != 3 {
+		t.Fatalf("статус %s, долей %d, отклонено %d: %+v", f.Status, len(f.Shares), f.RejectedRows(), f.RowErrors)
+	}
+	requireRowError(t, f.Check, 4, "basis", "не заполнено")
+	requireRowError(t, f.Check, 2, "district_code", "в строке 4")
+	requireRowError(t, f.Check, 3, "district_code", "в строке 4")
+	if f.DataSource != "" || !f.Period.IsZero() {
+		t.Fatalf("у отклонённого файла нет сводки: %q %+v", f.DataSource, f.Period)
 	}
 }
 
@@ -329,18 +352,20 @@ func TestParseClinicShares_BrokenRows(t *testing.T) {
 	data := csvOf(
 		shareHeader,
 		shareRow("D01", "C001", "1"),             // 2: принята
-		shareRow("D01", "C001", "0,2"),           // 3: пара повторяется
+		shareRow("D06", "C001", "1"),             // 3: отклонена вместе с районом D06 (строка 9)
 		shareRow("D02", "C002", "0"),             // 4: доля 0
 		shareRow("D03", "C002", "0,00004"),       // 5: после округления 0
 		shareRow("D04", "C002", "1,5"),           // 6: больше 1
 		"D05;C002;1;;ДЕМО;2026-01-01;2026-12-31", // 7: нет основания
 		shareRow("D99", "C002", "1"),             // 8: неизвестный район
+		shareRow("D06", "C001", "0,2"),           // 9: пара повторяется
 	)
 	f := ParseClinicShares(data, testRef(t))
-	if f.Status != StatusPartial || len(f.Shares) != 1 {
+	if f.Status != StatusPartial || len(f.Shares) != 1 || f.Shares[0].Row != 2 {
 		t.Fatalf("статус %s, долей %d: %+v", f.Status, len(f.Shares), f.RowErrors)
 	}
-	requireRowError(t, f.Check, 3, "clinic_code", "пара район D01 — клиника C001 уже указана в строке 2")
+	requireRowError(t, f.Check, 9, "clinic_code", "пара район D06 — клиника C001 уже указана в строке 3")
+	requireRowError(t, f.Check, 3, "district_code", "доли района D06 отклонены целиком: в строке 9")
 	requireRowError(t, f.Check, 4, "clinic_share", "больше 0 и не больше 1")
 	requireRowError(t, f.Check, 5, "clinic_share", "больше 0 и не больше 1")
 	requireRowError(t, f.Check, 6, "clinic_share", "больше 0 и не больше 1")
@@ -358,6 +383,133 @@ func TestParse_BrokenQuotesRejectOnlyThatRow(t *testing.T) {
 		t.Fatalf("статус %s, долей %d: %+v", f.Status, len(f.Shares), f.RowErrors)
 	}
 	requireRowError(t, f.Check, 2, "", "кавычк")
+}
+
+// Незакрытая кавычка: encoding/csv дочитывает до конца файла одной ошибкой, строки после неё пропали бы
+// молча — файл отклоняется целиком.
+func TestParse_UnclosedQuoteRejectsFile(t *testing.T) {
+	cases := map[string][]byte{
+		"в середине файла": csvOf(
+			shareHeader,
+			shareRow("D01", "C001", "1"),
+			`D02;"C002;1;ДЕМО;ДЕМО;2026-01-01;2026-12-31`,
+			shareRow("D03", "C003", "1"),
+			shareRow("D04", "C004", "1"),
+		),
+		"в последней строке": csvOf(
+			shareHeader,
+			shareRow("D01", "C001", "1"),
+			`D02;"C002;1;ДЕМО;ДЕМО;2026-01-01;2026-12-31`,
+		),
+	}
+	for name, data := range cases {
+		t.Run(name, func(t *testing.T) {
+			f := ParseClinicShares(data, testRef(t))
+			if f.Status != StatusRejected || len(f.Shares) != 0 {
+				t.Fatalf("статус %s, долей %d", f.Status, len(f.Shares))
+			}
+			if !strings.Contains(f.FileError, "в строке 3 не закрыта кавычка") {
+				t.Fatalf("причина: %q", f.FileError)
+			}
+		})
+	}
+}
+
+func TestParse_CRLFLineEndings(t *testing.T) {
+	data := []byte(shareHeader + "\r\n" + shareRow("D01", "C001", "1") + "\r\n" + shareRow("D02", "C099", "1") + "\r\n")
+	f := ParseClinicShares(data, testRef(t))
+	if f.Status != StatusPartial || len(f.Shares) != 1 {
+		t.Fatalf("статус %s: %+v", f.Status, f.RowErrors)
+	}
+	if f.Shares[0].Period.End != date(2026, 12, 31) || f.Shares[0].Basis != "ДЕМО: схема маршрутизации" {
+		t.Fatalf("последнее поле строки с CRLF: %+v", f.Shares[0])
+	}
+	requireRowError(t, f.Check, 3, "clinic_code", "«C099»")
+}
+
+func TestParse_QuotedFieldWithSeparator(t *testing.T) {
+	f := ParseClinicShares(csvOf(
+		shareHeader,
+		`D01;C001;1;"ДЕМО: схема; редакция 2";"ДЕМО: решение ""ДЗМ""";2026-01-01;2026-12-31`,
+	), testRef(t))
+	if f.Status != StatusAccepted {
+		t.Fatalf("статус %s: %+v %q", f.Status, f.RowErrors, f.FileError)
+	}
+	if f.Shares[0].Basis != "ДЕМО: схема; редакция 2" || f.Shares[0].DataSource != `ДЕМО: решение "ДЗМ"` {
+		t.Fatalf("поля в кавычках: %+v", f.Shares[0])
+	}
+}
+
+// Поле в кавычках с переводом строки занимает две строки файла: ошибка следующей записи указывает
+// её настоящую строку в файле, а не порядковый номер записи.
+func TestParse_QuotedFieldWithNewlineKeepsFileLineNumbers(t *testing.T) {
+	f := ParseClinicShares(csvOf(
+		shareHeader,
+		"D01;C001;1;\"ДЕМО: схема\nмаршрутизации\";ДЕМО;2026-01-01;2026-12-31", // строки 2–3
+		shareRow("D02", "C099", "1"), // строка 4
+	), testRef(t))
+	if f.Status != StatusPartial || len(f.Shares) != 1 || f.Shares[0].Row != 2 {
+		t.Fatalf("статус %s: %+v", f.Status, f.RowErrors)
+	}
+	if f.Shares[0].Basis != "ДЕМО: схема\nмаршрутизации" {
+		t.Fatalf("основание: %q", f.Shares[0].Basis)
+	}
+	requireRowError(t, f.Check, 4, "clinic_code", "«C099»")
+}
+
+func TestParse_SeparatorOnlyRowsSkipped(t *testing.T) {
+	f := ParseClinicShares(csvOf(shareHeader, shareRow("D01", "C001", "1"), ";;;;;;", " ; ;;;;; "), testRef(t))
+	if f.Status != StatusAccepted || f.TotalRows != 1 {
+		t.Fatalf("статус %s, строк %d: %+v", f.Status, f.TotalRows, f.RowErrors)
+	}
+}
+
+func TestParse_LimitsRejectFile(t *testing.T) {
+	ref := testRef(t)
+	big := make([]byte, MaxFileBytes+1)
+	for i := range big {
+		big[i] = 'a'
+	}
+	if f := ParseClinicShares(big, ref); f.Status != StatusRejected || !strings.Contains(f.FileError, "больше 5 МиБ") {
+		t.Fatalf("размер: %s %q", f.Status, f.FileError)
+	}
+
+	lines := []string{shareHeader}
+	for i := 0; i <= MaxDataRows; i++ {
+		lines = append(lines, shareRow("D01", "C001", "1"))
+	}
+	if f := ParseClinicShares(csvOf(lines...), ref); f.Status != StatusRejected || !strings.Contains(f.FileError, "больше 50000 строк") {
+		t.Fatalf("число строк: %s %q", f.Status, f.FileError)
+	}
+
+	long := shareRow("D01", "C001", "1") + strings.Repeat("я", maxCellLen)
+	if f := ParseClinicShares(csvOf(shareHeader, long), ref); f.Status != StatusRejected || !strings.Contains(f.FileError, "длиннее 1024") {
+		t.Fatalf("длина поля: %s %q", f.Status, f.FileError)
+	}
+}
+
+func TestParse_DateYearsLimited(t *testing.T) {
+	f := ParseClinicShares(csvOf(shareHeader,
+		"D01;C001;1;ДЕМО;ДЕМО;1899-12-31;2026-12-31",
+		"D02;C002;1;ДЕМО;ДЕМО;2026-01-01;2101-01-01",
+	), testRef(t))
+	if f.Status != StatusRejected {
+		t.Fatalf("статус %s", f.Status)
+	}
+	requireRowError(t, f.Check, 2, "period_start", "от 1900 до 2100")
+	requireRowError(t, f.Check, 3, "period_end", "от 1900 до 2100")
+}
+
+func TestParse_LongValuesShortenedInMessages(t *testing.T) {
+	code := strings.Repeat("Ж", 100)
+	f := ParseClinicShares(csvOf(shareHeader, shareRow(code, "C001", "1")), testRef(t))
+	e, ok := findRowError(f.RowErrors, 2, "district_code")
+	if !ok {
+		t.Fatalf("нет ошибки района: %+v", f.RowErrors)
+	}
+	if strings.Contains(e.Message, code) || !strings.Contains(e.Message, strings.Repeat("Ж", 64)+"…") {
+		t.Fatalf("значение не обрезано до 64 символов: %q", e.Message)
+	}
 }
 
 func TestNewReference_RejectsDuplicates(t *testing.T) {

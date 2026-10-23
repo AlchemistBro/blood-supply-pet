@@ -62,7 +62,7 @@ func ParseDistrictProfiles(data []byte, ref *Reference) DistrictProfileFile {
 			d, known := ref.District(code)
 			switch {
 			case !known:
-				c.fail(columnDistrict, fmt.Sprintf("неизвестный район «%s»", code))
+				c.fail(columnDistrict, fmt.Sprintf("неизвестный район «%s»", shown(code)))
 			case firstRow[d.ID] != 0:
 				c.fail(columnDistrict, fmt.Sprintf("район %s уже указан в строке %d", code, firstRow[d.ID]))
 			default:
@@ -98,7 +98,6 @@ func ParseDistrictProfiles(data []byte, ref *Reference) DistrictProfileFile {
 
 		p.DataSource = c.text(columnDataSource)
 		p.Period, _ = c.period()
-		sum.add(p.DataSource, p.Period)
 
 		if !c.ok() {
 			errs = append(errs, c.errs...)
@@ -106,6 +105,8 @@ func ParseDistrictProfiles(data []byte, ref *Reference) DistrictProfileFile {
 		}
 		firstRow[p.DistrictID] = row.line
 		out.Profiles = append(out.Profiles, p)
+		// Источник и период файла — только по принятым строкам.
+		sum.add(p.DataSource, p.Period)
 	}
 	finish(&out.Check, len(rows), len(out.Profiles), errs, sum)
 	return out
