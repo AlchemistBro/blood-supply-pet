@@ -1,7 +1,11 @@
 version: "2"
 sql:
   - engine: postgresql
-    schema: ../migrations
+    # Миграции перечислены явно: 00111 (функции и представление actual_stock) sqlc не разбирает,
+    # запросы к ним написаны вручную в адаптере postgres (stock.go).
+    schema:
+      - ../migrations/00100_inventory.sql
+      - ../migrations/00110_norm.sql
     queries: queries
     gen:
       go:

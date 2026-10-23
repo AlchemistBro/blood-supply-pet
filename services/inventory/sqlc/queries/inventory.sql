@@ -75,3 +75,26 @@ SELECT * FROM sync_run WHERE sync_run_id = $1;
 
 -- name: NextProtectedVolumeVersion :one
 SELECT nextval('protected_volume_version_seq')::bigint;
+
+-- name: GetUnit :one
+SELECT * FROM unit WHERE unit_id = $1;
+
+-- name: LastSyncRunOfKind :one
+SELECT * FROM sync_run
+WHERE sync_kind = $1
+ORDER BY started_at DESC, sync_run_id DESC
+LIMIT 1;
+
+-- name: LastSuccessfulSyncRunOfKind :one
+SELECT * FROM sync_run
+WHERE sync_kind = $1 AND sync_result = 'SUCCESS'
+ORDER BY finished_at DESC, sync_run_id DESC
+LIMIT 1;
+
+-- name: ListSyncRuns :many
+-- Журнал сеансов обмена, новые первыми; курсор — sync_run_id (uuid v7 растёт со временем создания).
+SELECT * FROM sync_run
+WHERE (sqlc.narg(sync_kind)::varchar IS NULL OR sync_kind = sqlc.narg(sync_kind)::varchar)
+  AND (sqlc.narg(before_id)::uuid IS NULL OR sync_run_id < sqlc.narg(before_id)::uuid)
+ORDER BY sync_run_id DESC
+LIMIT @row_limit::integer;

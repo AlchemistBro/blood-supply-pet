@@ -77,6 +77,30 @@ func (q *Queries) GetSyncRun(ctx context.Context, syncRunID uuid.UUID) (SyncRun,
 	return i, err
 }
 
+const getUnit = `-- name: GetUnit :one
+SELECT unit_id, aist_unit_code, clinic_id, storage_location, component_kind_code, volume_ml, blood_group_code, phenotype, expires_at, unit_status_code, status_received_at, source_version FROM unit WHERE unit_id = $1
+`
+
+func (q *Queries) GetUnit(ctx context.Context, unitID uuid.UUID) (Unit, error) {
+	row := q.db.QueryRow(ctx, getUnit, unitID)
+	var i Unit
+	err := row.Scan(
+		&i.UnitID,
+		&i.AistUnitCode,
+		&i.ClinicID,
+		&i.StorageLocation,
+		&i.ComponentKindCode,
+		&i.VolumeMl,
+		&i.BloodGroupCode,
+		&i.Phenotype,
+		&i.ExpiresAt,
+		&i.UnitStatusCode,
+		&i.StatusReceivedAt,
+		&i.SourceVersion,
+	)
+	return i, err
+}
+
 const getUnitByCode = `-- name: GetUnitByCode :one
 SELECT unit_id, aist_unit_code, clinic_id, storage_location, component_kind_code, volume_ml, blood_group_code, phenotype, expires_at, unit_status_code, status_received_at, source_version FROM unit WHERE aist_unit_code = $1
 `
@@ -212,6 +236,30 @@ func (q *Queries) LastSuccessfulSync(ctx context.Context) (*time.Time, error) {
 	return finished_at, err
 }
 
+const lastSuccessfulSyncRunOfKind = `-- name: LastSuccessfulSyncRunOfKind :one
+SELECT sync_run_id, sync_kind, requested_by, started_at, finished_at, sync_result, changes_count, error_text, source_version FROM sync_run
+WHERE sync_kind = $1 AND sync_result = 'SUCCESS'
+ORDER BY finished_at DESC, sync_run_id DESC
+LIMIT 1
+`
+
+func (q *Queries) LastSuccessfulSyncRunOfKind(ctx context.Context, syncKind string) (SyncRun, error) {
+	row := q.db.QueryRow(ctx, lastSuccessfulSyncRunOfKind, syncKind)
+	var i SyncRun
+	err := row.Scan(
+		&i.SyncRunID,
+		&i.SyncKind,
+		&i.RequestedBy,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.SyncResult,
+		&i.ChangesCount,
+		&i.ErrorText,
+		&i.SourceVersion,
+	)
+	return i, err
+}
+
 const lastSyncCursor = `-- name: LastSyncCursor :one
 SELECT source_version FROM sync_run
 WHERE sync_kind = 'CHANGES'
@@ -225,6 +273,30 @@ func (q *Queries) LastSyncCursor(ctx context.Context) (int64, error) {
 	var source_version int64
 	err := row.Scan(&source_version)
 	return source_version, err
+}
+
+const lastSyncRunOfKind = `-- name: LastSyncRunOfKind :one
+SELECT sync_run_id, sync_kind, requested_by, started_at, finished_at, sync_result, changes_count, error_text, source_version FROM sync_run
+WHERE sync_kind = $1
+ORDER BY started_at DESC, sync_run_id DESC
+LIMIT 1
+`
+
+func (q *Queries) LastSyncRunOfKind(ctx context.Context, syncKind string) (SyncRun, error) {
+	row := q.db.QueryRow(ctx, lastSyncRunOfKind, syncKind)
+	var i SyncRun
+	err := row.Scan(
+		&i.SyncRunID,
+		&i.SyncKind,
+		&i.RequestedBy,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.SyncResult,
+		&i.ChangesCount,
+		&i.ErrorText,
+		&i.SourceVersion,
+	)
+	return i, err
 }
 
 const listStatusHistory = `-- name: ListStatusHistory :many
@@ -247,6 +319,51 @@ func (q *Queries) ListStatusHistory(ctx context.Context, unitID uuid.UUID) ([]Un
 			&i.SourceVersion,
 			&i.ChangedAt,
 			&i.ReceivedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSyncRuns = `-- name: ListSyncRuns :many
+SELECT sync_run_id, sync_kind, requested_by, started_at, finished_at, sync_result, changes_count, error_text, source_version FROM sync_run
+WHERE ($1::varchar IS NULL OR sync_kind = $1::varchar)
+  AND ($2::uuid IS NULL OR sync_run_id < $2::uuid)
+ORDER BY sync_run_id DESC
+LIMIT $3::integer
+`
+
+type ListSyncRunsParams struct {
+	SyncKind *string
+	BeforeID *uuid.UUID
+	RowLimit int32
+}
+
+// Журнал сеансов обмена, новые первыми; курсор — sync_run_id (uuid v7 растёт со временем создания).
+func (q *Queries) ListSyncRuns(ctx context.Context, arg ListSyncRunsParams) ([]SyncRun, error) {
+	rows, err := q.db.Query(ctx, listSyncRuns, arg.SyncKind, arg.BeforeID, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SyncRun{}
+	for rows.Next() {
+		var i SyncRun
+		if err := rows.Scan(
+			&i.SyncRunID,
+			&i.SyncKind,
+			&i.RequestedBy,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.SyncResult,
+			&i.ChangesCount,
+			&i.ErrorText,
+			&i.SourceVersion,
 		); err != nil {
 			return nil, err
 		}
