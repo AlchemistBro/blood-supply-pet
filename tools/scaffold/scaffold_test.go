@@ -38,6 +38,36 @@ func TestRenderProducesValidGoAndSubstitutes(t *testing.T) {
 	}
 }
 
+// Сервис без базы (имитатор смежной системы) не получает миграций, sqlc и pgx, а каркас знает, что базы нет.
+func TestRenderNoDBOmitsDatabase(t *testing.T) {
+	files, err := scaffold.Render(scaffold.Params{Name: "sim-demo", ModulePath: "example.com/m", Port: 8290, NoDB: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var main string
+	for _, f := range files {
+		if strings.Contains(f.Path, "/migrations/") || strings.Contains(f.Path, "/sqlc/") || strings.HasSuffix(f.Path, ".sql") {
+			t.Errorf("сервис без базы получил файл %s", f.Path)
+		}
+		if strings.Contains(string(f.Content), "pgx") {
+			t.Errorf("%s ссылается на pgx", f.Path)
+		}
+		if f.Path == "services/sim-demo/cmd/sim-demo/main.go" {
+			main = string(f.Content)
+		}
+	}
+	if !strings.Contains(main, "NoDB:") || strings.Contains(main, "migrations") {
+		t.Fatalf("main.go сервиса без базы:\n%s", main)
+	}
+	withDB, err := scaffold.Render(scaffold.Params{Name: "demo", ModulePath: "example.com/m", Port: 8290})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(withDB) <= len(files) {
+		t.Fatalf("с базой файлов %d, без базы %d: без базы должно быть меньше", len(withDB), len(files))
+	}
+}
+
 func TestValidateRejectsBadParams(t *testing.T) {
 	cases := map[string]scaffold.Params{
 		"заглавные буквы": {Name: "Demo", ModulePath: "m", Port: 8190},
@@ -88,14 +118,18 @@ func TestGeneratedServiceCompilesInRepo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := scaffold.Params{Name: "scaffoldprobe", ModulePath: "github.com/AlchemistBro/blood-supply-pet", Port: 8199}
-	if _, err := scaffold.Write(root, p); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(filepath.Join(root, "services", p.Name)) })
-	cmd := exec.Command("go", "vet", "./services/scaffoldprobe/...")
-	cmd.Dir = root
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("go vet сгенерированного сервиса: %v\n%s", err, out)
+	for _, p := range []scaffold.Params{
+		{Name: "scaffoldprobe", ModulePath: "github.com/AlchemistBro/blood-supply-pet", Port: 8199},
+		{Name: "scaffoldprobe-nodb", ModulePath: "github.com/AlchemistBro/blood-supply-pet", Port: 8198, NoDB: true},
+	} {
+		if _, err := scaffold.Write(root, p); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.RemoveAll(filepath.Join(root, "services", p.Name)) })
+		cmd := exec.Command("go", "vet", "./services/"+p.Name+"/...")
+		cmd.Dir = root
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("go vet сгенерированного сервиса %s: %v\n%s", p.Name, err, out)
+		}
 	}
 }
