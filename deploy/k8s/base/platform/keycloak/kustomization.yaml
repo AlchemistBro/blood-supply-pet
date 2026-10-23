@@ -1,0 +1,19 @@
+# Keycloak (bs-edge). Секреты keycloak-admin и keycloak-db — в components/demo-secrets.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - deployment.yaml
+
+configMapGenerator:
+  # Копия deploy/compose/keycloak/realm-blood-supply.json: kustomize не читает файлы вне своего
+  # каталога без --load-restrictor. Правка realm — в обоих файлах.
+  - name: keycloak-realm
+    namespace: bs-edge
+    files:
+      - realm-blood-supply.json
+  # Внешний адрес Keycloak через ingress; overlay меняет его под свой хост.
+  - name: keycloak-config
+    namespace: bs-edge
+    literals:
+      - KC_HOSTNAME=https://localhost/auth

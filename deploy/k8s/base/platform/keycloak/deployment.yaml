@@ -1,0 +1,149 @@
+# Keycloak (сегмент доступа, bs-edge): realm blood-supply импортируется при старте, если его ещё нет.
+# Режим start (продовый): ingress публикует его по пути /auth, TLS завершается на ingress.
+# Издатель токенов: ${KC_HOSTNAME}/realms/blood-supply; сервисы читают JWKS изнутри кластера:
+# http://keycloak.bs-edge.svc:8080/auth/realms/blood-supply/protocol/openid-connect/certs.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  namespace: bs-edge
+  labels:
+    app.kubernetes.io/name: keycloak
+    app.kubernetes.io/component: identity-provider
+spec:
+  # Одна реплика с локальным кешем сессий; при двух и более нужен KC_CACHE=ispn (кластер через БД).
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: keycloak
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: keycloak
+        app.kubernetes.io/component: identity-provider
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 0
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: keycloak
+          # Тот же тег, что в deploy/compose/compose.yaml.
+          image: quay.io/keycloak/keycloak:26.4
+          args: ["start", "--import-realm"]
+          envFrom:
+            - configMapRef:
+                name: keycloak-config
+          env:
+            - name: KC_BOOTSTRAP_ADMIN_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin
+                  key: username
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin
+                  key: password
+            - name: KC_DB
+              value: postgres
+            - name: KC_DB_URL
+              value: jdbc:postgresql://pg-rw.bs-data.svc:5432/keycloak
+            - name: KC_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-db
+                  key: username
+            - name: KC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-db
+                  key: password
+            - name: KC_HTTP_ENABLED
+              value: "true"
+            - name: KC_HTTP_RELATIVE_PATH
+              value: /auth
+            # Служебный порт 9000 (health, metrics) — без префикса /auth, пробы ниже на него рассчитаны.
+            - name: KC_HTTP_MANAGEMENT_RELATIVE_PATH
+              value: /
+            - name: KC_PROXY_HEADERS
+              value: xforwarded
+            # Внутренние запросы (JWKS, обмен кода на токен из web) идут по адресу сервиса,
+            # а издатель в токенах остаётся внешним KC_HOSTNAME.
+            - name: KC_HOSTNAME_BACKCHANNEL_DYNAMIC
+              value: "true"
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+            - name: KC_METRICS_ENABLED
+              value: "true"
+            - name: KC_CACHE
+              value: local
+            - name: JAVA_OPTS_KC_HEAP
+              value: -XX:MaxRAMPercentage=70 -XX:InitialRAMPercentage=30
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: management
+              containerPort: 9000
+          startupProbe:
+            httpGet:
+              path: /health/started
+              port: management
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: management
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: management
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 250m
+              memory: 768Mi
+            limits:
+              memory: 1536Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            # В режиме start без --optimized Keycloak при запуске пересобирает конфигурацию
+            # в /opt/keycloak/lib (драйвер postgres), поэтому корень ФС записываемый.
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: realm
+              mountPath: /opt/keycloak/data/import
+              readOnly: true
+      volumes:
+        - name: realm
+          configMap:
+            name: keycloak-realm
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  namespace: bs-edge
+  labels:
+    app.kubernetes.io/name: keycloak
+spec:
+  selector:
+    app.kubernetes.io/name: keycloak
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+    - name: management
+      port: 9000
+      targetPort: management
