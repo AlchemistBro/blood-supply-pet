@@ -70,7 +70,7 @@
 - Запуск workflow в GitHub Actions: изменения ещё не отправлены в репозиторий.
 - Защита ветки `main` в GitHub: настраивается владельцем вручную.
 
-**Причина задержки.** Docker Desktop на этой машине останавливал движок по простою, а VPN Outline обрывался и сбрасывал DNS; это ломало загрузку образов и связь агента с API. Разбор и меры: [docs/runbooks/dev-environment-windows.md](../runbooks/dev-environment-windows.md).
+**Причина задержки.** Docker Desktop на этой машине останавливал движок по простою, а VPN Outline обрывался и сбрасывал DNS; это ломало загрузку образов и доступ к внешним сервисам. Разбор и меры: [docs/runbooks/dev-environment-windows.md](../runbooks/dev-environment-windows.md).
 
 ## Критерий выхода
 `task up` → все контейнеры healthy за ≤ 2 мин; `task ci` зелёный локально и в GitHub Actions; тест outbox → Kafka → inbox
