@@ -63,7 +63,15 @@ func explainVariant(res Result, req Request, policy Policy, v Variant, prev *Var
 	case DeliveryLocal:
 		b.WriteString("Время получения: местный вариант, 0 мин.\n")
 	case DeliveryEstimated:
-		fmt.Fprintf(&b, "Время получения: %d мин, оценка C03 от %s.\n", v.Delivery.Minutes, formatTime(v.Delivery.EstimatedAt))
+		fmt.Fprintf(&b, "Время получения: %d мин, оценка C03 от %s, возраст %s.\n",
+			v.Delivery.Minutes, formatTime(v.Delivery.EstimatedAt), formatDuration(v.Delivery.Age))
+	case DeliveryStale:
+		age := "время оценки неизвестно"
+		if !v.Delivery.EstimatedAt.IsZero() {
+			age = fmt.Sprintf("оценка C03 от %s, возраст %s", formatTime(v.Delivery.EstimatedAt), formatDuration(v.Delivery.Age))
+		}
+		fmt.Fprintf(&b, "Время получения: %d мин; %s — оценка устарела (порог %s, демо-параметр, ADR-0014). Она используется для проверки годности, при равном времени вариант идёт после вариантов со свежей оценкой.\n",
+			v.Delivery.Minutes, age, formatDuration(policy.EstimateStaleAfter))
 	case DeliveryUnknown:
 		fmt.Fprintf(&b, "Время получения: оценки нет; для проверки годности принято %d мин (демо-параметр), в ранжировании вариант идёт после вариантов с оценкой.\n",
 			policy.UnknownDeliveryMinutes)
@@ -85,7 +93,7 @@ func explainVariant(res Result, req Request, policy Policy, v Variant, prev *Var
 	// Почему такое место.
 	if prev == nil {
 		fmt.Fprintf(&b, "Место %d из %d: порядок факторов — %s; шаг сравнения годности %s (демо-параметр).\n",
-			v.Rank, total, factorNames(), formatBucket(policy.ExpiryBucket))
+			v.Rank, total, factorNames(), formatDuration(policy.ExpiryBucket))
 	} else if f, ok := decidingFactor(*prev, v); ok {
 		fmt.Fprintf(&b, "Место %d из %d: ниже места %d (клиника %d, %s %s): решил фактор «%s» (%s против %s).\n",
 			v.Rank, total, prev.Rank, prev.SourceClinicID, prev.ComponentKind, prev.BloodGroup, f.name, f.show(*prev), f.show(v))
@@ -142,9 +150,16 @@ func factorNames() string {
 	return strings.Join(names, " → ")
 }
 
-func formatBucket(d time.Duration) string {
-	if d%time.Hour == 0 {
-		return fmt.Sprintf("%d ч", int64(d/time.Hour))
+// formatDuration — длительность в часах и минутах: «6 ч», «7 ч 5 мин», «40 мин».
+func formatDuration(d time.Duration) string {
+	d = d.Round(time.Minute)
+	h, m := int64(d/time.Hour), int64(d%time.Hour/time.Minute)
+	switch {
+	case h == 0:
+		return fmt.Sprintf("%d мин", m)
+	case m == 0:
+		return fmt.Sprintf("%d ч", h)
+	default:
+		return fmt.Sprintf("%d ч %d мин", h, m)
 	}
-	return d.String()
 }

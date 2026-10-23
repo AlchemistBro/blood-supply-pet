@@ -60,6 +60,9 @@ type Policy struct {
 	// UnknownDeliveryMinutes — какое время доставки принять для проверки годности, если оценки нет.
 	// В ранжировании такой вариант всё равно стоит после вариантов с оценкой.
 	UnknownDeliveryMinutes int
+	// EstimateStaleAfter — возраст оценки доставки, после которого она считается устаревшей (ADR-0014).
+	// Устаревшая оценка используется (другой нет), но помечается и при равном времени идёт после свежей.
+	EstimateStaleAfter time.Duration
 	// OfferSubstitutesWhenPreferredCovers — показывать замены, даже когда предпочтительный вариант
 	// покрывает заявку полностью. По умолчанию нет: FR030 допускает замены «при отсутствии или
 	// недостаточном количестве» предпочтительного варианта.
@@ -68,11 +71,14 @@ type Policy struct {
 
 // DemoPolicy — демонстрационные параметры подбора.
 func DemoPolicy() Policy {
-	return Policy{ExpiryBucket: 24 * time.Hour, UnknownDeliveryMinutes: 240}
+	return Policy{ExpiryBucket: 24 * time.Hour, UnknownDeliveryMinutes: 240, EstimateStaleAfter: 6 * time.Hour}
 }
 
 func (p Policy) normalized() Policy {
 	d := DemoPolicy()
+	if p.EstimateStaleAfter <= 0 {
+		p.EstimateStaleAfter = d.EstimateStaleAfter
+	}
 	if p.ExpiryBucket <= 0 {
 		p.ExpiryBucket = d.ExpiryBucket
 	}
@@ -105,17 +111,21 @@ type DeliveryStatus string
 const (
 	// DeliveryLocal — местный вариант: время получения 0.
 	DeliveryLocal DeliveryStatus = "LOCAL"
-	// DeliveryEstimated — есть оценка C03.
+	// DeliveryEstimated — есть свежая оценка C03.
 	DeliveryEstimated DeliveryStatus = "ESTIMATED"
+	// DeliveryStale — оценка C03 старше Policy.EstimateStaleAfter или без времени оценки (ADR-0014).
+	DeliveryStale DeliveryStatus = "STALE"
 	// DeliveryUnknown — оценки нет.
 	DeliveryUnknown DeliveryStatus = "UNKNOWN"
 )
 
-// Delivery — время получения варианта. Minutes имеет смысл только при статусе LOCAL или ESTIMATED.
+// Delivery — время получения варианта. Minutes имеет смысл при статусе LOCAL, ESTIMATED и STALE.
 type Delivery struct {
 	Status      DeliveryStatus
 	Minutes     int
 	EstimatedAt time.Time
+	// Age — возраст оценки на момент подбора; 0, если время оценки неизвестно или оценки нет.
+	Age time.Duration
 }
 
 // ProtectedStock — расход защищённого объёма источника предлагаемой передачей в единицах (FR033).
@@ -355,8 +365,16 @@ func arrival(in Input, policy Policy, clinic int64) (time.Time, Delivery) {
 		return in.At, Delivery{Status: DeliveryLocal}
 	}
 	if e, ok := in.Delivery[clinic]; ok && e.Minutes >= 0 {
-		return in.At.Add(time.Duration(e.Minutes) * time.Minute),
-			Delivery{Status: DeliveryEstimated, Minutes: e.Minutes, EstimatedAt: e.EstimatedAt}
+		d := Delivery{Status: DeliveryEstimated, Minutes: e.Minutes, EstimatedAt: e.EstimatedAt}
+		if e.EstimatedAt.IsZero() {
+			d.Status = DeliveryStale
+		} else {
+			d.Age = max(in.At.Sub(e.EstimatedAt), 0)
+			if d.Age > policy.EstimateStaleAfter {
+				d.Status = DeliveryStale
+			}
+		}
+		return in.At.Add(time.Duration(e.Minutes) * time.Minute), d
 	}
 	return in.At.Add(time.Duration(policy.UnknownDeliveryMinutes) * time.Minute), Delivery{Status: DeliveryUnknown}
 }
@@ -511,18 +529,26 @@ var rankFactors = []rankFactor{
 		show:    func(v Variant) string { return "до " + formatTime(v.EarliestExpiresAt) },
 	},
 	{
+		// Оценки нет — последним. Устаревшая оценка сравнивается по минутам наравне со свежей: это всё равно
+		// лучшее, что известно о расстоянии, и уводить её ниже любой свежей оценки было бы грубее, чем
+		// показать возраст; при равном времени свежая оценка выше.
 		name: "время получения",
 		compare: func(a, b Variant) int {
-			if c := cmpBool(a.Delivery.Status == DeliveryUnknown, b.Delivery.Status == DeliveryUnknown); c != 0 {
-				return c
-			}
-			return cmp.Compare(a.Delivery.Minutes, b.Delivery.Minutes)
+			return cmp.Or(
+				cmpBool(a.Delivery.Status == DeliveryUnknown, b.Delivery.Status == DeliveryUnknown),
+				cmp.Compare(a.Delivery.Minutes, b.Delivery.Minutes),
+				cmpBool(a.Delivery.Status == DeliveryStale, b.Delivery.Status == DeliveryStale),
+			)
 		},
 		show: func(v Variant) string {
-			if v.Delivery.Status == DeliveryUnknown {
+			switch v.Delivery.Status {
+			case DeliveryUnknown:
 				return "оценки нет"
+			case DeliveryStale:
+				return fmt.Sprintf("%d мин, оценка устарела", v.Delivery.Minutes)
+			default:
+				return fmt.Sprintf("%d мин", v.Delivery.Minutes)
 			}
-			return fmt.Sprintf("%d мин", v.Delivery.Minutes)
 		},
 	},
 	{

@@ -504,6 +504,62 @@ func TestRankingFactors(t *testing.T) {
 	}
 }
 
+// ADR-0014: оценка старше Policy.EstimateStaleAfter (демо 6 ч) помечается STALE, используется для прибытия,
+// а при равном времени получения ставит вариант после варианта со свежей оценкой.
+func TestStaleDeliveryEstimate(t *testing.T) {
+	cases := []struct {
+		name        string
+		age2        time.Duration // возраст оценки источника 2 (30 мин); источник 3 — свежая оценка
+		minutes3    int
+		wantStatus2 domain.DeliveryStatus
+		want        []int64
+	}{
+		{"ровно на пороге — ещё свежая", 6 * time.Hour, 30, domain.DeliveryEstimated, []int64{remote2, remote3}},
+		{"старше порога, время равно — после свежей", 6*time.Hour + time.Minute, 30, domain.DeliveryStale, []int64{remote3, remote2}},
+		{"старше порога, но заметно ближе — время решает", 7 * time.Hour, 60, domain.DeliveryStale, []int64{remote2, remote3}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			in := input(t, request("RBC", "A+", "URGENT", 1),
+				unit(1, remote2, "RBC", "A+", 30*time.Hour), unit(2, remote3, "RBC", "A+", 30*time.Hour))
+			in.Delivery[remote2] = domain.DeliveryEstimate{Minutes: 30, EstimatedAt: at.Add(-tc.age2)}
+			in.Delivery[remote3] = domain.DeliveryEstimate{Minutes: tc.minutes3, EstimatedAt: at.Add(-time.Hour)}
+			res := mustMatch(t, in)
+			var got []int64
+			var v2 domain.Variant
+			for _, v := range res.Variants {
+				got = append(got, v.SourceClinicID)
+				if v.SourceClinicID == remote2 {
+					v2 = v
+				}
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("порядок %v, ожидали %v", got, tc.want)
+			}
+			if v2.Delivery.Status != tc.wantStatus2 || v2.Delivery.Age != tc.age2 || !v2.ArrivalAt.Equal(at.Add(30*time.Minute)) {
+				t.Fatalf("источник 2: %+v, прибытие %v", v2.Delivery, v2.ArrivalAt)
+			}
+			if stale := strings.Contains(v2.Explanation, "оценка устарела"); stale != (tc.wantStatus2 == domain.DeliveryStale) {
+				t.Fatalf("пометка «устарела» в объяснении: %v\n%s", stale, v2.Explanation)
+			}
+			if !strings.Contains(v2.Explanation, "возраст") {
+				t.Fatalf("в объяснении нет возраста оценки:\n%s", v2.Explanation)
+			}
+		})
+	}
+}
+
+// Оценка без времени её получения считается устаревшей.
+func TestEstimateWithoutTimeIsStale(t *testing.T) {
+	in := input(t, request("RBC", "A+", "URGENT", 1), unit(1, remote2, "RBC", "A+", 30*time.Hour))
+	in.Delivery[remote2] = domain.DeliveryEstimate{Minutes: 30}
+	res := mustMatch(t, in)
+	if len(res.Variants) != 1 || res.Variants[0].Delivery.Status != domain.DeliveryStale ||
+		!strings.Contains(res.Variants[0].Explanation, "время оценки неизвестно") {
+		t.Fatalf("ожидали STALE без времени оценки: %+v", res.Variants)
+	}
+}
+
 // Ранжирование детерминировано: порядок входных единиц и правил не меняет результат.
 func TestRankingIsDeterministic(t *testing.T) {
 	groups := []string{"A+", "A-", "O-"}
