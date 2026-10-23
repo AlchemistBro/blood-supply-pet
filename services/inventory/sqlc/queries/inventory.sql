@@ -1,0 +1,77 @@
+-- name: GetUnitByCodeForUpdate :one
+-- Строка единицы блокируется до конца транзакции: параллельный опрос применит версию после нас.
+SELECT * FROM unit WHERE aist_unit_code = $1 FOR UPDATE;
+
+-- name: InsertUnit :execrows
+-- Новая единица; гонку двух вставок одного кода решает уникальность aist_unit_code.
+INSERT INTO unit (unit_id, aist_unit_code, clinic_id, storage_location, component_kind_code, volume_ml,
+                  blood_group_code, phenotype, expires_at, unit_status_code, status_received_at, source_version)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+ON CONFLICT (aist_unit_code) DO NOTHING;
+
+-- name: UpdateUnitIfNewer :execrows
+-- Проверка версии в самом UPDATE: старая или та же версия не перезаписывает новую.
+UPDATE unit
+SET clinic_id           = @clinic_id,
+    storage_location    = @storage_location,
+    component_kind_code = @component_kind_code,
+    volume_ml           = @volume_ml,
+    blood_group_code    = @blood_group_code,
+    phenotype           = @phenotype,
+    expires_at          = @expires_at,
+    unit_status_code    = @unit_status_code,
+    status_received_at  = @status_received_at,
+    source_version      = @source_version
+WHERE unit_id = @unit_id AND source_version < @source_version;
+
+-- name: InsertStatusHistory :exec
+INSERT INTO unit_status_history (unit_status_history_id, unit_id, unit_status_code, source_version, changed_at, received_at)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (unit_id, source_version) DO NOTHING;
+
+-- name: ListUnitsByIDs :many
+SELECT * FROM unit WHERE unit_id = ANY(@unit_ids::uuid[]) ORDER BY unit_id;
+
+-- name: GetUnitByCode :one
+SELECT * FROM unit WHERE aist_unit_code = $1;
+
+-- name: ListStatusHistory :many
+SELECT * FROM unit_status_history WHERE unit_id = $1 ORDER BY source_version;
+
+-- name: StartSyncRun :exec
+INSERT INTO sync_run (sync_run_id, sync_kind, requested_by, started_at, source_version)
+VALUES ($1, $2, $3, $4, $5);
+
+-- name: AdvanceSyncRun :exec
+-- Курсор и счётчик двигаются в транзакции страницы: обрыв не теряет применённое и не повторяет его зря.
+UPDATE sync_run
+SET source_version = @source_version,
+    changes_count  = changes_count + @changes::integer
+WHERE sync_run_id = @sync_run_id;
+
+-- name: FinishSyncRun :exec
+UPDATE sync_run
+SET finished_at = @finished_at,
+    sync_result = @sync_result,
+    error_text  = @error_text
+WHERE sync_run_id = @sync_run_id AND finished_at IS NULL;
+
+-- name: LastSyncCursor :one
+-- Курсор — версия последнего сеанса CHANGES (не максимум): после перезапуска АИСТ-М курсор сбрасывается в 0.
+SELECT source_version FROM sync_run
+WHERE sync_kind = 'CHANGES'
+ORDER BY started_at DESC, sync_run_id DESC
+LIMIT 1;
+
+-- name: LastSuccessfulSync :one
+-- Водяной знак копии: окончание последнего успешного сеанса CHANGES.
+SELECT finished_at FROM sync_run
+WHERE sync_kind = 'CHANGES' AND sync_result = 'SUCCESS'
+ORDER BY finished_at DESC
+LIMIT 1;
+
+-- name: GetSyncRun :one
+SELECT * FROM sync_run WHERE sync_run_id = $1;
+
+-- name: NextProtectedVolumeVersion :one
+SELECT nextval('protected_volume_version_seq')::bigint;
