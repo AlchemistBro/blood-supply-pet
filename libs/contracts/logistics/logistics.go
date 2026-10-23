@@ -45,11 +45,16 @@ const (
 	RejectOutcomeUnknown = "OUTCOME_UNKNOWN"
 )
 
-// Причины снятия заказа (CancelTransport).
+// Причины снятия заказа (CancelTransport). UNIT_QUARANTINED — закреплённая единица ушла на карантин
+// (ПП РФ № 641, п. 62 а; ADR-0027).
 const (
 	CancelUnitWithdrawn       = "UNIT_WITHDRAWN"
+	CancelUnitQuarantined     = "UNIT_QUARANTINED"
 	CancelObligationCancelled = "OBLIGATION_CANCELLED"
 )
+
+// CancelReasons — все причины снятия заказа в порядке схемы.
+var CancelReasons = []string{CancelUnitWithdrawn, CancelUnitQuarantined, CancelObligationCancelled}
 
 // RequestTransport — команда «заказать перевозку» по подтверждённому обязательству.
 type RequestTransport struct {

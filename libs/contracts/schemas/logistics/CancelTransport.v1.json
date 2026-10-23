@@ -8,6 +8,6 @@
   "required": ["obligation_id", "reason"],
   "properties": {
     "obligation_id": { "type": "string", "format": "uuid" },
-    "reason": { "type": "string", "enum": ["UNIT_WITHDRAWN", "OBLIGATION_CANCELLED"] }
+    "reason": { "type": "string", "enum": ["UNIT_WITHDRAWN", "UNIT_QUARANTINED", "OBLIGATION_CANCELLED"] }
   }
 }
