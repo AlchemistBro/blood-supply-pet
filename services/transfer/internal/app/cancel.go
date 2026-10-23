@@ -14,7 +14,9 @@ import (
 
 // Cancel — отмена задания по CancelObligation (заявка отменена, план пересчитан).
 // Из PENDING, CONFIRMED и TRANSPORT_REQUESTED → CANCELLED (CAS): закрепления RELEASED, резерв снимается,
-// TransferCancelled; после TRANSPORT_REQUESTED ещё CancelTransport перевозчику.
+// TransferCancelled. Из CONFIRMED и TRANSPORT_REQUESTED ещё CancelTransport: RequestTransport ушла в момент
+// подтверждения, и без компенсации заказ, принятый перевозчиком после отмены, остался бы висеть.
+// Шлюз отвечает и тогда, когда заказа не было (надгробие).
 // Из конечного статуса — идемпотентный отказ без изменений: ни событий, ни аудита.
 func (s *Service) Cancel(ctx context.Context, msg *messaging.Message, c CancelObligation) (CancelResult, error) {
 	switch c.Reason {
@@ -73,7 +75,7 @@ func (s *Service) cancelLocked(ctx context.Context, tx pgx.Tx, o domain.Obligati
 	if err := s.event(ctx, tx, o.ID, TransferCancelled{ObligationID: o.ID, RequestID: o.RequestID, Reason: c.Reason}); err != nil {
 		return CancelResult{}, err
 	}
-	if locked.Status == domain.StatusTransportRequested {
+	if locked.Status.HoldsAllocations() {
 		if err := s.command(ctx, tx, o.ID, CancelTransport{ObligationID: o.ID, Reason: logistics.CancelObligationCancelled}); err != nil {
 			return CancelResult{}, err
 		}

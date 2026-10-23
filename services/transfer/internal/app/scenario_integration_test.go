@@ -384,7 +384,8 @@ func TestCancelReleasesUnitsAndReserve(t *testing.T) {
 		t.Fatalf("после отмены: статус %s, единицы %v", v.Status, v.Units)
 	}
 	h.expectTypes("события", h.eventTypes(o), "ObligationOpened", "TransferConfirmed", "TransferCancelled")
-	h.expectTypes("команды (заказ ещё не принят)", h.commandTypes(o), "RequestTransport")
+	// RequestTransport уже ушла при подтверждении: отмена снимает заказ, даже если ответа шлюза ещё не было.
+	h.expectTypes("команды", h.commandTypes(o), "RequestTransport", "CancelTransport")
 	h.assertStockConsistent(1, "RBC")
 
 	// Отмена ещё не подтверждённого задания тоже работает.
