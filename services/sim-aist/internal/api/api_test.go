@@ -258,7 +258,17 @@ func TestChangesSinceReturnsOnlyNewVersions(t *testing.T) {
 		t.Fatalf("после последней версии: %+v", empty)
 	}
 
+	// since далеко за текущей версией (вплоть до MaxInt64) — пустой ответ, а не паника.
+	for _, since := range []string{"1000", "9223372036854775807"} {
+		rec = e.do(http.MethodGet, "/units/changes?since="+since, nil)
+		expect(t, rec, http.StatusOK)
+		if far := decode[changesResponse](t, rec); len(far.Units) != 0 || far.HasMore || itoa(far.LastVersion) != since {
+			t.Fatalf("since=%s: %+v", since, far)
+		}
+	}
+
 	expect(t, e.do(http.MethodGet, "/units/changes?since=abc", nil), http.StatusBadRequest)
+	expect(t, e.do(http.MethodGet, "/units/changes?since=-1", nil), http.StatusBadRequest)
 	expect(t, e.do(http.MethodGet, "/units/changes?limit=0", nil), http.StatusBadRequest)
 }
 

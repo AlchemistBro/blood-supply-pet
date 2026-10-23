@@ -304,10 +304,14 @@ func isWithdrawn(status string) bool {
 func (s *Store) Changes(since int64, limit int) (units []Unit, more bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	units = []Unit{}
+	// since >= версии — изменений нет. Ранний выход заодно исключает переполнение since+1 при MaxInt64.
+	if since >= s.version {
+		return units, false
+	}
 	if since < 0 {
 		since = 0
 	}
-	units = []Unit{}
 	for v := since + 1; v <= s.version; v++ {
 		u := s.units[s.byVersion[v-1]]
 		if u.Version != v {

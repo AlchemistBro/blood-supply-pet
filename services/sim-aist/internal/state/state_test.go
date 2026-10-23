@@ -2,6 +2,7 @@ package state_test
 
 import (
 	"errors"
+	"math"
 	"testing"
 	"time"
 
@@ -201,6 +202,24 @@ func TestChangesReturnsOnlyNewerVersionsInOrder(t *testing.T) {
 	}
 	if rest, _ := s.Changes(s.Version(), 10); len(rest) != 0 {
 		t.Fatalf("после последней версии изменений нет, получили %d", len(rest))
+	}
+}
+
+func TestChangesSinceBeyondCurrentVersionIsEmpty(t *testing.T) {
+	s, _, ref := newStore(t)
+	if got, more := s.Changes(math.MaxInt64, 10); len(got) != 0 || more {
+		t.Fatalf("пустое состояние, since=MaxInt64: %d единиц, продолжение %v", len(got), more)
+	}
+	mustCreate(t, s, newUnit(ref, "U-1"))
+	mustCreate(t, s, newUnit(ref, "U-2"))
+	for _, since := range []int64{s.Version(), s.Version() + 1, 1 << 40, math.MaxInt64} {
+		if got, more := s.Changes(since, 10); len(got) != 0 || more {
+			t.Fatalf("since=%d: %d единиц, продолжение %v", since, len(got), more)
+		}
+	}
+	// Отрицательный since равен нулю: все единицы.
+	if got, _ := s.Changes(-5, 10); len(got) != 2 {
+		t.Fatalf("since=-5: %d единиц, ожидали 2", len(got))
 	}
 }
 
