@@ -37,18 +37,22 @@
 
 ### inventory
 
+Исходный код единицы АИСТ-М (`aist_unit_code`) и номер донации хранятся только в базе `inventory` и ни в одно событие
+не попадают: наружу идёт суррогат `unit_id` (ADR-0010). Статусы и причины выбытия — по ADR-0027: закрепляется только
+`IN_STOCK`; истёкшая единица хранится как `DISCARDED`, причина `EXPIRED` есть только в `UnitWithdrawn`.
+
 | Тип | Назначение | Поля |
 | --- | --- | --- |
-| `UnitRegistered` | Единица появилась в наличии по данным АИСТ-М | `unit_id`, `aist_unit_code` (не публикуется наружу: суррогат), `clinic_id`, `component_kind`, `blood_group`, `rh_positive`, `phenotype?`, `volume_ml`, `expires_at`, `storage_location`, `version` |
-| `UnitUpdated` | Изменился статус, место или срок | `unit_id`, `clinic_id`, `component_kind`, `status`, `version`, `changed_at` |
-| `UnitWithdrawn` | Единица выбыла: перелита, списана, передана | `unit_id`, `clinic_id`, `component_kind`, `reason`(TRANSFUSED/DISCARDED/TRANSFERRED/EXPIRED), `version` |
+| `UnitRegistered` | Единица появилась в копии запаса по данным АИСТ-М | `unit_id`, `clinic_id`, `component_kind`, `blood_group`, `rh_positive`, `phenotype?`, `volume_ml`, `expires_at`, `storage_location`, `status`, `version` |
+| `UnitUpdated` | Изменился статус, место или срок | `unit_id`, `clinic_id`, `component_kind`, `status`(IN_STOCK/QUARANTINE/ISSUED/DISCARDED/TRANSFERRED), `expires_at?`, `storage_location?`, `version`, `changed_at` |
+| `UnitWithdrawn` | Единица выбыла: выдана, списана, передана, истёк срок | `unit_id`, `clinic_id`, `component_kind`, `reason`(ISSUED/DISCARDED/TRANSFERRED/EXPIRED), `version` |
 | `StockSnapshotPublished` | Снимок запаса клиники × вид × группа с водяным знаком | `clinic_id`, `component_kind`, `blood_group`, `unit_count`, `volume_ml`, `nearest_expiry`, `watermark`, `synced_at` |
 | `StockNormPublished` | Новый действующий норматив | `clinic_id`, `component_kind`, `norm_ml`, `avg_monthly_ml`, `version`, `calculated_at` |
-| `ProtectedVolumePublished` | Защищённый объём источника (норматив + фон + обязательства, считает planning, публикует inventory как владелец запаса) | `clinic_id`, `component_kind`, `volume_units`, `version`, `reason` |
+| `ProtectedVolumePublished` | Защищённый объём источника (норматив + фон + обязательства, считает planning, публикует inventory как владелец запаса) | `clinic_id`, `component_kind`, `volume_units` (в единицах, не в мл: Остаток `transfer` считает единицы), `version`, `reason` |
 | `SyncRunCompleted` | Сеанс обмена с АИСТ-М завершён | `sync_run_id`, `kind`, `result`, `changes_count`, `finished_at` |
 | `ConsumptionExportPublished` | Выгрузка расхода для demand (FR045) | `component_kind`, `period_start`, `period_end`, `consumed_volume_ml` |
 | `PatientAllocationAcknowledged` | АИСТ-М подтвердил приём закрепления (ИНТ-05) | `obligation_id`, `idempotency_key`, `acknowledged_at` |
-| команда `AllocateUnitsToPatient` | От transfer после подтверждения по заявке врача (FR051) | `obligation_id`, `idempotency_key`, `unit_ids`, `patient_case_no`(K1), `target_clinic_id` |
+| команда `AllocateUnitsToPatient` | От transfer после подтверждения по заявке врача (FR051), этап 6 | `obligation_id`, `idempotency_key`, `unit_ids`, номер случая (K1, только в зашифрованном виде, ADR-0020), `target_clinic_id` |
 | команда `ReleasePatientAllocation` | Снять закрепление при отмене/нарушении | `obligation_id`, `idempotency_key` |
 
 ### demand
@@ -85,30 +89,35 @@
 
 | Тип | Поля |
 | --- | --- |
-| команда `OpenObligation` | `choice_id` (идемпотентность), `request_id` (заявка или план), `origin`(DOCTOR_CHOICE/PLAN_PROPOSAL), `source_clinic_id`, `target_clinic_id`, `component_kind`, `requested_qty`, `urgency`, `confirm_window`, `fallback_sources[]`, `spec{blood_group?, rh_positive?, phenotype?, min_expires_at?, rule_version}`, `patient_case_ref?` (только ссылка для ИНТ-05, не хранится в событиях) |
-| команда `CancelObligation` | `obligation_id`, `reason` |
+| команда `OpenObligation` | `choice_id` (идемпотентность), `request_id` (заявка или план), `origin`(DOCTOR_CHOICE/PLAN_PROPOSAL), `source_clinic_id`, `target_clinic_id`, `component_kind`, `requested_qty`, `urgency`, `confirm_window_seconds`, `fallback_sources[]`, `spec{blood_group?, rh_positive?, phenotype?, min_expires_at?, rule_version}`. Номера случая нет: обязательство ссылается на заявку через `request_id`, путь номера случая в ИНТ-05 задаёт ADR-0020 (этап 6) |
+| команда `CancelObligation` | `obligation_id`, `reason`(REQUEST_CANCELLED/PLAN_RECALCULATED/DUTY_OFFICER_DECISION) |
 | `ObligationOpened` | `obligation_id`, `request_id`, `origin`, `source_clinic_id`, `target_clinic_id`, `component_kind`, `requested_qty`, `deadline` |
 | `TransferConfirmed` | `obligation_id`, `request_id`, `units[]`, `quantity`, `operator` |
 | `TransferShortfallRecorded` | `obligation_id`, `request_id`, `component_kind`, `shortfall` |
-| `TransferRejected` | `obligation_id`, `request_id`, `reason` |
-| `TransferExpired` | `obligation_id`, `request_id`, `next_obligation_id?` |
-| `TransferCancelled` | `obligation_id`, `request_id`, `reason` |
-| `TransferBroken` | `obligation_id`, `request_id`, `unit_id` |
+| `TransferRejected` | `obligation_id`, `request_id`, `reason`(UNITS_WITHDRAWN/SOURCE_REFUSED) |
+| `TransferExpired` | `obligation_id`, `request_id`, `next_obligation_id?` (новое задание у следующего источника, если он был) |
+| `TransferCancelled` | `obligation_id`, `request_id`, `reason`(REQUEST_CANCELLED/PLAN_RECALCULATED/DUTY_OFFICER_DECISION) |
+| `TransferBroken` | `obligation_id`, `request_id`, `unit_id`, `reason`(ISSUED/DISCARDED/TRANSFERRED/EXPIRED — причина выбытия из `UnitWithdrawn`; QUARANTINE — карантин закреплённой единицы, ADR-0027) |
 | `TransferUnitReplaced` | `obligation_id`, `old_unit_id`, `new_unit_id`, `rule_version` |
 | `TransportRequested` | `obligation_id`, `shipment_ref` |
-| `TransportRequestFailed` | `obligation_id`, `reason`, `details` |
-| `TransferDispatched` / `TransferDelivered` | `obligation_id`, `at` |
-| `EscalationRaised` | `obligation_id`, `kind`(EXPIRED/TRANSPORT_UNKNOWN/TRANSPORT_REFUSED), `next_obligation_id?` |
+| `TransportRequestFailed` | `obligation_id`, `reason`(REFUSED/OUTCOME_UNKNOWN), `details?` |
+| `TransferDispatched` / `TransferDelivered` | `obligation_id`, `at` (этап 7) |
+| `EscalationRaised` | `obligation_id`, `request_id`, `reason`(EXPIRED_NO_FALLBACK/TRANSPORT_REFUSED/TRANSPORT_OUTCOME_UNKNOWN/SOURCE_SYSTEM_UNAVAILABLE), `at`. Пишется только тогда, когда нужен дежурный смены (ADR-0027) |
 
 ### logistics-gateway
 
 | Тип | Поля |
 | --- | --- |
-| команда `RequestTransport` | `obligation_id`, `request_id`, `source_clinic_id`, `target_clinic_id`, `component_kind`, `quantity` (номеров единиц нет: замена единицы не трогает заказ) |
-| команда `CancelTransport` | `obligation_id`, `reason` |
+| команда `RequestTransport` | `obligation_id`, `request_id`, `source_clinic_id`, `target_clinic_id`, `component_kind`, `quantity`, `temperature_regime` (номеров единиц нет: замена единицы не трогает заказ; режим по виду компонента, значения демо, ПП РФ № 641 п. 68 в, ADR-0022) |
+| команда `CancelTransport` | `obligation_id`, `reason`(UNIT_WITHDRAWN/UNIT_QUARANTINED/OBLIGATION_CANCELLED) |
 | `TransportAccepted` | `obligation_id`, `shipment_ref` |
-| `TransportRejected` | `obligation_id`, `reason`(REFUSED/OUTCOME_UNKNOWN), `details` |
-| `TransportCancelled` | `obligation_id` |
+| `TransportRejected` | `obligation_id`, `reason`(REFUSED/OUTCOME_UNKNOWN), `details?` |
+| `TransportCancelled` | `obligation_id` (и тогда, когда заказа не было) |
+| `TransportDelivered` | `obligation_id`, `delivered_at`, `temperature_at_dispatch_c?`, `temperature_at_arrival_c?`. Топик `logistics.replies`. Заготовка этапа 7: контракт есть, обработки в этапе 1 нет (ADR-0022) |
+
+Команды `RequestTransport`, `CancelTransport` идут в `logistics.commands`; ответы `TransportAccepted`, `TransportRejected`,
+`TransportCancelled`, `TransportDelivered` — в `logistics.replies`. Коды `temperature_regime` в контракте этапа 1:
+`COLD_2_6`, `FROZEN_MINUS_25`, `ROOM_20_24` (демо, ADR-0010).
 | `DeliveryEstimatesPublished` | `source_clinic_id`, `estimates[]{target_clinic_id, minutes}`, `estimated_at` |
 
 ### audit
