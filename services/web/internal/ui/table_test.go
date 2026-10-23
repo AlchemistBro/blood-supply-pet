@@ -166,3 +166,18 @@ func TestTablePagerCarriesTarget(t *testing.T) {
 		t.Fatal("без пагинации — nil")
 	}
 }
+
+func TestClampPage(t *testing.T) {
+	cases := []struct{ page, perPage, total, want int }{
+		{1, 20, 0, 1},
+		{0, 20, 100, 1},
+		{3, 20, 100, 3},
+		{9, 20, 100, 5},
+		{2, 0, 3, 2}, // perPage < 1 считается как 1
+	}
+	for _, c := range cases {
+		if got := ClampPage(c.page, c.perPage, c.total); got != c.want {
+			t.Errorf("ClampPage(%d, %d, %d) = %d, want %d", c.page, c.perPage, c.total, got, c.want)
+		}
+	}
+}

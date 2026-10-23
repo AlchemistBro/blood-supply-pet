@@ -170,8 +170,23 @@ func ParsePage(q url.Values) int {
 	return n
 }
 
+// ClampPage приводит номер страницы к диапазону от 1 до числа страниц при известном total.
+//
+// Порядок на экране: ParsePage → ClampPage (если total известен до выборки, например из COUNT) → запрос строк
+// со смещением (page-1)*perPage → NewPagination. Если total приходит только вместе со строками и NewPagination
+// вернула Page меньше запрошенного, строки запрошены за пределами: перенаправьте на ссылку текущей страницы
+// или повторите запрос для p.Page — иначе под пагинацией «стр. 3 из 3» окажется пустая таблица.
+func ClampPage(page, perPage, total int) int {
+	if perPage < 1 {
+		perPage = 1
+	}
+	pages := (max(total, 0) + perPage - 1) / perPage
+	return max(1, min(page, pages))
+}
+
 // NewPagination строит пагинацию: первая и последняя страницы, текущая ± pageWindow, многоточия на разрывах.
-// Номер за пределами приводится к последней странице.
+// Номер за пределами приводится к последней странице (ClampPage); данные для исправленного номера вызывающий
+// должен запросить сам — см. порядок у ClampPage.
 func NewPagination(base *url.URL, page, perPage, total int) *Pagination {
 	if perPage < 1 {
 		perPage = 1
@@ -180,7 +195,7 @@ func NewPagination(base *url.URL, page, perPage, total int) *Pagination {
 		total = 0
 	}
 	pages := (total + perPage - 1) / perPage
-	page = max(1, min(page, pages))
+	page = ClampPage(page, perPage, total)
 	p := &Pagination{Page: page, Pages: pages, PerPage: perPage, Total: total}
 	if total == 0 {
 		return p
