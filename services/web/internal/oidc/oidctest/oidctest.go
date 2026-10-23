@@ -4,6 +4,7 @@
 package oidctest
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -154,7 +155,11 @@ func (p *Provider) TokenCalls() int {
 func (p *Provider) Authorize(t testing.TB, authURL string) *url.URL {
 	t.Helper()
 	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	resp, err := client.Get(authURL)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, authURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,6 +223,7 @@ func (p *Provider) authorize(w http.ResponseWriter, r *http.Request) {
 	tq.Set("code", code)
 	tq.Set("state", q.Get("state"))
 	target.RawQuery = tq.Encode()
+	//nolint:gosec // фальшивый провайдер для тестов: redirect_uri задаёт тест, как его задаёт клиент Keycloak
 	http.Redirect(w, r, target.String(), http.StatusFound)
 }
 

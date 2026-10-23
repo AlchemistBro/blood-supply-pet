@@ -76,6 +76,8 @@ func (s *Server) startLogin(w http.ResponseWriter, r *http.Request) {
 	if !loginHintPattern.MatchString(hint) {
 		hint = ""
 	}
+	// Адрес строится из discovery Keycloak; от пользователя в нём только login_hint по белому шаблону.
+	//nolint:gosec // G710: перенаправление только на authorization endpoint провайдера из конфигурации
 	http.Redirect(w, r, s.oidc.AuthURL(st, hint), http.StatusFound)
 }
 

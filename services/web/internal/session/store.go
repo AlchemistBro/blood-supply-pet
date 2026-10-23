@@ -82,6 +82,8 @@ func (s *Store) Clear(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Store) cookie(name, value string, maxAge int) *http.Cookie {
+	// Secure включён по умолчанию (BS_COOKIE_SECURE); выключается только явно для отладки (ADR-0018).
+	//nolint:gosec // G124: HttpOnly и SameSite=Lax заданы всегда, Secure — из конфигурации
 	return &http.Cookie{
 		Name: name, Value: value, Path: "/", MaxAge: maxAge,
 		HttpOnly: true, Secure: s.secure, SameSite: http.SameSiteLaxMode,

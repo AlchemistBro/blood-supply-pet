@@ -88,7 +88,7 @@ func (c *Client) Do(ctx context.Context, method, path string, body io.Reader, co
 
 // GetJSON — GET с разбором JSON при 200.
 func (c *Client) GetJSON(ctx context.Context, path string, out any) error {
-	resp, err := c.Do(ctx, http.MethodGet, path, nil, "")
+	resp, err := c.Do(ctx, http.MethodGet, path, nil, "") //nolint:bodyclose // тело закрывает decode
 	if err != nil {
 		return err
 	}
@@ -101,7 +101,7 @@ func (c *Client) PostJSON(ctx context.Context, path string, in, out any) error {
 	if err != nil {
 		return fmt.Errorf("%s: %w", c.name, err)
 	}
-	resp, err := c.Do(ctx, http.MethodPost, path, bytes.NewReader(b), "application/json")
+	resp, err := c.Do(ctx, http.MethodPost, path, bytes.NewReader(b), "application/json") //nolint:bodyclose // тело закрывает decode
 	if err != nil {
 		return err
 	}
