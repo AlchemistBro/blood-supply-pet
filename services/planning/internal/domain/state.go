@@ -55,7 +55,8 @@ type cell struct {
 func (c *cell) targetML() int64 { return c.normML + c.backgroundML + c.emergencyML }
 
 // stockML — собственный запас клиники: доступные единицы за вычетом обещанных по подтверждённым обязательствам.
-func (c *cell) stockML() int64 { return c.availableML - c.outgoingML }
+// Не меньше нуля: если снимок запаса уже не содержит обещанных единиц (отправлены), мнимой потребности нет.
+func (c *cell) stockML() int64 { return max(0, c.availableML-c.outgoingML) }
 
 // needML — потребность пополнения: цель минус запас и уже подтверждённые входящие передачи.
 func (c *cell) needML() int64 { return max(0, c.targetML()-c.stockML()-c.inboundML) }
