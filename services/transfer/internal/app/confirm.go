@@ -46,7 +46,7 @@ func (s *Service) Confirm(ctx context.Context, c ConfirmTransfer) (domain.Confir
 
 	report, err := s.checker.CheckUnits(ctx, c.UnitIDs)
 	if err != nil || report.FromCopy {
-		return s.sourceUnavailable(ctx, o, err)
+		return s.sourceUnavailable(ctx, o, c.Operator, err)
 	}
 	present, unavailable := domain.SplitByStatus(c.UnitIDs, report.Statuses)
 	switch domain.DecideAfterSourceCheck(present, unavailable, c.AcceptPartial) {
@@ -209,16 +209,21 @@ func (s *Service) reject(ctx context.Context, o domain.Obligation, c ConfirmTran
 // sourceUnavailable — АИСТ-М не ответила или inventory ответил из копии. Вслепую не закрепляем: плановое
 // задание остаётся PENDING («повторите»), экстренное — то же плюс эскалация дежурному (допущение этапа 1:
 // BS_ALLOW_COPY_CONFIRM_EMERGENCY не реализован, подтверждение по копии появится только с отдельным ADR).
-func (s *Service) sourceUnavailable(ctx context.Context, o domain.Obligation, cause error) (domain.ConfirmationResult, error) {
+func (s *Service) sourceUnavailable(ctx context.Context, o domain.Obligation, operator string, cause error) (domain.ConfirmationResult, error) {
 	s.log.WarnContext(ctx, "статус единиц в АИСТ-М не получен, подтверждение отклонено",
 		"obligation_id", o.ID, "urgency", o.UrgencyCode, "err", cause)
 	if o.UrgencyCode != domain.UrgencyEmergency {
 		return domain.SourceSystemUnavailable{}, nil
 	}
+	// Статус O07 не меняется; эскалация и запись аудита — одна отдельная транзакция.
 	err := s.inTx(ctx, nil, func(ctx context.Context, tx pgx.Tx) error {
-		return s.event(ctx, tx, o.ID, EscalationRaised{
-			ObligationID: o.ID, RequestID: o.RequestID, Reason: string(domain.EscalationSourceSystemUnavailable), At: s.clock.Now(),
-		})
+		reason := string(domain.EscalationSourceSystemUnavailable)
+		if err := s.event(ctx, tx, o.ID, EscalationRaised{
+			ObligationID: o.ID, RequestID: o.RequestID, Reason: reason, At: s.clock.Now(),
+		}); err != nil {
+			return err
+		}
+		return s.audit(ctx, tx, operator, ActionEscalated, o, map[string]any{"reason": reason})
 	})
 	if err != nil {
 		return nil, err

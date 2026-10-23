@@ -117,6 +117,7 @@ func TestEmergencyWithAistMDownRaisesEscalation(t *testing.T) {
 		t.Fatalf("статус %s, ожидали PENDING", s)
 	}
 	h.expectTypes("события", h.eventTypes(o), "ObligationOpened", "EscalationRaised")
+	h.expectTypes("аудит", h.auditActions(o), app.ActionOpened, app.ActionEscalated)
 }
 
 func TestTimerEscalatesToNextSourceAndExpiresWithoutOne(t *testing.T) {

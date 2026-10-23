@@ -32,6 +32,8 @@ const (
 	ActionTransportReplyIgnored = "TRANSPORT_REPLY_IGNORED"
 	ActionTransportCancelled    = "TRANSPORT_CANCELLED"
 	ActionTransportFailed       = "TRANSPORT_FAILED"
+	// ActionEscalated — задание передано дежурному без смены статуса (экстренное, АИСТ-М не ответила).
+	ActionEscalated = "ESCALATED"
 )
 
 // Участники, от имени которых действует сам сервис.
