@@ -1,49 +1,30 @@
 package contracts
 
-import (
-	"strconv"
-
-	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/audit"
-	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/inventory"
-	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/logistics"
-	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/transfer"
-)
+import "strconv"
 
 // Registry — все типы сообщений: имя типа → конструктор пустого значения.
 // Используется проверкой контрактов (пример → Go-тип → JSON → схема) и consumer-ами для декодирования.
-var Registry = map[string]func() Payload{
-	"AuditRecorded": func() Payload { return &audit.AuditRecorded{} },
+// Заполняется в init() файлов registry_<topic>.go: каждый контекст регистрирует свои типы в своём файле,
+// поэтому пакеты контрактов разных этапов не правят один и тот же список.
+var Registry = map[string]func() Payload{}
 
-	// inventory.events
-	"UnitRegistered":           func() Payload { return &inventory.UnitRegistered{} },
-	"UnitUpdated":              func() Payload { return &inventory.UnitUpdated{} },
-	"UnitWithdrawn":            func() Payload { return &inventory.UnitWithdrawn{} },
-	"ProtectedVolumePublished": func() Payload { return &inventory.ProtectedVolumePublished{} },
+var duplicates []string
 
-	// transfer.commands
-	"OpenObligation":   func() Payload { return &transfer.OpenObligation{} },
-	"CancelObligation": func() Payload { return &transfer.CancelObligation{} },
-	// transfer.events
-	"ObligationOpened":          func() Payload { return &transfer.ObligationOpened{} },
-	"TransferConfirmed":         func() Payload { return &transfer.TransferConfirmed{} },
-	"TransferShortfallRecorded": func() Payload { return &transfer.TransferShortfallRecorded{} },
-	"TransferRejected":          func() Payload { return &transfer.TransferRejected{} },
-	"TransferExpired":           func() Payload { return &transfer.TransferExpired{} },
-	"TransferCancelled":         func() Payload { return &transfer.TransferCancelled{} },
-	"TransferBroken":            func() Payload { return &transfer.TransferBroken{} },
-	"TransferUnitReplaced":      func() Payload { return &transfer.TransferUnitReplaced{} },
-	"TransportRequested":        func() Payload { return &transfer.TransportRequested{} },
-	"TransportRequestFailed":    func() Payload { return &transfer.TransportRequestFailed{} },
-	"EscalationRaised":          func() Payload { return &transfer.EscalationRaised{} },
+// register добавляет типы в Registry под именем MessageType(). Повтор имени не паникует при старте
+// процесса, а копится в DuplicateTypes и роняет тест контрактов.
+func register(ctors ...func() Payload) {
+	for _, ctor := range ctors {
+		name := ctor().MessageType()
+		if _, dup := Registry[name]; dup {
+			duplicates = append(duplicates, name)
+		}
+		Registry[name] = ctor
+	}
+}
 
-	// logistics.commands
-	"RequestTransport": func() Payload { return &logistics.RequestTransport{} },
-	"CancelTransport":  func() Payload { return &logistics.CancelTransport{} },
-	// logistics.replies
-	"TransportAccepted":  func() Payload { return &logistics.TransportAccepted{} },
-	"TransportRejected":  func() Payload { return &logistics.TransportRejected{} },
-	"TransportCancelled": func() Payload { return &logistics.TransportCancelled{} },
-	"TransportDelivered": func() Payload { return &logistics.TransportDelivered{} },
+// DuplicateTypes возвращает имена типов, зарегистрированных больше одного раза (для теста контрактов).
+func DuplicateTypes() []string {
+	return append([]string(nil), duplicates...)
 }
 
 // SchemaPath возвращает путь к JSON Schema типа относительно libs/contracts.

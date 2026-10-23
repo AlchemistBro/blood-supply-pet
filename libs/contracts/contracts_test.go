@@ -141,6 +141,64 @@ func TestSchemasRejectMissingRequiredFields(t *testing.T) {
 	}
 }
 
+// Номер случая пациента — врачебная тайна (152-ФЗ, ст. 10): в открытом виде он не появляется ни в одной
+// схеме сообщений. Отдельный тест, чтобы правило не потерялось при правке общего списка ниже.
+func TestNoSchemaHasPatientCaseNo(t *testing.T) {
+	schemas, err := filepath.Glob("schemas/*/*.json")
+	if err != nil || len(schemas) == 0 {
+		t.Fatalf("схемы не найдены: %v", err)
+	}
+	for _, schemaPath := range schemas {
+		raw, err := os.ReadFile(schemaPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var node any
+		if err := json.Unmarshal(raw, &node); err != nil {
+			t.Fatalf("%s: %v", schemaPath, err)
+		}
+		if hasProperty(node, "patient_case_no") {
+			t.Errorf("%s объявляет свойство patient_case_no", schemaPath)
+		}
+	}
+}
+
+// hasProperty ищет имя среди ключей любого объекта properties на любом уровне схемы.
+func hasProperty(node any, name string) bool {
+	switch x := node.(type) {
+	case map[string]any:
+		if props, ok := x["properties"].(map[string]any); ok {
+			if _, found := props[name]; found {
+				return true
+			}
+		}
+		for _, v := range x {
+			if hasProperty(v, name) {
+				return true
+			}
+		}
+	case []any:
+		for _, v := range x {
+			if hasProperty(v, name) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// Регистрация типов разнесена по файлам registry_<topic>.go: повтор имени типа в двух файлах — ошибка.
+func TestRegistryHasNoDuplicateTypes(t *testing.T) {
+	if dups := contracts.DuplicateTypes(); len(dups) > 0 {
+		t.Fatalf("типы зарегистрированы дважды: %v", dups)
+	}
+	for name, ctor := range contracts.Registry {
+		if got := ctor().MessageType(); got != name {
+			t.Errorf("ключ реестра %s, MessageType() %s", name, got)
+		}
+	}
+}
+
 // Контракты не несут ПДн, номер случая пациента и исходный код единицы АИСТ-М (ADR-0010, NFR010):
 // ни одна схема не объявляет такие поля, на каком бы уровне они ни лежали.
 func TestSchemasDeclareNoPersonalOrSourceIdentifiers(t *testing.T) {
