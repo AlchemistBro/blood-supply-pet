@@ -6,16 +6,20 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/caarlos0/env/v11"
 
+	"github.com/AlchemistBro/blood-supply-pet/libs/contracts"
 	auditc "github.com/AlchemistBro/blood-supply-pet/libs/contracts/audit"
 	"github.com/AlchemistBro/blood-supply-pet/libs/httpx/auth"
+	"github.com/AlchemistBro/blood-supply-pet/libs/messaging"
 	"github.com/AlchemistBro/blood-supply-pet/libs/runtime"
 	apispec "github.com/AlchemistBro/blood-supply-pet/services/web/api"
 	"github.com/AlchemistBro/blood-supply-pet/services/web/internal/auditclient"
+	"github.com/AlchemistBro/blood-supply-pet/services/web/internal/live"
 	"github.com/AlchemistBro/blood-supply-pet/services/web/internal/oidc"
 	"github.com/AlchemistBro/blood-supply-pet/services/web/internal/server"
 	"github.com/AlchemistBro/blood-supply-pet/services/web/internal/session"
@@ -40,6 +44,11 @@ type config struct {
 	// Служебный клиент Keycloak для POST /records (роль SERVICE, ADR-0017).
 	ServiceClientID     string `env:"BS_SERVICE_CLIENT_ID" envDefault:"services"`
 	ServiceClientSecret string `env:"BS_SERVICE_CLIENT_SECRET"`
+	// LiveEvents — живые статусы: consumer transfer.events и SSE /events/obligations (нужен BS_KAFKA_BROKERS).
+	LiveEvents bool `env:"BS_LIVE_EVENTS" envDefault:"true"`
+	// Instance — имя экземпляра для своей consumer-группы web-<имя>; по умолчанию POD_NAME или имя хоста.
+	Instance     string        `env:"POD_NAME"`
+	SSEHeartbeat time.Duration `env:"BS_SSE_HEARTBEAT" envDefault:"15s"`
 }
 
 func main() {
@@ -100,7 +109,43 @@ func setup(ctx context.Context, rt *runtime.Runtime) ([]runtime.Worker, error) {
 	// Отказы общих middleware (auth.Require с rt.Deny) тоже уходят в audit по HTTP.
 	rt.OnDeny = srv.Guard().Denied()
 	rt.Use(srv.Middleware()...)
-	return nil, nil
+
+	workers, err := liveEvents(cfg, rt, srv)
+	if err != nil {
+		return nil, err
+	}
+	return workers, nil
+}
+
+// liveEvents подключает живые статусы: consumer transfer.events → хаб → SSE. Каждый экземпляр web читает
+// топик своей группой (у каждого свои SSE-соединения), inbox не нужен: это только показ.
+func liveEvents(cfg config, rt *runtime.Runtime, srv *server.Server) ([]runtime.Worker, error) {
+	if !cfg.LiveEvents {
+		return nil, nil
+	}
+	if len(rt.Cfg.KafkaBrokers) == 0 {
+		rt.Log.Warn("BS_KAFKA_BROKERS не задан: живые статусы выключены")
+		return nil, nil
+	}
+	instance := cfg.Instance
+	if instance == "" {
+		host, err := os.Hostname()
+		if err != nil {
+			return nil, fmt.Errorf("имя экземпляра для группы web: %w", err)
+		}
+		instance = host
+	}
+	hub := live.NewHub(64)
+	feed := live.NewFeed(hub, rt.Clock, rt.Log)
+	consumer, err := messaging.NewConsumer(messaging.ConsumerConfig{
+		Brokers: rt.Cfg.KafkaBrokers, Group: "web-" + instance, Topics: []string{contracts.TopicTransferEvents},
+	}, feed.Handle, rt.Log)
+	if err != nil {
+		return nil, err
+	}
+	sse := live.NewSSE(hub, srv.Guard(), rt.Log, live.SSEConfig{Heartbeat: cfg.SSEHeartbeat})
+	rt.Mux.Handle("GET /events/obligations", sse.Handler())
+	return []runtime.Worker{consumer.Run}, nil
 }
 
 func sessionKeys(cfg config) ([][]byte, error) {

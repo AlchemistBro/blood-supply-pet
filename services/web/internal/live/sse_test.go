@@ -70,7 +70,13 @@ func newSSEEnv(t *testing.T, heartbeat time.Duration) *sseEnv {
 	return e
 }
 
-func (e *sseEnv) open(t *testing.T, user, query string) (*http.Response, *bufio.Reader, context.CancelFunc) {
+// streamHead — статус и заголовки ответа; тело читается через bufio.Reader и закрывается в t.Cleanup.
+type streamHead struct {
+	StatusCode int
+	Header     http.Header
+}
+
+func (e *sseEnv) open(t *testing.T, user, query string) (streamHead, *bufio.Reader, context.CancelFunc) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, e.srv.URL+"/events/obligations"+query, nil)
@@ -85,7 +91,7 @@ func (e *sseEnv) open(t *testing.T, user, query string) (*http.Response, *bufio.
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { cancel(); _ = resp.Body.Close() })
-	return resp, bufio.NewReader(resp.Body), cancel
+	return streamHead{StatusCode: resp.StatusCode, Header: resp.Header}, bufio.NewReader(resp.Body), cancel
 }
 
 // readUntil читает строки потока, пока не встретит строку с префиксом prefix.
