@@ -13,7 +13,7 @@ func TestDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.PollInterval != 5*time.Second || c.StatusTimeout != 3*time.Second || c.PageLimit != 500 {
+	if c.PollInterval != 5*time.Second || c.StatusTimeout != 2*time.Second || c.PageLimit != 500 {
 		t.Fatalf("значения по умолчанию: %+v", c)
 	}
 }
