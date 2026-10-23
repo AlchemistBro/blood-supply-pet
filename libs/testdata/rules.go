@@ -80,8 +80,11 @@ var demoRules = []MatchingRule{
 		RulePriority: 1, BasisClause: "демо-набор, правило 8", ValidFrom: day(2026, 1, 1),
 	},
 	{
-		// Исключение: плановая заявка не расходует замену DEMO_FFP_AB.
-		RuleCode: "DEMO_FFP_AB_PLANNED_EXC", VersionNo: 1, ComponentKindCode: "FFP", AllowedGroupCode: "AB+",
+		// Десятая версия набора — правило-исключение: для плановой заявки A+ запрещает вариант A-,
+		// который разрешает DEMO_RBC_A_NEG_FOR_A_POS. Исключение запрещает вариант с указанной группой,
+		// поэтому группа заявки задана явно: иначе оно задело бы и точное соответствие заявке A-.
+		RuleCode: "DEMO_RBC_A_NEG_PLANNED_EXC", VersionNo: 1, ComponentKindCode: "RBC",
+		RequestedGroupCode: "A+", AllowedGroupCode: "A-",
 		ApplicationCondition: "URGENCY=PLANNED", IsException: true,
 		RulePriority: 1, BasisClause: "демо-набор, правило 9", ValidFrom: day(2026, 1, 1),
 	},

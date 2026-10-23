@@ -284,7 +284,6 @@ func Match(in Input) (Result, error) {
 // permittedTargets — шаг 1 по правилам: какие (вид, группа) разрешены и каким правилом. Ограничения заявки
 // применяются здесь же и строго: нехватка запаса не возвращает запрещённую замену.
 func permittedTargets(req Request, active []Rule) (map[target]Rule, []string) {
-	preferred := target{kind: req.ComponentKind, group: req.BloodGroup}
 	permitted := map[target]Rule{}
 	for _, r := range active {
 		if r.IsException || !ruleApplies(r, req) {
@@ -316,19 +315,15 @@ func permittedTargets(req Request, active []Rule) (map[target]Rule, []string) {
 		}
 	}
 
-	// Исключения запрещают замену; точное соответствие заявке исключением не запрещается —
-	// для запрета служат ограничения заявки.
+	// Исключение запрещает вариант (ПР6, matching_rule.is_exception) — любой, включая точное соответствие заявке.
 	for _, r := range active {
 		if !r.IsException || !ruleApplies(r, req) {
 			continue
 		}
 		t := ruleTarget(r, req)
-		if t == preferred {
-			continue
-		}
 		if _, ok := permitted[t]; ok {
 			delete(permitted, t)
-			notes = append(notes, fmt.Sprintf("исключение %s v%d запретило замену %s %s", r.Code, r.Version, t.kind, t.group))
+			notes = append(notes, fmt.Sprintf("исключение %s v%d запретило вариант %s %s", r.Code, r.Version, t.kind, t.group))
 		}
 	}
 	return permitted, notes

@@ -196,8 +196,8 @@ func TestSubstitutesOfferedOnlyWhenPreferredInsufficient(t *testing.T) {
 	}
 }
 
-// Исключение правила запрещает замену: демо-исключение DEMO_FFP_AB_PLANNED_EXC запрещает плазму AB+
-// для плановой заявки, хотя DEMO_FFP_AB её разрешает.
+// Исключение правила запрещает вариант: демо-исключение DEMO_RBC_A_NEG_PLANNED_EXC запрещает A- для
+// плановой заявки A+, хотя DEMO_RBC_A_NEG_FOR_A_POS его разрешает.
 func TestExceptionForbidsSubstitution(t *testing.T) {
 	cases := []struct {
 		urgency     string
@@ -209,29 +209,77 @@ func TestExceptionForbidsSubstitution(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.urgency, func(t *testing.T) {
-			res := mustMatch(t, input(t, request("FFP", "A+", tc.urgency, 1), unit(1, remote2, "FFP", "AB+", 300*day24)))
+			res := mustMatch(t, input(t, request("RBC", "A+", tc.urgency, 1), unit(1, remote2, "RBC", "A-", 10*day24)))
 			if tc.wantDeficit {
 				if len(res.Variants) != 0 || res.Deficit == nil || res.Deficit.Reason != domain.DeficitNoAllowedVariant {
 					t.Fatalf("исключение должно запретить замену: %+v", views(res))
 				}
-				if !strings.Contains(res.Deficit.Explanation, "DEMO_FFP_AB_PLANNED_EXC") {
+				if !strings.Contains(res.Deficit.Explanation, "DEMO_RBC_A_NEG_PLANNED_EXC") {
 					t.Fatalf("объяснение дефицита не называет исключение: %s", res.Deficit.Explanation)
 				}
 				return
 			}
 			got := views(res)
-			if len(got) != 1 || got[0].group != "AB+" || got[0].rule != "DEMO_FFP_AB" {
-				t.Fatalf("ожидали замену AB+ по DEMO_FFP_AB, получили %+v", got)
+			if len(got) != 1 || got[0].group != "A-" || got[0].rule != "DEMO_RBC_A_NEG_FOR_A_POS" {
+				t.Fatalf("ожидали замену A- по DEMO_RBC_A_NEG_FOR_A_POS, получили %+v", got)
 			}
 		})
 	}
 }
 
-// Исключение запрещает только замену: точное соответствие заявке AB+ остаётся допустимым.
-func TestExceptionDoesNotForbidPreferred(t *testing.T) {
-	res := mustMatch(t, input(t, request("FFP", "AB+", "PLANNED", 1), unit(1, remote2, "FFP", "AB+", 300*day24)))
-	if got := views(res); len(got) != 1 || !got[0].preferred || got[0].rule != "DEMO_FFP_IDENTICAL" {
-		t.Fatalf("ожидали предпочтительный AB+ по DEMO_FFP_IDENTICAL, получили %+v", got)
+func testRule(code, kind, reqGroup, allowedGroup, cond string, exception bool, priority int) domain.Rule {
+	return domain.Rule{Code: code, Version: 1, ComponentKind: kind, RequestedGroup: reqGroup, AllowedGroup: allowedGroup,
+		Condition: cond, IsException: exception, Priority: priority,
+		BasisDocument: "ДЕМО: синтетические правила, не клинические", BasisClause: "тест", ValidFrom: day(2026, 1, 1)}
+}
+
+// ПР6: правило-исключение «запрещает вариант» — любой, в том числе точное соответствие заявке.
+func TestExceptionForbidsPreferredToo(t *testing.T) {
+	rules := []domain.Rule{
+		testRule("T_IDENTICAL", "RBC", "", "", "", false, 1),
+		testRule("T_O_NEG", "RBC", "", "O-", "", false, 2),
+		// Пустая группа замены — та же группа, что в заявке: исключение нацелено на точное соответствие.
+		testRule("T_SAME_GROUP_PLANNED_EXC", "RBC", "", "", "URGENCY=PLANNED", true, 1),
+	}
+	cases := []struct {
+		name    string
+		urgency string
+		units   []domain.Unit
+		want    []string // группы вариантов по рангу; пусто — дефицит
+	}{
+		{"плановая: точное соответствие запрещено, остаётся замена", "PLANNED",
+			[]domain.Unit{unit(1, local, "RBC", "A+", 10*day24), unit(2, remote3, "RBC", "O-", 10*day24)}, []string{"O-"}},
+		{"плановая: только точное соответствие в запасе — дефицит", "PLANNED",
+			[]domain.Unit{unit(1, local, "RBC", "A+", 10*day24)}, nil},
+		{"срочная: исключение не применяется", "URGENT",
+			[]domain.Unit{unit(1, local, "RBC", "A+", 10*day24)}, []string{"A+"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			in := input(t, request("RBC", "A+", tc.urgency, 1), tc.units...)
+			in.Rules = rules
+			res := mustMatch(t, in)
+			var got []string
+			for _, v := range res.Variants {
+				got = append(got, v.BloodGroup)
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("варианты %v, ожидали %v", got, tc.want)
+			}
+			if tc.want == nil {
+				if res.Deficit == nil || !strings.Contains(res.Deficit.Explanation, "T_SAME_GROUP_PLANNED_EXC") {
+					t.Fatalf("ожидали дефицит с названием исключения: %+v", res.Deficit)
+				}
+			}
+		})
+	}
+}
+
+// Демо-исключение задаёт группу заявки и не задевает точное соответствие для заявки A-.
+func TestDemoExceptionDoesNotHitOtherRequests(t *testing.T) {
+	res := mustMatch(t, input(t, request("RBC", "A-", "PLANNED", 1), unit(1, remote2, "RBC", "A-", 10*day24)))
+	if got := views(res); len(got) != 1 || !got[0].preferred || got[0].rule != "DEMO_RBC_IDENTICAL" {
+		t.Fatalf("ожидали предпочтительный A- по DEMO_RBC_IDENTICAL, получили %+v", got)
 	}
 }
 
