@@ -39,6 +39,18 @@ func TestDenyWithoutDatabaseDoesNotPanic(t *testing.T) {
 	rt.Deny()(req, &auth.Principal{Username: "u", Roles: []auth.Role{auth.RoleOperator}}, auth.OpViewStock)
 }
 
+// Без базы отказ уходит в OnDeny сервиса (web — POST /records в audit, ADR-0017).
+func TestDenyWithoutDatabaseCallsOnDeny(t *testing.T) {
+	var gotOp auth.Operation
+	var gotUser string
+	rt := &Runtime{Log: slog.New(slog.NewTextHandler(io.Discard, nil)), Name: "web",
+		OnDeny: func(_ *http.Request, p *auth.Principal, op auth.Operation) { gotOp, gotUser = op, p.Username }}
+	rt.Deny()(httptest.NewRequest(http.MethodGet, "/x", nil), &auth.Principal{Username: "physician1"}, auth.OpConfirmTransfer)
+	if gotOp != auth.OpConfirmTransfer || gotUser != "physician1" {
+		t.Fatalf("OnDeny не вызван: %q %q", gotOp, gotUser)
+	}
+}
+
 // Своя цепочка (web, ADR-0018) заменяет bearer JWT; без неё при CustomAuth запуск останавливается,
 // а Use без CustomAuth — ошибка конфигурации.
 func TestAuthChain(t *testing.T) {

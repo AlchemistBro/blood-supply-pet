@@ -73,6 +73,10 @@ type Spec struct {
 	// со своей цепочкой, она заменяет проверку bearer JWT; проверяющий токены рантайм не создаёт.
 	// Без цепочки запуск останавливается, чтобы маршруты не открылись без проверки по ошибке.
 	CustomAuth bool
+	// OnDeny — запись отказа в доступе для сервиса без базы (NoDB): Runtime.Deny вызывает его вместо
+	// outbox. Если обработчику нужны зависимости из Setup, Setup может задать Runtime.OnDeny сам.
+	// Сервисам с базой не нужен: их отказы идут в outbox, как прежде.
+	OnDeny auth.Denied
 }
 
 // Worker — фоновая работа, живущая до отмены контекста (consumer, таймер).
@@ -91,6 +95,8 @@ type Runtime struct {
 	Obs      *observability.Observability
 	Refdata  *refdata.Set
 	Name     string
+	// OnDeny — запись отказа без базы (из Spec.OnDeny; Setup может заменить). У сервиса с базой не вызывается.
+	OnDeny auth.Denied
 
 	// middleware — своя цепочка проверки входа (Spec.CustomAuth), задаётся через Use.
 	middleware []httpx.Middleware
@@ -155,7 +161,7 @@ func run(ctx context.Context, spec Spec) error {
 	ref := refdata.MustLoad()
 	rt := &Runtime{
 		Cfg: cfg, Log: log, Clock: clock.System{}, Health: httpx.NewHealth(),
-		Mux: http.NewServeMux(), Obs: obs, Refdata: ref, Name: spec.Name,
+		Mux: http.NewServeMux(), Obs: obs, Refdata: ref, Name: spec.Name, OnDeny: spec.OnDeny,
 	}
 	if !spec.NoDB {
 		pool, err := openDatabase(ctx, cfg, spec, ref, log)
@@ -334,10 +340,15 @@ func splitColon(s string) []string {
 }
 
 // Deny — стандартная реакция на отказ в доступе: запись ACCESS_DENIED в аудит через journal.
+// У сервиса без базы outbox нет: отказ уходит в OnDeny (web пишет его в audit по HTTP, ADR-0017),
+// а без OnDeny — только в журнал процесса.
 func (rt *Runtime) Deny() auth.Denied {
 	return func(r *http.Request, p *auth.Principal, op auth.Operation) {
 		if rt.Pool == nil {
-			// Сервис без базы: outbox нет, отказ фиксируется только в журнале процесса.
+			if rt.OnDeny != nil {
+				rt.OnDeny(r, p, op)
+				return
+			}
 			rt.Log.WarnContext(r.Context(), "доступ запрещён", "operation", string(op))
 			return
 		}
