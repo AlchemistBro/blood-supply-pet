@@ -83,6 +83,24 @@ func TestStaleChangeHasNoEvent(t *testing.T) {
 	}
 }
 
+// Новая версия уже выбывшей единицы не публикуется: UnitUpdated допускает только IN_STOCK и QUARANTINE,
+// а выбытие уже опубликовано UnitWithdrawn.
+func TestWithdrawnUnitChangeHasNoEvent(t *testing.T) {
+	reg := apply(t, nil, domain.StatusInStock, "", 1)
+	out := apply(t, &reg.Unit, domain.StatusIssued, domain.ReasonIssued, 2)
+	for _, next := range []domain.Change{
+		apply(t, &out.Unit, domain.StatusDiscarded, domain.ReasonDiscarded, 3),
+		apply(t, &out.Unit, domain.StatusInStock, "", 3),
+	} {
+		if next.Event != domain.EventSilent {
+			t.Fatalf("событие %v, ожидали silent", next.Event)
+		}
+		if p, ok := events.Payload(next); ok {
+			t.Fatalf("для выбывшей единицы построено событие %s", p.MessageType())
+		}
+	}
+}
+
 func TestProtectedVolumeKeyAndReasonCodes(t *testing.T) {
 	pv := domain.ProtectedVolume{ClinicID: 12, ComponentKind: "PLT", VolumeUnits: 3}
 	if pv.Key() != "12:PLT" {
