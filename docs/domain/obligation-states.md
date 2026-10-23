@@ -14,7 +14,7 @@ stateDiagram-v2
     PENDING --> CANCELLED: заявка отменена / план пересчитан
     CONFIRMED --> TRANSPORT_REQUESTED: TransportAccepted от logistics-gateway
     CONFIRMED --> CANCELLED: отмена заявки
-    CONFIRMED --> BROKEN: единица выбыла в АИСТ-М, равноценной нет
+    CONFIRMED --> BROKEN: закреплённая единица выбыла в АИСТ-М
     CONFIRMED --> CONFIRMED: замена равноценной единицы (ADR-0011)
     TRANSPORT_REQUESTED --> CANCELLED: отмена заявки → CancelTransport в C03
     TRANSPORT_REQUESTED --> BROKEN: единица выбыла → CancelTransport
@@ -38,7 +38,7 @@ stateDiagram-v2
 | `REJECTED` | Отклонено: все единицы выбыли или источник отказал; подбор предложит следующий вариант | нет | да |
 | `EXPIRED` | Не подтверждено в срок; эскалация дежурному; новое O07 у следующего источника | нет | да |
 | `CANCELLED` | Отменено (заявка отменена, план пересчитан); закрепления сняты; после TRANSPORT_REQUESTED ушёл `CancelTransport` | нет | да |
-| `BROKEN` | Нарушено: единица выбыла в АИСТ-М после подтверждения, равноценной замены нет; `CancelTransport`; дефицит заявки | нет | да |
+| `BROKEN` | Нарушено: закреплённая единица выбыла в АИСТ-М после подтверждения; закрепления сняты, `CancelTransport`; дефицит заявки | нет | да |
 
 Статус «ожидает подтверждения АИСТ-М» из ПР6 (FR051, FR052) реализуется **не** отдельным состоянием O07, а полем
 `aist_ack_at` и статусом сообщения в `inventory.aist_outbox_message`: O07 остаётся `CONFIRMED`, UI показывает
@@ -100,7 +100,7 @@ stateDiagram-v2
 
 | Событие | Реакция `transfer` |
 | --- | --- |
-| `UnitWithdrawn` из `inventory` для закреплённой единицы | Если есть равноценная (по спецификации) — автозамена не делается, оператору показывается «замените»; при перепроверке перед отправкой без замены → `BROKEN` + `CancelTransport` + `RequestDeficitRecorded` |
+| `UnitWithdrawn` из `inventory` для закреплённой единицы | Сразу, в одной транзакции: CAS → `BROKEN`, все закрепления O07 → `RELEASED`, резерв уменьшается, в outbox `TransferBroken`, `CancelTransport` (шлётся всегда: шлюз отвечает и тогда, когда заказа не было), аудит. Решение владельца от 23.10.2026, как в Java-прототипе (`InventoryProjection`). Замену равноценной единицей оператор делает только **до** выбытия, через `ReplaceUnit` |
 | `TransportRejected(REFUSED)` | O07 остаётся `CONFIRMED`, событие `TransportRequestFailed`, эскалация дежурному: перевозку организует вручную |
 | `TransportRejected(OUTCOME_UNKNOWN)` | O07 остаётся `CONFIRMED`; если сверка шлюза позже найдёт заказ, придёт запоздалый `TransportAccepted` |
 | `TransportAccepted` для не-`CONFIRMED` O07 | Игнорируется с записью в аудит: `CancelTransport` уже ушла в момент нарушения |
