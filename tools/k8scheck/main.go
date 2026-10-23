@@ -2,7 +2,8 @@
 //   - каждый Deployment с меткой blood-supply.io/runtime=go-service соответствует стандарту сервиса
 //     (deploy/k8s/components/go-service): три пробы, ресурсы, runAsNonRoot, корень ФС только для чтения, /tmp;
 //   - ссылки env/envFrom ведут на существующие ConfigMap и Secret того же namespace и на существующие ключи
-//     (кроме optional), переменные не повторяются.
+//     (кроме optional), переменные не повторяются;
+//   - каждый namespace закрыт NetworkPolicy «запрещено всё» на вход и выход (security.md, сегменты ПР4).
 //
 // Запуск: kubectl kustomize deploy/k8s/overlays/local | go run ./tools/k8scheck
 // или go run ./tools/k8scheck <файл.yaml>. Код выхода 1 — есть замечания.
@@ -77,8 +78,43 @@ func check(docs []doc) []string {
 		}
 		problems = append(problems, checkService(d, idx)...)
 	}
+	problems = append(problems, checkDefaultDeny(docs)...)
 	sort.Strings(problems)
 	return problems
+}
+
+// checkDefaultDeny: у каждого Namespace из сборки есть NetworkPolicy на все поды (пустой podSelector)
+// с типами Ingress и Egress и без разрешающих правил — «запрещено всё, что не разрешено явно».
+func checkDefaultDeny(docs []doc) []string {
+	denied := map[string]bool{}
+	for _, d := range docs {
+		if str(d, "kind") != "NetworkPolicy" {
+			continue
+		}
+		sel, _ := get(d, "spec", "podSelector").(doc)
+		if len(sel) != 0 || len(list(d, "spec", "ingress")) != 0 || len(list(d, "spec", "egress")) != 0 {
+			continue
+		}
+		types := map[string]bool{}
+		for _, t := range list(d, "spec", "policyTypes") {
+			if s, ok := t.(string); ok {
+				types[s] = true
+			}
+		}
+		if types["Ingress"] && types["Egress"] {
+			denied[str(d, "metadata", "namespace")] = true
+		}
+	}
+	var out []string
+	for _, d := range docs {
+		if str(d, "kind") != "Namespace" {
+			continue
+		}
+		if ns := str(d, "metadata", "name"); !denied[ns] {
+			out = append(out, ns+": нет NetworkPolicy default-deny (пустой podSelector, Ingress и Egress)")
+		}
+	}
+	return out
 }
 
 // index — ConfigMap и Secret по ключу «вид/namespace/имя» с набором их ключей.

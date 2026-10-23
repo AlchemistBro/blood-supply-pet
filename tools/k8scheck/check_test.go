@@ -99,3 +99,43 @@ func TestPlatformDeploymentIsSkipped(t *testing.T) {
 		t.Fatalf("платформенный Deployment не должен проверяться: %v", problems)
 	}
 }
+
+const namespaceWithDeny = `
+apiVersion: v1
+kind: Namespace
+metadata: {name: bs-app}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: default-deny, namespace: bs-app}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+`
+
+// Каждый namespace из сборки закрыт политикой «запрещено всё» на вход и выход.
+func TestNamespaceWithDefaultDenyPasses(t *testing.T) {
+	if problems := check(mustParse(t, namespaceWithDeny)); len(problems) != 0 {
+		t.Fatalf("ожидались ноль замечаний, получено: %v", problems)
+	}
+}
+
+func TestNamespaceWithoutDefaultDenyIsReported(t *testing.T) {
+	cases := map[string]struct{ from, to string }{
+		"политики нет":        {"name: default-deny, namespace: bs-app", "name: default-deny, namespace: bs-other"},
+		"только вход":         {"policyTypes: [Ingress, Egress]", "policyTypes: [Ingress]"},
+		"выбраны не все поды": {"podSelector: {}", "podSelector: {matchLabels: {app: x}}"},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			text := strings.Replace(namespaceWithDeny, c.from, c.to, 1)
+			if text == namespaceWithDeny {
+				t.Fatalf("замена %q не применилась", c.from)
+			}
+			problems := check(mustParse(t, text))
+			if len(problems) != 1 || !strings.Contains(problems[0], "bs-app") || !strings.Contains(problems[0], "default-deny") {
+				t.Fatalf("ожидалось одно замечание про bs-app и default-deny, получено: %v", problems)
+			}
+		})
+	}
+}
