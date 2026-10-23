@@ -17,3 +17,4 @@ resources:
   - services
   # Вход: Ingress (ingress-nginx); NetworkPolicy по сегментам.
   - ingress
+  - networkpolicy

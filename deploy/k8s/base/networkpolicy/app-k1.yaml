@@ -1,0 +1,96 @@
+# Поды с данными класса K1 (номер случая пациента): matching и inventory (метка blood-supply.io/data-class=k1,
+# ADR-0020, security.md). Принимают запросы только от тех, кому они нужны по контракту, и ходят только
+# в Kafka, свою базу, Keycloak и телеметрию; inventory — ещё в АИСТ-М (ИНТ-01, ИНТ-05).
+# Изоляция базы внутри общего кластера PostgreSQL этим не достигается — см. README, ограничение 1.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: inventory-ingress
+  namespace: bs-app
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: inventory, blood-supply.io/data-class: k1}
+  policyTypes: [Ingress]
+  ingress:
+    # Статус единиц для саги (ADR-0004) и экраны запаса.
+    - from:
+        - podSelector:
+            matchExpressions:
+              - {key: app.kubernetes.io/name, operator: In, values: [transfer, web]}
+      ports:
+        - {protocol: TCP, port: 8101}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: matching-ingress
+  namespace: bs-app
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: matching, blood-supply.io/data-class: k1}
+  policyTypes: [Ingress]
+  ingress:
+    # Заявки врача приходят только через web.
+    - from:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: web}
+      ports:
+        - {protocol: TCP, port: 8104}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: k1-egress
+  namespace: bs-app
+spec:
+  podSelector:
+    matchLabels: {blood-supply.io/data-class: k1}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: kafka}
+      ports:
+        - {protocol: TCP, port: 9092}
+    - to:
+        - namespaceSelector:
+            matchLabels: {blood-supply.io/segment: data}
+          podSelector:
+            matchLabels: {cnpg.io/cluster: pg}
+      ports:
+        - {protocol: TCP, port: 5432}
+    - to:
+        - namespaceSelector:
+            matchLabels: {blood-supply.io/segment: edge}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: keycloak}
+      ports:
+        - {protocol: TCP, port: 8080}
+    - to:
+        - namespaceSelector:
+            matchLabels: {blood-supply.io/segment: observability}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: otel-lgtm}
+      ports:
+        - {protocol: TCP, port: 4317}
+        - {protocol: TCP, port: 4318}
+---
+# inventory → АИСТ-М: синхронизация запаса (ИНТ-01) и передача закрепления с номером случая (ИНТ-05).
+# На стенде АИСТ-М — имитатор sim-aist; адрес настоящей системы открывает overlay.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: inventory-egress-aist
+  namespace: bs-app
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: inventory, blood-supply.io/data-class: k1}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {blood-supply.io/segment: sims}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: sim-aist}
+      ports:
+        - {protocol: TCP, port: 8201}

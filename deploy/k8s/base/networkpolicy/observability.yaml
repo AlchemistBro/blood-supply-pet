@@ -1,0 +1,19 @@
+# Зона контроля (bs-observability) только принимает телеметрию; исходящих соединений, кроме DNS, нет.
+# Grafana (3000) снаружи не публикуется: просмотр через kubectl port-forward.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: otel-ingress
+  namespace: bs-observability
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: otel-lgtm}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchExpressions:
+              - {key: blood-supply.io/segment, operator: In, values: [app, sims]}
+      ports:
+        - {protocol: TCP, port: 4317}
+        - {protocol: TCP, port: 4318}
