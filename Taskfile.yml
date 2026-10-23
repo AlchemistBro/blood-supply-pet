@@ -20,9 +20,10 @@ tasks:
   gen:
     desc: Сгенерировать код из OpenAPI (oapi-codegen) и SQL (sqlc)
     cmds:
+      # Сервис без генерируемого сервера (web, имитаторы) не имеет api/oapi-codegen.yaml, сервис без базы
+      # (scaffold --no-db) — каталога sqlc: такие шаги пропускаются, а не валят генерацию.
       - for: { var: SERVICES, split: " " }
-        cmd: cd services/{{.ITEM}}/api && go tool oapi-codegen -config oapi-codegen.yaml openapi.yaml
-      # Сервис без базы (scaffold --no-db) не имеет каталога sqlc: пропускаем его, а не падаем.
+        cmd: if [ -f services/{{.ITEM}}/api/oapi-codegen.yaml ]; then cd services/{{.ITEM}}/api && go tool oapi-codegen -config oapi-codegen.yaml openapi.yaml; fi
       - for: { var: SERVICES, split: " " }
         cmd: if [ -d services/{{.ITEM}}/sqlc ]; then cd services/{{.ITEM}}/sqlc && sqlc generate; fi
 
