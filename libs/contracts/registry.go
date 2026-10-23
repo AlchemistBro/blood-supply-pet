@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/audit"
+	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/inventory"
 	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/logistics"
 	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/transfer"
 )
@@ -12,6 +13,12 @@ import (
 // Используется проверкой контрактов (пример → Go-тип → JSON → схема) и consumer-ами для декодирования.
 var Registry = map[string]func() Payload{
 	"AuditRecorded": func() Payload { return &audit.AuditRecorded{} },
+
+	// inventory.events
+	"UnitRegistered":           func() Payload { return &inventory.UnitRegistered{} },
+	"UnitUpdated":              func() Payload { return &inventory.UnitUpdated{} },
+	"UnitWithdrawn":            func() Payload { return &inventory.UnitWithdrawn{} },
+	"ProtectedVolumePublished": func() Payload { return &inventory.ProtectedVolumePublished{} },
 
 	// transfer.commands
 	"OpenObligation":   func() Payload { return &transfer.OpenObligation{} },

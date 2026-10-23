@@ -1,0 +1,10 @@
+{
+  "unit_id": "0192f3a1-7b2c-7d4e-8f90-400000000001",
+  "clinic_id": 1,
+  "component_kind": "RBC",
+  "status": "QUARANTINE",
+  "expires_at": "2026-11-20T08:00:00Z",
+  "storage_location": "Холодильник 4, полка 1",
+  "version": 2,
+  "changed_at": "2026-10-23T09:30:00Z"
+}

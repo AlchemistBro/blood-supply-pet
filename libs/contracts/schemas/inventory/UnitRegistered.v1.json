@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/inventory/UnitRegistered.v1.json",
+  "title": "UnitRegistered",
+  "description": "Событие inventory.events: единица появилась в копии запаса по данным АИСТ-М. Исходный код единицы АИСТ-М не публикуется, только суррогат unit_id (ADR-0010).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["unit_id", "clinic_id", "component_kind", "blood_group", "rh_positive", "volume_ml", "expires_at", "storage_location", "status", "version"],
+  "properties": {
+    "unit_id": { "type": "string", "format": "uuid" },
+    "clinic_id": { "type": "integer", "minimum": 1 },
+    "component_kind": { "type": "string", "enum": ["RBC", "FFP", "PLT", "CRYO"] },
+    "blood_group": { "type": "string", "enum": ["O+", "O-", "A+", "A-", "B+", "B-", "AB+", "AB-"] },
+    "rh_positive": { "type": "boolean" },
+    "phenotype": { "type": "string", "maxLength": 64, "description": "Квазиидентификатор: не логируется" },
+    "volume_ml": { "type": "integer", "minimum": 1 },
+    "expires_at": { "type": "string", "format": "date-time" },
+    "storage_location": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "status": { "type": "string", "enum": ["IN_STOCK", "QUARANTINE", "ISSUED", "DISCARDED", "TRANSFERRED"] },
+    "version": { "type": "integer", "minimum": 1 }
+  }
+}
