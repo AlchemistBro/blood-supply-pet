@@ -28,6 +28,8 @@ WHERE obligation_id = @obligation_id;
 -- name: Claim :one
 -- Аренда: строку берёт тот, кто первым увидел её свободной. Конкурент после ожидания блокировки строки
 -- перечитывает условие и получает 0 строк (READ COMMITTED), поэтому с C03 говорит один экземпляр.
+-- @now — часы экземпляра, а не базы (как в прототипе; в тестах — подменяемые). Допущение: время экземпляров
+-- синхронизировано (NTP), расхождение много меньше запаса «аренда − 2 × таймаут C03» (около 20 с).
 UPDATE transport_request
 SET lease_owner = @owner::uuid, lease_until = @lease_until::timestamptz
 WHERE obligation_id = @obligation_id

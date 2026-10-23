@@ -72,6 +72,7 @@ func (s *Store) RequestCancel(ctx context.Context, tx pgx.Tx, id uuid.UUID, now 
 }
 
 // Claim берёт аренду вне транзакции вызывающего: UPDATE ... RETURNING сам по себе атомарен.
+// now и until — по часам экземпляра; требуется синхронизация времени экземпляров (см. app.Settings).
 func (s *Store) Claim(ctx context.Context, id, owner uuid.UUID, now, until time.Time) (domain.Row, bool, error) {
 	r, err := s.q.Claim(ctx, gen.ClaimParams{ObligationID: id, Owner: owner, LeaseUntil: until, Now: now})
 	if errors.Is(err, pgx.ErrNoRows) {
