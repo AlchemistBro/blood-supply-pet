@@ -1,0 +1,14 @@
+# ДЕМО-секреты для local и ci. Значения совпадают с deploy/compose (пароль роли равен её имени)
+# и годятся только для стенда на ноутбуке и в CI. prod-example этот компонент не подключает.
+#
+# Хеш-суффикс отключён: на секреты ссылаются ресурсы CloudNativePG (Cluster.managed.roles,
+# barmanObjectStore), а kustomize не умеет переписывать имена в чужих CRD.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    blood-supply.io/demo: "true"
+  annotations:
+    blood-supply.io/note: "демо-значения, не для реального развёртывания"

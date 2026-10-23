@@ -1,0 +1,17 @@
+# База развёртывания: то, что одинаково для всех окружений (local, ci, prod-example).
+# Секреты здесь не генерируются: демо-значения подключает компонент components/demo-secrets
+# в overlays local и ci, prod-example берёт их из внешнего менеджера секретов.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: blood-supply
+    includeSelectors: false
+
+resources:
+  - namespaces.yaml
+  # Сервисы приложения (пакет S8-WP2): services/<svc>/ — Deployment, Service, HPA, PDB.
+  # - services
+  # Вход (пакет S8-WP3): ingress, NetworkPolicy по сегментам.
+  # - ingress

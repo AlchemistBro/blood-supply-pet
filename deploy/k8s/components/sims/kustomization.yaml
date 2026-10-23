@@ -1,0 +1,7 @@
+# Имитаторы смежных систем (C01, C03, C04) — только local и ci, в prod-example не подключаются.
+# Пакет S8-WP2 добавляет сюда sim-aist, sim-logistics, sim-emergency.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+resources:
+  - namespace.yaml

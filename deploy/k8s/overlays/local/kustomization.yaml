@@ -1,0 +1,16 @@
+# Стенд в kind на ноутбуке: база, демо-секреты, имитаторы.
+# Применение (пакет S8-WP4, task k8s:up): kubectl apply --server-side -k deploy/k8s/overlays/local
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+labels:
+  - pairs:
+      blood-supply.io/env: local
+    includeSelectors: false
+
+resources:
+  - ../../base
+
+components:
+  - ../../components/demo-secrets
+  - ../../components/sims
