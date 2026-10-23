@@ -3,6 +3,7 @@ package logistics_test
 import (
 	"encoding/json"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -51,6 +52,39 @@ func TestCancelReasonsMatchSchema(t *testing.T) {
 	}
 	if !strings.Contains(","+strings.Join(want, ",")+",", ","+logistics.CancelUnitQuarantined+",") {
 		t.Fatal("карантин закреплённой единицы должен снимать заказ перевозки")
+	}
+}
+
+// Идентификатор работника службы перевозки — служебный код без пробелов (ПП РФ № 641, п. 73; ADR-0022):
+// ФИО шаблон не пропускает.
+func TestCourierRefIsServiceIdentifier(t *testing.T) {
+	re := regexp.MustCompile(logistics.CourierRefPattern)
+	for _, ok := range []string{"courier-0042", "c03:tab.1187"} {
+		if !re.MatchString(ok) {
+			t.Errorf("служебный идентификатор %q отвергнут", ok)
+		}
+	}
+	for _, bad := range []string{"Иванов Иван Иванович", "ivanov ivan", ""} {
+		if re.MatchString(bad) {
+			t.Errorf("значение %q прошло шаблон служебного идентификатора", bad)
+		}
+	}
+	for _, path := range []string{"../schemas/logistics/TransportDispatched.v1.json", "../schemas/logistics/TransportDelivered.v1.json"} {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var schema struct {
+			Properties map[string]struct {
+				Pattern string `json:"pattern"`
+			} `json:"properties"`
+		}
+		if err := json.Unmarshal(raw, &schema); err != nil {
+			t.Fatal(err)
+		}
+		if got := schema.Properties["courier_ref"].Pattern; got != logistics.CourierRefPattern {
+			t.Errorf("%s: courier_ref с шаблоном %q, ожидали %q", path, got, logistics.CourierRefPattern)
+		}
 	}
 }
 

@@ -15,5 +15,6 @@
     "phenotype": "CcDEe",
     "min_expires_at": "2026-10-25T00:00:00Z",
     "rule_version": "demo-o15-v1"
-  }
+  },
+  "patient_case_sealed": "v1.k1-2026-10.Q2lwaGVydGV4dC1kZW1vLW5vdC1yZWFs"
 }

@@ -6,8 +6,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/demand"
 	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/inventory"
 	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/logistics"
+	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/matching"
+	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/planning"
 	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/transfer"
 	"github.com/AlchemistBro/blood-supply-pet/libs/refdata"
 )
@@ -69,6 +72,18 @@ func TestGoEnumsMatchSchemas(t *testing.T) {
 		{"inventory/UnitRegistered", "status", inventory.Statuses},
 		{"inventory/UnitUpdated", "status", inventory.UpdatedStatuses},
 		{"inventory/UnitWithdrawn", "reason", inventory.WithdrawReasons},
+		{"inventory/SyncRunCompleted", "kind", inventory.SyncKinds},
+		{"inventory/SyncRunCompleted", "result", inventory.SyncResults},
+		{"demand/StatisticsFileAccepted", "file_kind", demand.FileKinds},
+		{"demand/StatisticsFileAccepted", "status", demand.AcceptStatuses},
+		{"demand/StatisticsFileRejected", "file_kind", demand.FileKinds},
+		{"demand/StatisticsFileRejected", "reason", demand.FileRejectReasons},
+		{"planning/PlanDeficitRecorded", "reason", planning.DeficitReasons},
+		{"matching/ClinicalRequestCreated", "urgency", matching.Urgencies},
+		{"matching/RequestDeficitRecorded", "reason", matching.DeficitReasons},
+		{"inventory/ReleasePatientAllocation", "reason", inventory.ReleaseReasons},
+		{"transfer/EscalationClosed", "reason", transfer.EscalationReasons},
+		{"transfer/EscalationClosed", "resolution", transfer.EscalationResolutions},
 	}
 	for _, c := range cases {
 		schema := readJSON(t, "schemas/"+c.schema+".v1.json")

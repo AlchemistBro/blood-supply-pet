@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/inventory/StockNormPublished.v1.json",
+  "title": "StockNormPublished",
+  "type": "object",
+  "description": "Событие inventory.events: новый действующий норматив запаса клиники по виду компонента (FR012, FR013).",
+  "additionalProperties": false,
+  "required": [
+    "clinic_id",
+    "component_kind",
+    "norm_ml",
+    "avg_monthly_ml",
+    "version",
+    "calculated_at"
+  ],
+  "properties": {
+    "clinic_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "component_kind": {
+      "type": "string",
+      "enum": [
+        "RBC",
+        "FFP",
+        "PLT",
+        "CRYO"
+      ]
+    },
+    "norm_ml": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Норматив N = Kгод / 360, не меньше одной единицы"
+    },
+    "avg_monthly_ml": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Средний месячный расход Kср = Kгод / 12"
+    },
+    "is_min_unit_applied": {
+      "type": "boolean",
+      "description": "Норматив поднят до одной типовой единицы"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "calculated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

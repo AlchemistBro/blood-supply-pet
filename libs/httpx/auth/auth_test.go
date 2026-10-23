@@ -39,7 +39,19 @@ func TestObligationOperations(t *testing.T) {
 	}{
 		{auth.OpOpenObligation, []auth.Role{auth.RoleService}},
 		{auth.OpCancelObligation, []auth.Role{auth.RoleService, auth.RoleDuty}},
-		{auth.OpViewObligation, []auth.Role{auth.RoleOperator, auth.RolePhysician, auth.RoleDuty, auth.RoleService}},
+		// IT_SERVICE — мониторинг заданий без ПДн (номера случая в обязательстве нет).
+		{auth.OpViewObligation, []auth.Role{auth.RoleOperator, auth.RolePhysician, auth.RoleDuty, auth.RoleService, auth.RoleITService}},
+		// этап 4: файлы, версии оценки и доли видят аналитик и дежурный (FR016–FR020)
+		{auth.OpViewDemand, []auth.Role{auth.RoleAnalyst, auth.RoleDuty}},
+		// этап 5: построить план вручную могут аналитик и дежурный; по прогнозу ЧС план строится сам (FR021–FR028)
+		{auth.OpBuildPlan, []auth.Role{auth.RoleAnalyst, auth.RoleDuty}},
+		// этап 6: заявки и варианты видят врач и дежурный; номер случая — отдельная операция READ_PATIENT_CASE
+		{auth.OpViewRequests, []auth.Role{auth.RolePhysician, auth.RoleDuty}},
+		// этап 7: состояние интеграций — ИТ-служба и дежурный; прослеживаемость выданных единиц за 12 месяцев
+		// (ПП РФ № 641, п. 54) — оператор клиники и дежурный; эскалации — только дежурный
+		{auth.OpViewIntegrations, []auth.Role{auth.RoleITService, auth.RoleDuty}},
+		{auth.OpTraceUnits, []auth.Role{auth.RoleOperator, auth.RoleDuty}},
+		{auth.OpHandleEscalation, []auth.Role{auth.RoleDuty}},
 	}
 	all := []auth.Role{auth.RolePhysician, auth.RoleOperator, auth.RoleAnalyst, auth.RoleDuty, auth.RoleITService, auth.RoleService}
 	for _, c := range cases {

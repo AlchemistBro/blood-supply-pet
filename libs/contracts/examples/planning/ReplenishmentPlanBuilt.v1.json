@@ -1,0 +1,15 @@
+{
+  "replenishment_plan_id": "0192f3a1-7b2c-7d4e-8f90-710000000001",
+  "demand_estimate_id": "0192f3a1-7b2c-7d4e-8f90-610000000001",
+  "demand_estimate_version_no": 4,
+  "emergency_forecast_id": "0192f3a1-7b2c-7d4e-8f90-700000000001",
+  "scenario_version": "chs-2026-10-23-v2",
+  "stock_watermark": 1042,
+  "stock_synced_at": "2026-10-23T09:25:00Z",
+  "delivery_estimated_at": "2026-10-23T09:00:00Z",
+  "coverage_ratio": 0.93,
+  "targets_count": 400,
+  "proposals_count": 57,
+  "deficits_count": 3,
+  "elapsed_ms": 8420
+}

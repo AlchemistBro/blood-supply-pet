@@ -9,6 +9,8 @@
   "properties": {
     "obligation_id": { "type": "string", "format": "uuid" },
     "obligation_version": { "type": "integer", "minimum": 0, "description": "Версия O07 после перехода; проекции применяют событие, только если версия выше сохранённой" },
+    "source_clinic_id": { "type": "integer", "minimum": 1, "description": "Клиника-источник обязательства; для фильтра живых статусов без запроса к transfer" },
+    "target_clinic_id": { "type": "integer", "minimum": 1, "description": "Клиника-получатель обязательства; для фильтра живых статусов без запроса к transfer" },
     "request_id": { "type": "string", "format": "uuid" },
     "component_kind": { "type": "string", "enum": ["RBC", "FFP", "PLT", "CRYO"] },
     "shortfall": { "type": "integer", "minimum": 1 }

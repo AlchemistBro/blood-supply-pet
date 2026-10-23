@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/demand/ClinicSharesPublished.v1.json",
+  "title": "ClinicSharesPublished",
+  "type": "object",
+  "description": "Событие demand.events: новая версия долей «район → клиника» (сумма по району = 1 ± 0,0001).",
+  "additionalProperties": false,
+  "required": [
+    "clinic_share_version_id",
+    "version_no",
+    "shares"
+  ],
+  "properties": {
+    "clinic_share_version_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "version_no": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "shares": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "district_id",
+          "clinic_id",
+          "share"
+        ],
+        "properties": {
+          "district_id": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "clinic_id": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "share": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      }
+    }
+  }
+}
