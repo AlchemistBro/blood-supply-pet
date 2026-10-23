@@ -133,19 +133,26 @@ type changesResponse struct {
 // Клиент передаёт last_version следующим запросом как since; has_more — есть следующая страница.
 func (h *Handler) changes(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	since, err := intParam(q.Get("since"), 0)
+	var since int64
+	var err error
+	if s := q.Get("since"); s != "" {
+		since, err = strconv.ParseInt(s, 10, 64)
+	}
 	if err != nil || since < 0 {
 		httpx.WriteProblem(w, r, http.StatusBadRequest, "Некорректный параметр since",
 			"since — неотрицательное целое: последняя полученная версия.")
 		return
 	}
-	limit, err := intParam(q.Get("limit"), defaultChangesLimit)
+	limit := defaultChangesLimit
+	if s := q.Get("limit"); s != "" {
+		limit, err = strconv.Atoi(s)
+	}
 	if err != nil || limit < 1 || limit > maxChangesLimit {
 		httpx.WriteProblem(w, r, http.StatusBadRequest, "Некорректный параметр limit",
 			fmt.Sprintf("limit — целое от 1 до %d.", maxChangesLimit))
 		return
 	}
-	units, more := h.store.Changes(since, int(limit))
+	units, more := h.store.Changes(since, limit)
 	last := since
 	if len(units) > 0 {
 		last = units[len(units)-1].Version
@@ -153,17 +160,6 @@ func (h *Handler) changes(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, changesResponse{
 		Units: units, LastVersion: last, CurrentVersion: h.store.Version(), HasMore: more,
 	})
-}
-
-func intParam(s string, def int64) (int64, error) {
-	if s == "" {
-		return def, nil
-	}
-	v, err := strconv.ParseInt(s, 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("разбор %q: %w", s, err)
-	}
-	return v, nil
 }
 
 type unitStatus struct {
