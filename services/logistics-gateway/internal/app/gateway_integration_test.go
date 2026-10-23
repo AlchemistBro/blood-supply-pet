@@ -9,19 +9,21 @@
 package app_test
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -56,8 +58,16 @@ func TestMain(m *testing.M) {
 	os.Exit(runTests(m))
 }
 
-// runTests собирает и запускает sim-logistics на свободном порту, ждёт /healthz и гоняет тесты.
-func runTests(m *testing.M) int {
+// simHTTP — клиент пульта имитатора: с таймаутом, чтобы зависший имитатор ронял тест, а не вешал его.
+var simHTTP = &http.Client{Timeout: 10 * time.Second}
+
+// runTests собирает и запускает sim-logistics, ждёт /healthz и гоняет тесты.
+//
+// Порт выбирает сам имитатор (127.0.0.1:0) и печатает «listening on <адрес>»: гонки за свободный порт нет.
+// Имитатор слушает stdin и завершается по его закрытию: если тестовый процесс упадёт (паника в тесте, таймаут
+// go test, kill), ОС закроет трубу, и имитатор не останется висеть. Паника в главной горутине перехватывается,
+// чтобы отложенная остановка имитатора выполнилась.
+func runTests(m *testing.M) (code int) {
 	dir, err := os.MkdirTemp("", "sim-logistics-")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "временный каталог:", err)
@@ -74,24 +84,42 @@ func runTests(m *testing.M) int {
 		fmt.Fprintln(os.Stderr, "сборка sim-logistics:", err)
 		return 1
 	}
-	l, err := net.Listen("tcp", "127.0.0.1:0")
+
+	sim := exec.Command(bin)
+	sim.Env = append(os.Environ(), "BS_HTTP_ADDR=127.0.0.1:0", "BS_PRINT_ADDR=true", "BS_EXIT_ON_STDIN_EOF=true",
+		"BS_LOG_LEVEL=warn", "BS_LOG_FORMAT=text", "BS_OTEL_ENDPOINT=")
+	sim.Stderr = os.Stderr
+	stdin, err := sim.StdinPipe()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "свободный порт:", err)
+		fmt.Fprintln(os.Stderr, "stdin sim-logistics:", err)
 		return 1
 	}
-	addr := l.Addr().String()
-	_ = l.Close()
-	sim := exec.Command(bin)
-	sim.Env = append(os.Environ(), "BS_HTTP_ADDR="+addr, "BS_LOG_LEVEL=warn", "BS_LOG_FORMAT=text", "BS_OTEL_ENDPOINT=")
-	sim.Stdout, sim.Stderr = os.Stderr, os.Stderr
+	stdout, err := sim.StdoutPipe()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "stdout sim-logistics:", err)
+		return 1
+	}
 	if err := sim.Start(); err != nil {
 		fmt.Fprintln(os.Stderr, "запуск sim-logistics:", err)
 		return 1
 	}
 	defer func() {
+		_ = stdin.Close() // штатная остановка: имитатор увидит EOF
 		_ = sim.Process.Kill()
 		_ = sim.Wait()
 	}()
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Fprintln(os.Stderr, "паника в тестах:", r)
+			code = 2
+		}
+	}()
+
+	addr, err := readListenAddr(stdout, time.Minute)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "sim-logistics не сообщил адрес:", err)
+		return 1
+	}
 	simURL = "http://" + addr
 	if err := waitHealthy(simURL+"/healthz", time.Minute); err != nil {
 		fmt.Fprintln(os.Stderr, "sim-logistics не поднялся:", err)
@@ -100,10 +128,40 @@ func runTests(m *testing.M) int {
 	return m.Run()
 }
 
+// readListenAddr ждёт строку «listening on <адрес>» в stdout имитатора; остальной вывод уходит в stderr теста.
+func readListenAddr(stdout io.Reader, timeout time.Duration) (string, error) {
+	const prefix = "listening on "
+	found := make(chan string, 1)
+	go func() {
+		sc := bufio.NewScanner(stdout)
+		for sc.Scan() {
+			line := sc.Text()
+			if addr, ok := strings.CutPrefix(line, prefix); ok {
+				select {
+				case found <- strings.TrimSpace(addr):
+				default:
+				}
+				continue
+			}
+			fmt.Fprintln(os.Stderr, line)
+		}
+		close(found)
+	}()
+	select {
+	case addr, ok := <-found:
+		if !ok || addr == "" {
+			return "", errors.New("stdout закрылся без адреса")
+		}
+		return addr, nil
+	case <-time.After(timeout):
+		return "", fmt.Errorf("нет адреса за %v", timeout)
+	}
+}
+
 func waitHealthy(u string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for {
-		resp, err := http.Get(u) //nolint:gosec,noctx // адрес задаёт сам тест
+		resp, err := simHTTP.Get(u)
 		if err == nil {
 			_ = resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
@@ -390,7 +448,7 @@ func (f *fixture) simPost(path string, body any, want int) []byte {
 			f.t.Fatal(err)
 		}
 	}
-	resp, err := http.Post(simURL+path, "application/json", &buf) //nolint:noctx // тестовый пульт
+	resp, err := simHTTP.Post(simURL+path, "application/json", &buf)
 	if err != nil {
 		f.t.Fatal(err)
 	}
@@ -410,7 +468,7 @@ func (f *fixture) faults(v map[string]any) {
 // shipments — все заказы у C03 по обязательству, включая отменённые.
 func (f *fixture) shipments(id uuid.UUID) []simShipment {
 	f.t.Helper()
-	resp, err := http.Get(simURL + "/dev/shipments?clientRef=" + url.QueryEscape(domain.ClientRef(id))) //nolint:noctx // тестовый пульт
+	resp, err := simHTTP.Get(simURL + "/dev/shipments?clientRef=" + url.QueryEscape(domain.ClientRef(id)))
 	if err != nil {
 		f.t.Fatal(err)
 	}
