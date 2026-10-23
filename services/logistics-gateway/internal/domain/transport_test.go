@@ -37,13 +37,14 @@ func TestRequestValidation(t *testing.T) {
 		t.Fatalf("корректная команда отвергнута: %v", err)
 	}
 	cases := map[string]func(r *domain.Request){
-		"нет обязательства":    func(r *domain.Request) { r.ObligationID = uuid.Nil },
-		"нет request_id":       func(r *domain.Request) { r.RequestID = uuid.Nil },
-		"нет источника":        func(r *domain.Request) { r.SourceClinicID = 0 },
-		"нет получателя":       func(r *domain.Request) { r.TargetClinicID = -1 },
-		"нет вида":             func(r *domain.Request) { r.ComponentKindCode = "" },
-		"ноль контейнеров":     func(r *domain.Request) { r.Quantity = 0 },
-		"нет режима перевозки": func(r *domain.Request) { r.TemperatureRegime = "" },
+		"нет обязательства":     func(r *domain.Request) { r.ObligationID = uuid.Nil },
+		"нет request_id":        func(r *domain.Request) { r.RequestID = uuid.Nil },
+		"нет источника":         func(r *domain.Request) { r.SourceClinicID = 0 },
+		"нет получателя":        func(r *domain.Request) { r.TargetClinicID = -1 },
+		"нет вида":              func(r *domain.Request) { r.ComponentKindCode = "" },
+		"источник = получатель": func(r *domain.Request) { r.TargetClinicID = r.SourceClinicID },
+		"ноль контейнеров":      func(r *domain.Request) { r.Quantity = 0 },
+		"нет режима перевозки":  func(r *domain.Request) { r.TemperatureRegime = "" },
 	}
 	for name, mutate := range cases {
 		r := request()

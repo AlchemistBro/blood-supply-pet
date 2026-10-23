@@ -69,6 +69,9 @@ func (r Request) Validate() error {
 		return fmt.Errorf("%w: нет request_id", ErrInvalidRequest)
 	case r.SourceClinicID <= 0 || r.TargetClinicID <= 0:
 		return fmt.Errorf("%w: нет клиники-источника или клиники-получателя", ErrInvalidRequest)
+	case r.SourceClinicID == r.TargetClinicID:
+		// Перевозка внутри одной клиники не заказывается: такую команду C03 отвергнет при любом повторе.
+		return fmt.Errorf("%w: клиника-источник совпадает с клиникой-получателем", ErrInvalidRequest)
 	case r.ComponentKindCode == "":
 		return fmt.Errorf("%w: нет вида компонента", ErrInvalidRequest)
 	case r.Quantity < 1:

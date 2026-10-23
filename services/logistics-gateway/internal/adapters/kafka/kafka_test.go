@@ -67,12 +67,19 @@ func TestUnknownRegimeIsRejected(t *testing.T) {
 // Ядовитые команды уходят в DLT без повторов и без обращения к шлюзу (он здесь nil).
 func TestPoisonCommandsArePermanent(t *testing.T) {
 	h := kafka.Handler(nil)
-	noRoute, _ := json.Marshal(logistics.RequestTransport{ObligationID: uuid.New(), RequestID: uuid.New()})
+	// Вид и режим корректны: команда ядовита именно из-за маршрута.
+	noRouteCmd := command()
+	noRouteCmd.SourceClinicID, noRouteCmd.TargetClinicID = 0, 0
+	noRoute, _ := json.Marshal(noRouteCmd)
+	sameClinicCmd := command()
+	sameClinicCmd.TargetClinicID = sameClinicCmd.SourceClinicID
+	sameClinic, _ := json.Marshal(sameClinicCmd)
 	noObligation, _ := json.Marshal(logistics.CancelTransport{Reason: logistics.CancelUnitWithdrawn})
 	cases := map[string]messaging.Message{
 		"неизвестный тип":          {ID: uuid.New(), Type: "SomethingElse", Payload: []byte(`{}`)},
 		"битый JSON заказа":        {ID: uuid.New(), Type: "RequestTransport", Payload: []byte(`{`)},
 		"заказ без маршрута":       {ID: uuid.New(), Type: "RequestTransport", Payload: noRoute},
+		"источник = получатель":    {ID: uuid.New(), Type: "RequestTransport", Payload: sameClinic},
 		"битый JSON отмены":        {ID: uuid.New(), Type: "CancelTransport", Payload: []byte(`{`)},
 		"отмена без обязательства": {ID: uuid.New(), Type: "CancelTransport", Payload: noObligation},
 	}
