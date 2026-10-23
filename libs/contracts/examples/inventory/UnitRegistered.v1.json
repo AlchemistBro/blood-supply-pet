@@ -1,0 +1,13 @@
+{
+  "unit_id": "0192f3a1-7b2c-7d4e-8f90-400000000001",
+  "clinic_id": 1,
+  "component_kind": "RBC",
+  "blood_group": "A+",
+  "rh_positive": true,
+  "phenotype": "CcDEe",
+  "volume_ml": 290,
+  "expires_at": "2026-11-20T08:00:00Z",
+  "storage_location": "Холодильник 2, полка 3",
+  "status": "IN_STOCK",
+  "version": 1
+}

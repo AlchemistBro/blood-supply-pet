@@ -1,0 +1,254 @@
+// Package transfer — контракт контекста «Передачи и обязательства» (O07, FR048, FR049, NFR004).
+//
+// Команды OpenObligation и CancelObligation идут в топик transfer.commands (пишут matching и planning,
+// исполняет transfer), события — в transfer.events. Ключ сообщения — obligation_id (для OpenObligation —
+// choice_id). Номера случая пациента здесь нет: обязательство ссылается на заявку только через request_id,
+// ИНТ-05 (закрепление за пациентом) — забота inventory. Спецификация замены содержит фенотип —
+// квазиидентификатор (ADR-0011): её не логируют и не пересылают дальше OpenObligation.
+package transfer
+
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
+
+// Origin — откуда пришло обязательство.
+const (
+	OriginDoctorChoice = "DOCTOR_CHOICE"
+	OriginPlanProposal = "PLAN_PROPOSAL"
+)
+
+// Срочность — коды справочника ref_urgency (libs/refdata).
+const (
+	UrgencyPlanned   = "PLANNED"
+	UrgencyUrgent    = "URGENT"
+	UrgencyEmergency = "EMERGENCY"
+)
+
+// Причины отмены обязательства (CancelObligation, TransferCancelled).
+const (
+	CancelRequestCancelled    = "REQUEST_CANCELLED"
+	CancelPlanRecalculated    = "PLAN_RECALCULATED"
+	CancelDutyOfficerDecision = "DUTY_OFFICER_DECISION"
+)
+
+// Причины отклонения (TransferRejected): все выбранные единицы выбыли или источник отказал.
+const (
+	RejectUnitsWithdrawn = "UNITS_WITHDRAWN"
+	RejectSourceRefused  = "SOURCE_REFUSED"
+)
+
+// Причины эскалации дежурному (EscalationRaised).
+const (
+	EscalationExpiredNoFallback       = "EXPIRED_NO_FALLBACK"
+	EscalationTransportRefused        = "TRANSPORT_REFUSED"
+	EscalationTransportOutcomeUnknown = "TRANSPORT_OUTCOME_UNKNOWN"
+	EscalationSourceSystemUnavailable = "SOURCE_SYSTEM_UNAVAILABLE"
+)
+
+// ReplacementSpec — спецификация допустимой замены единицы (ADR-0011). Её считает matching
+// (или planning) по правилам O15, transfer только проверяет кандидата. Пустое поле — «любой».
+type ReplacementSpec struct {
+	BloodGroup *string `json:"blood_group,omitempty"`
+	RhPositive *bool   `json:"rh_positive,omitempty"`
+	// Phenotype — квазиидентификатор: не логируется, не попадает в события и письма.
+	Phenotype    string     `json:"phenotype,omitempty"`
+	MinExpiresAt *time.Time `json:"min_expires_at,omitempty"`
+	// RuleVersion — версия правила O15, по которой посчитана спецификация (NFR009).
+	RuleVersion string `json:"rule_version"`
+}
+
+// OpenObligation — команда «создать задание источнику» (O07 PENDING). Повтор с тем же choice_id
+// не создаёт второе обязательство.
+type OpenObligation struct {
+	ChoiceID       uuid.UUID `json:"choice_id"`
+	RequestID      uuid.UUID `json:"request_id"`
+	Origin         string    `json:"origin"`
+	SourceClinicID int64     `json:"source_clinic_id"`
+	TargetClinicID int64     `json:"target_clinic_id"`
+	ComponentKind  string    `json:"component_kind"`
+	RequestedQty   int       `json:"requested_qty"`
+	Urgency        string    `json:"urgency"`
+	// ConfirmWindowSeconds — срок подтверждения оператором источника (FR049); для экстренной — минуты.
+	ConfirmWindowSeconds int64 `json:"confirm_window_seconds"`
+	// FallbackSources — следующие источники для эскалации по таймеру, по порядку ранжирования.
+	FallbackSources []int64         `json:"fallback_sources,omitempty"`
+	Spec            ReplacementSpec `json:"spec"`
+}
+
+// MessageType реализует contracts.Payload.
+func (OpenObligation) MessageType() string { return "OpenObligation" }
+
+// SchemaVersion реализует contracts.Payload.
+func (OpenObligation) SchemaVersion() int { return 1 }
+
+// CancelObligation — команда «отменить обязательство»: заявка отменена или план пересчитан.
+type CancelObligation struct {
+	ObligationID uuid.UUID `json:"obligation_id"`
+	Reason       string    `json:"reason"`
+}
+
+// MessageType реализует contracts.Payload.
+func (CancelObligation) MessageType() string { return "CancelObligation" }
+
+// SchemaVersion реализует contracts.Payload.
+func (CancelObligation) SchemaVersion() int { return 1 }
+
+// ObligationOpened — обязательство создано в статусе PENDING.
+type ObligationOpened struct {
+	ObligationID   uuid.UUID `json:"obligation_id"`
+	RequestID      uuid.UUID `json:"request_id"`
+	Origin         string    `json:"origin"`
+	SourceClinicID int64     `json:"source_clinic_id"`
+	TargetClinicID int64     `json:"target_clinic_id"`
+	ComponentKind  string    `json:"component_kind"`
+	RequestedQty   int       `json:"requested_qty"`
+	Deadline       time.Time `json:"deadline"`
+}
+
+// MessageType реализует contracts.Payload.
+func (ObligationOpened) MessageType() string { return "ObligationOpened" }
+
+// SchemaVersion реализует contracts.Payload.
+func (ObligationOpened) SchemaVersion() int { return 1 }
+
+// TransferConfirmed — оператор источника подтвердил передачу, единицы закреплены (PENDING → CONFIRMED).
+type TransferConfirmed struct {
+	ObligationID uuid.UUID   `json:"obligation_id"`
+	RequestID    uuid.UUID   `json:"request_id"`
+	Units        []uuid.UUID `json:"units"`
+	Quantity     int         `json:"quantity"`
+	// Operator — учётная запись оператора из токена (как user_id в аудите), не ФИО.
+	Operator string `json:"operator"`
+}
+
+// MessageType реализует contracts.Payload.
+func (TransferConfirmed) MessageType() string { return "TransferConfirmed" }
+
+// SchemaVersion реализует contracts.Payload.
+func (TransferConfirmed) SchemaVersion() int { return 1 }
+
+// TransferShortfallRecorded — подтверждено меньше запрошенного; подбор или план ищет источник на остаток.
+type TransferShortfallRecorded struct {
+	ObligationID  uuid.UUID `json:"obligation_id"`
+	RequestID     uuid.UUID `json:"request_id"`
+	ComponentKind string    `json:"component_kind"`
+	Shortfall     int       `json:"shortfall"`
+}
+
+// MessageType реализует contracts.Payload.
+func (TransferShortfallRecorded) MessageType() string { return "TransferShortfallRecorded" }
+
+// SchemaVersion реализует contracts.Payload.
+func (TransferShortfallRecorded) SchemaVersion() int { return 1 }
+
+// TransferRejected — обязательство отклонено (PENDING → REJECTED).
+type TransferRejected struct {
+	ObligationID uuid.UUID `json:"obligation_id"`
+	RequestID    uuid.UUID `json:"request_id"`
+	Reason       string    `json:"reason"`
+}
+
+// MessageType реализует contracts.Payload.
+func (TransferRejected) MessageType() string { return "TransferRejected" }
+
+// SchemaVersion реализует contracts.Payload.
+func (TransferRejected) SchemaVersion() int { return 1 }
+
+// TransferExpired — срок подтверждения истёк (PENDING → EXPIRED). NextObligationID — новое обязательство
+// у следующего источника, если он был в fallback_sources.
+type TransferExpired struct {
+	ObligationID     uuid.UUID  `json:"obligation_id"`
+	RequestID        uuid.UUID  `json:"request_id"`
+	NextObligationID *uuid.UUID `json:"next_obligation_id,omitempty"`
+}
+
+// MessageType реализует contracts.Payload.
+func (TransferExpired) MessageType() string { return "TransferExpired" }
+
+// SchemaVersion реализует contracts.Payload.
+func (TransferExpired) SchemaVersion() int { return 1 }
+
+// TransferCancelled — обязательство отменено, закрепления сняты.
+type TransferCancelled struct {
+	ObligationID uuid.UUID `json:"obligation_id"`
+	RequestID    uuid.UUID `json:"request_id"`
+	Reason       string    `json:"reason"`
+}
+
+// MessageType реализует contracts.Payload.
+func (TransferCancelled) MessageType() string { return "TransferCancelled" }
+
+// SchemaVersion реализует contracts.Payload.
+func (TransferCancelled) SchemaVersion() int { return 1 }
+
+// TransferBroken — закреплённая единица выбыла в АИСТ-М, обязательство нарушено (→ BROKEN).
+// Reason — причина выбытия из inventory.UnitWithdrawn.
+type TransferBroken struct {
+	ObligationID uuid.UUID `json:"obligation_id"`
+	RequestID    uuid.UUID `json:"request_id"`
+	UnitID       uuid.UUID `json:"unit_id"`
+	Reason       string    `json:"reason"`
+}
+
+// MessageType реализует contracts.Payload.
+func (TransferBroken) MessageType() string { return "TransferBroken" }
+
+// SchemaVersion реализует contracts.Payload.
+func (TransferBroken) SchemaVersion() int { return 1 }
+
+// TransferUnitReplaced — закреплённая единица заменена равноценной до отправки (ADR-0011).
+type TransferUnitReplaced struct {
+	ObligationID uuid.UUID `json:"obligation_id"`
+	OldUnitID    uuid.UUID `json:"old_unit_id"`
+	NewUnitID    uuid.UUID `json:"new_unit_id"`
+	RuleVersion  string    `json:"rule_version"`
+}
+
+// MessageType реализует contracts.Payload.
+func (TransferUnitReplaced) MessageType() string { return "TransferUnitReplaced" }
+
+// SchemaVersion реализует contracts.Payload.
+func (TransferUnitReplaced) SchemaVersion() int { return 1 }
+
+// TransportRequested — перевозчик принял заказ (CONFIRMED → TRANSPORT_REQUESTED).
+type TransportRequested struct {
+	ObligationID uuid.UUID `json:"obligation_id"`
+	ShipmentRef  string    `json:"shipment_ref"`
+}
+
+// MessageType реализует contracts.Payload.
+func (TransportRequested) MessageType() string { return "TransportRequested" }
+
+// SchemaVersion реализует contracts.Payload.
+func (TransportRequested) SchemaVersion() int { return 1 }
+
+// TransportRequestFailed — заказ перевозки не состоялся; O07 остаётся CONFIRMED, перевозку организует дежурный.
+// Reason — причина из logistics.TransportRejected.
+type TransportRequestFailed struct {
+	ObligationID uuid.UUID `json:"obligation_id"`
+	Reason       string    `json:"reason"`
+	Details      string    `json:"details,omitempty"`
+}
+
+// MessageType реализует contracts.Payload.
+func (TransportRequestFailed) MessageType() string { return "TransportRequestFailed" }
+
+// SchemaVersion реализует contracts.Payload.
+func (TransportRequestFailed) SchemaVersion() int { return 1 }
+
+// EscalationRaised — ситуация передана дежурному смены: таймер без запасного источника, отказ или
+// неизвестный исход перевозки, недоступность АИСТ-М при экстренной заявке.
+type EscalationRaised struct {
+	ObligationID uuid.UUID `json:"obligation_id"`
+	RequestID    uuid.UUID `json:"request_id"`
+	Reason       string    `json:"reason"`
+	At           time.Time `json:"at"`
+}
+
+// MessageType реализует contracts.Payload.
+func (EscalationRaised) MessageType() string { return "EscalationRaised" }
+
+// SchemaVersion реализует contracts.Payload.
+func (EscalationRaised) SchemaVersion() int { return 1 }

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/transfer/ObligationOpened.v1.json",
+  "title": "ObligationOpened",
+  "description": "Событие transfer.events: обязательство O07 создано в статусе PENDING, срок подтверждения — deadline.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["obligation_id", "request_id", "origin", "source_clinic_id", "target_clinic_id", "component_kind", "requested_qty", "deadline"],
+  "properties": {
+    "obligation_id": { "type": "string", "format": "uuid" },
+    "request_id": { "type": "string", "format": "uuid" },
+    "origin": { "type": "string", "enum": ["DOCTOR_CHOICE", "PLAN_PROPOSAL"] },
+    "source_clinic_id": { "type": "integer", "minimum": 1 },
+    "target_clinic_id": { "type": "integer", "minimum": 1 },
+    "component_kind": { "type": "string", "enum": ["RBC", "FFP", "PLT", "CRYO"] },
+    "requested_qty": { "type": "integer", "minimum": 1 },
+    "deadline": { "type": "string", "format": "date-time" }
+  }
+}
