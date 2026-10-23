@@ -38,7 +38,8 @@
    тогда, когда нужен дежурный смены. Рядом остаётся `TransferExpired(obligation_id, request_id, next_obligation_id?)`:
    факт истечения срока со ссылкой на новое задание, если запасной источник был. В прототипе эскалация была только записью
    аудита, в каноне `EscalationRaised.kind` и `TransferExpired` дублировали друг друга.
-6. **`TransferBroken` несёт `request_id` и `reason`** (`UNIT_WITHDRAWN` или `UNIT_QUARANTINED`): получателю (`matching`,
+6. **`TransferBroken` несёт `request_id` и `reason`** (причина выбытия из `UnitWithdrawn`: `ISSUED`, `DISCARDED`,
+   `TRANSFERRED`, `EXPIRED`; для карантина — `UNIT_QUARANTINED`): получателю (`matching`,
    `planning`) не нужно хранить связь обязательства с заявкой, чтобы записать дефицит.
 7. **`clinic_id` — `bigint` везде**: в контрактах, в `source_stock`, `obligation.source_clinic_id/target_clinic_id`,
    `fallback_sources bigint[]`. В прототипе был `text`. Ключ справочника `ref_clinic` один на все базы.
