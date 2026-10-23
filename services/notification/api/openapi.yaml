@@ -1,0 +1,20 @@
+openapi: 3.0.3
+info:
+  title: notification
+  version: 0.1.0
+  description: "Контракт сервиса notification. Источник истины для HTTP: код сервера генерируется из этого файла."
+servers:
+  - url: http://localhost:8107
+paths: {}
+components:
+  schemas:
+    Problem:
+      type: object
+      required: [title, status]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        correlation_id: { type: string }
