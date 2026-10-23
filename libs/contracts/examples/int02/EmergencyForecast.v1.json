@@ -1,19 +1,34 @@
 {
   "scenario_version": "chs-2026-10-23-v2",
-  "territory": "Демо-город, северный округ",
+  "scenario_kind": "FLOOD",
+  "scenario_name": "ДЕМО: паводок, северный округ",
+  "demo": true,
+  "territory": {
+    "name": "Демо-город, северный округ",
+    "districts": [
+      {
+        "district_code": "D01",
+        "weight": 0.7
+      },
+      {
+        "district_code": "D02",
+        "weight": 0.3
+      }
+    ]
+  },
   "period_start": "2026-10-23T12:00:00Z",
   "period_end": "2026-10-26T12:00:00Z",
-  "issued_at": "2026-10-23T09:00:00Z",
   "lines": [
     {
-      "clinic_id": 2,
+      "clinic_code": "C002",
       "component_kind": "RBC",
       "blood_group": "O-",
-      "forecast_volume_ml": 3000
+      "volume_ml": 3000,
+      "share": 0.5
     },
     {
       "component_kind": "FFP",
-      "forecast_volume_ml": 1250.5
+      "volume_ml": 1250
     }
   ]
 }

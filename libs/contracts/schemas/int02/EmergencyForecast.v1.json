@@ -3,7 +3,7 @@
   "$id": "https://blood-supply.dev/schemas/int02/EmergencyForecast.v1.json",
   "title": "EmergencyForecast",
   "type": "object",
-  "description": "Входящий ИНТ-02 (тело POST /int/forecast): прогноз ЧС. Белый список полей (NFR010): всё, чего нет в схеме, отвергается; ПДн пострадавших (ФИО, СНИЛС, списки пациентов) не принимаются.",
+  "description": "Входящий ИНТ-02 (тело POST /int/forecast): агрегированный прогноз ЧС. Белый список полей (NFR010): схема описывает только то, что planning хранит; ПДн пострадавших (ФИО, СНИЛС, списки пациентов) не принимаются — адаптер отбрасывает их до проверки.",
   "additionalProperties": false,
   "required": [
     "scenario_version",
@@ -19,20 +19,62 @@
       "maxLength": 64,
       "description": "Версия сценария; повтор не принимается"
     },
-    "territory": {
+    "scenario_kind": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 128
+      "maxLength": 64
+    },
+    "scenario_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "demo": {
+      "type": "boolean",
+      "description": "Прогноз синтетический (ADR-0010)"
+    },
+    "territory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "districts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "district_code",
+              "weight"
+            ],
+            "properties": {
+              "district_code": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 32
+              },
+              "weight": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            }
+          }
+        }
+      }
     },
     "period_start": {
       "type": "string",
       "format": "date-time"
     },
     "period_end": {
-      "type": "string",
-      "format": "date-time"
-    },
-    "issued_at": {
       "type": "string",
       "format": "date-time"
     },
@@ -44,12 +86,13 @@
         "additionalProperties": false,
         "required": [
           "component_kind",
-          "forecast_volume_ml"
+          "volume_ml"
         ],
         "properties": {
-          "clinic_id": {
-            "type": "integer",
-            "minimum": 1
+          "clinic_code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
           },
           "component_kind": {
             "type": "string",
@@ -73,9 +116,14 @@
               "AB-"
             ]
           },
-          "forecast_volume_ml": {
-            "type": "number",
+          "volume_ml": {
+            "type": "integer",
             "minimum": 0
+          },
+          "share": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
           }
         }
       }
