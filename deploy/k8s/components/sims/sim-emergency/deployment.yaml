@@ -1,0 +1,59 @@
+# sim-emergency — имитатор C02: отправляет агрегированный прогноз ЧС в planning (ИНТ-02).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sim-emergency
+  namespace: bs-sims
+  labels:
+    app.kubernetes.io/name: sim-emergency
+    app.kubernetes.io/component: simulator
+    blood-supply.io/runtime: go-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sim-emergency
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sim-emergency
+        app.kubernetes.io/component: simulator
+        blood-supply.io/runtime: go-service
+      annotations:
+        prometheus.io/port: "8202"
+    spec:
+      containers:
+        - name: app
+          image: ghcr.io/alchemistbro/blood-supply-sim-emergency:edge
+          ports:
+            - name: http
+              containerPort: 8202
+          env:
+            - name: BS_HTTP_ADDR
+              value: ":8202"
+            - name: BS_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: sims-env
+                  key: BS_ENV
+            - name: BS_LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: sims-env
+                  key: BS_LOG_LEVEL
+            - name: BS_OTEL_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: sims-env
+                  key: BS_OTEL_ENDPOINT
+            - name: BS_FORECAST_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: sims-env
+                  key: BS_FORECAST_URL
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi

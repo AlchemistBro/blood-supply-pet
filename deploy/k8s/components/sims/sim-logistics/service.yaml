@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: sim-logistics
+  namespace: bs-sims
+  labels:
+    app.kubernetes.io/name: sim-logistics
+spec:
+  selector:
+    app.kubernetes.io/name: sim-logistics
+  ports:
+    - name: http
+      port: 8203
+      targetPort: http

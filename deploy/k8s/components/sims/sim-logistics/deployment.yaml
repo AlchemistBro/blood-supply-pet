@@ -1,0 +1,54 @@
+# sim-logistics — имитатор перевозчика C03: заказы, сверка, отмена, оценки времени, управляемые сбои.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sim-logistics
+  namespace: bs-sims
+  labels:
+    app.kubernetes.io/name: sim-logistics
+    app.kubernetes.io/component: simulator
+    blood-supply.io/runtime: go-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sim-logistics
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sim-logistics
+        app.kubernetes.io/component: simulator
+        blood-supply.io/runtime: go-service
+      annotations:
+        prometheus.io/port: "8203"
+    spec:
+      containers:
+        - name: app
+          image: ghcr.io/alchemistbro/blood-supply-sim-logistics:edge
+          ports:
+            - name: http
+              containerPort: 8203
+          env:
+            - name: BS_HTTP_ADDR
+              value: ":8203"
+            - name: BS_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: sims-env
+                  key: BS_ENV
+            - name: BS_LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: sims-env
+                  key: BS_LOG_LEVEL
+            - name: BS_OTEL_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: sims-env
+                  key: BS_OTEL_ENDPOINT
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
