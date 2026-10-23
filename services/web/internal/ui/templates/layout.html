@@ -1,0 +1,41 @@
+{{/*
+  Макет страницы. Встроенных скриптов, атрибутов style и обработчиков on* нет: CSP без 'unsafe-inline' (ADR-0018).
+  htmx-config: без вставки стилей индикаторов, без eval и выполнения <script> из ответов; historyCacheSize 0 —
+  htmx не копирует страницы в localStorage (на экранах бывает номер случая, NFR016).
+*/}}
+{{define "layout" -}}
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false,"selfRequestsOnly":true,"historyCacheSize":0,"refreshOnHistoryMiss":true}'>
+<title>{{.Title}} · АС распределения компонентов донорской крови</title>
+<link rel="icon" href="{{asset "img/emblem.svg"}}" type="image/svg+xml">
+<link rel="stylesheet" href="{{asset "css/app.css"}}">
+<script src="{{asset "vendor/htmx.min.js"}}" defer></script>
+<script src="{{asset "vendor/ext/sse.js"}}" defer></script>
+<script src="{{asset "js/app.js"}}" defer></script>
+</head>
+<body{{with .CSRFToken}} hx-headers="{{csrfHeaders .}}"{{end}}>
+<a class="skip-link" href="#main">Перейти к содержимому</a>
+{{template "topbar" .}}
+{{template "bands" .}}
+<div class="shell{{if not .Nav}} shell--no-nav{{end}}">
+{{template "sidenav" .Nav}}
+<main id="main" class="content" tabindex="-1">
+{{template "breadcrumbs" .Breadcrumbs}}
+<div class="page-heading">
+<h1>{{.Title}}</h1>
+<div class="page-actions">
+{{block "page_actions" .}}{{end}}
+</div>
+</div>
+{{template "flashes" .Flashes}}
+{{template "content" .}}
+</main>
+</div>
+{{template "footer" .Footer}}
+</body>
+</html>
+{{- end}}

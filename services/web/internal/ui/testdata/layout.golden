@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false,"selfRequestsOnly":true,"historyCacheSize":0,"refreshOnHistoryMiss":true}'>
+<title>Задания на передачу · АС распределения компонентов донорской крови</title>
+<link rel="icon" href="/static/img/emblem.svg?v=test" type="image/svg+xml">
+<link rel="stylesheet" href="/static/css/app.css?v=test">
+<script src="/static/vendor/htmx.min.js?v=test" defer></script>
+<script src="/static/vendor/ext/sse.js?v=test" defer></script>
+<script src="/static/js/app.js?v=test" defer></script>
+</head>
+<body hx-headers="{&#34;X-CSRF-Token&#34;:&#34;tok123&#34;}">
+<a class="skip-link" href="#main">Перейти к содержимому</a>
+<header class="topbar">
+<a class="topbar__brand" href="/">
+<img class="topbar__emblem" src="/static/img/emblem.svg?v=test" alt="" width="32" height="32">
+<span class="topbar__title">АС распределения компонентов донорской крови</span>
+</a>
+<div id="stock-watermark" class="topbar__watermark topbar__watermark--stale" role="status">
+Запас обновлён <time datetime="2026-10-23T09:32:00Z">12:32</time>
+</div>
+<div class="topbar__user">
+<span class="topbar__role"><span class="visually-hidden">Роль: </span>Оператор клинической организации</span>
+<span class="topbar__sep" aria-hidden="true">·</span>
+<span class="topbar__clinic"><span class="visually-hidden">Клиника: </span>Клиника № 1</span>
+<span class="topbar__sep" aria-hidden="true">·</span>
+<span class="topbar__login"><span class="visually-hidden">Логин: </span>operator-c001</span>
+<form class="topbar__logout" method="post" action="/logout">
+<input type="hidden" name="csrf_token" value="tok123">
+<button type="submit" class="btn btn--topbar">Выйти</button>
+</form>
+</div>
+</header>
+<div class="band band--warning" role="status">
+Данные запаса устарели (обновлено 2 ч назад)
+</div>
+<div class="band band--danger" role="alert">АИСТ-М недоступна: подтверждение временно невозможно</div>
+<div class="shell">
+<input type="checkbox" id="nav-toggle" class="nav-toggle">
+<label for="nav-toggle" class="nav-toggle__label">Меню разделов</label>
+<nav class="sidenav" aria-label="Разделы">
+<ul>
+<li><a href="/operator/tasks" aria-current="page"><span>Задания</span><span class="sidenav__count">2</span></a></li>
+<li><a href="/operator/stock"><span>Запас</span></a></li>
+</ul>
+</nav>
+<main id="main" class="content" tabindex="-1">
+<nav class="breadcrumbs" aria-label="Навигационная цепочка">
+<ol>
+<li><a href="/">Главная</a></li>
+<li aria-current="page">Задания на передачу</li>
+</ol>
+</nav>
+<div class="page-heading">
+<h1>Задания на передачу</h1>
+<div class="page-actions">
+<a class="btn btn--primary" href="/operator/tasks/new">Создать</a>
+</div>
+</div>
+<div class="flashes" id="flashes" aria-live="polite">
+<div class="flash flash--success" role="status">Закреплено 2 единицы. Готовьте к отправке.</div></div>
+<p>Содержимое экрана</p>
+</main>
+</div>
+<footer class="footer">
+<span class="footer__demo">Демо: синтетические данные и правила. Клиническое решение принимает врач.</span>
+<span>Версия v0.2.0</span>
+<a href="https://github.com/AlchemistBro/blood-supply-pet">Исходный код</a>
+</footer>
+</body>
+</html>

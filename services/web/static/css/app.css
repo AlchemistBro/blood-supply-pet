@@ -229,6 +229,10 @@ h2 {
   min-height: calc(100vh - var(--bs-header-h));
 }
 
+.shell--no-nav {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .nav-toggle,
 .nav-toggle__label {
   display: none;
@@ -680,11 +684,28 @@ th[aria-sort] .sort-arrow {
   resize: vertical;
 }
 
-.field--checkbox label {
-  display: inline-flex;
+/* Флажок: поле слева, подпись справа; подсказка и ошибка — отдельной строкой. */
+.field--checkbox {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 4px 8px;
+}
+
+.field--checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.field--checkbox label {
+  margin: 0;
   font-weight: 400;
+}
+
+.field--checkbox .field__hint,
+.field--checkbox .field__error {
+  flex-basis: 100%;
 }
 
 .field--error input,

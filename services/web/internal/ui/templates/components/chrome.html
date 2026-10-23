@@ -1,0 +1,93 @@
+{{/* Шапка, полосы предупреждений, навигация, крошки, уведомления и подвал. Данные — Page. */}}
+
+{{define "topbar" -}}
+<header class="topbar">
+<a class="topbar__brand" href="{{.Header.Home}}">
+<img class="topbar__emblem" src="{{asset "img/emblem.svg"}}" alt="" width="32" height="32">
+<span class="topbar__title">АС распределения компонентов донорской крови</span>
+</a>
+{{if .Header.SignedIn}}
+{{template "watermark" .Header.Freshness}}
+<div class="topbar__user">
+<span class="topbar__role"><span class="visually-hidden">Роль: </span>{{roleLabel .Header.User.Role}}</span>
+<span class="topbar__sep" aria-hidden="true">·</span>
+<span class="topbar__clinic"><span class="visually-hidden">Клиника: </span>{{.Header.ClinicText}}</span>
+<span class="topbar__sep" aria-hidden="true">·</span>
+<span class="topbar__login"><span class="visually-hidden">Логин: </span>{{.Header.User.Login}}</span>
+<form class="topbar__logout" method="post" action="{{.Header.Logout}}">
+{{template "csrf" .CSRFToken}}
+<button type="submit" class="btn btn--topbar">Выйти</button>
+</form>
+</div>
+{{end}}
+</header>
+{{- end}}
+
+{{/* Водяной знак запаса (NFR015). id нужен для живого обновления по SSE. */}}
+{{define "watermark" -}}
+<div id="stock-watermark" class="topbar__watermark{{if .Stale}} topbar__watermark--stale{{end}}" role="status">
+{{if .Known}}
+Запас обновлён <time datetime="{{iso .UpdatedAt}}">{{if .ShowDate}}{{datetime .UpdatedAt}}{{else}}{{hm .UpdatedAt}}{{end}}</time>
+{{else}}
+Время обновления запаса неизвестно
+{{end}}
+</div>
+{{- end}}
+
+{{define "bands" -}}
+{{if .Header.SignedIn}}{{with .Header.Freshness}}{{if .Stale}}
+<div class="band band--warning" role="status">
+{{if .Known}}
+Данные запаса устарели (обновлено {{duration .Age}} назад)
+{{else}}
+Не удалось получить время обновления запаса: данные могут быть устаревшими
+{{end}}
+</div>
+{{end}}{{end}}{{end}}
+{{range .Alerts}}
+<div class="band band--{{.Tone}}" role="{{.Tone.LiveRole}}">{{.Text}}</div>
+{{end}}
+{{- end}}
+
+{{/* Левая навигация. На узких экранах сворачивается флажком без JS. */}}
+{{define "sidenav" -}}
+{{if .}}
+<input type="checkbox" id="nav-toggle" class="nav-toggle">
+<label for="nav-toggle" class="nav-toggle__label">Меню разделов</label>
+<nav class="sidenav" aria-label="Разделы">
+<ul>
+{{range .}}
+<li><a href="{{.URL}}"{{if .Active}} aria-current="page"{{end}}><span>{{.Label}}</span>{{if gt .Count 0}}<span class="sidenav__count">{{.Count}}</span>{{end}}</a></li>
+{{end}}
+</ul>
+</nav>
+{{end}}
+{{- end}}
+
+{{define "breadcrumbs" -}}
+{{if .}}
+<nav class="breadcrumbs" aria-label="Навигационная цепочка">
+<ol>
+{{range .}}
+{{if .URL}}<li><a href="{{.URL}}">{{.Label}}</a></li>{{else}}<li aria-current="page">{{.Label}}</li>{{end}}
+{{end}}
+</ol>
+</nav>
+{{end}}
+{{- end}}
+
+{{/* Уведомления после POST/redirect. Без пробелов внутри при пустом списке — работает .flashes:empty. */}}
+{{define "flashes" -}}
+<div class="flashes" id="flashes" aria-live="polite">{{range .}}
+<div class="flash flash--{{.Tone}}" role="{{.Tone.LiveRole}}">{{.Text}}</div>{{end}}</div>
+{{- end}}
+
+{{define "footer" -}}
+<footer class="footer">
+<span class="footer__demo">Демо: синтетические данные и правила. Клиническое решение принимает врач.</span>
+{{with .Version}}<span>Версия {{.}}</span>{{end}}
+{{with .RepoURL}}<a href="{{.}}">Исходный код</a>{{end}}
+</footer>
+{{- end}}
+
+{{define "csrf"}}{{with .}}<input type="hidden" name="csrf_token" value="{{.}}">{{end}}{{end}}

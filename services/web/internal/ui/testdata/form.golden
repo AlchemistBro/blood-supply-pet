@@ -1,0 +1,28 @@
+<div class="error-summary" role="alert" tabindex="-1" aria-labelledby="error-summary-title">
+<h2 id="error-summary-title">Исправьте ошибки в форме</h2>
+<ul>
+<li><a href="#reason">Причина отказа: Укажите причину отказа</a></li>
+<li>АИСТ-М не ответила. Задание остаётся в ожидании, повторите через минуту.</li>
+</ul>
+</div>
+<div class="field field--error">
+<label for="reason">Причина отказа<span class="field__required" aria-hidden="true"> *</span></label>
+<p class="field__hint" id="reason-hint">Увидит дежурный смены</p>
+<textarea id="reason" name="reason" aria-required="true" aria-invalid="true" aria-describedby="reason-hint reason-error"></textarea>
+<p class="field__error" id="reason-error"><span class="visually-hidden">Ошибка: </span>Укажите причину отказа</p>
+</div>
+<div class="field">
+<label for="qty">Количество, ед.</label>
+<input type="number" id="qty" name="qty" value="2">
+</div>
+<div class="field">
+<label for="kind">Вид компонента</label>
+<select id="kind" name="kind">
+<option value="RBC" selected>Эритроциты</option>
+<option value="FFP">Плазма</option>
+</select>
+</div>
+<div class="field field--checkbox">
+<input type="checkbox" id="partial" name="partial" value="on" checked>
+<label for="partial">Подтвердить частично</label>
+</div>

@@ -1,0 +1,82 @@
+{{/* Бейджи, таблица, пагинация, пустое состояние, карточка «ключ — значение». */}}
+
+{{/* Бейдж: статус всегда текстом, цвет только дополняет. Данные — Badge; статус O07: (statusBadge .Status). */}}
+{{define "badge" -}}
+<span class="badge badge--{{.Tone}}">{{if .Spinner}}<span class="spinner" aria-hidden="true"></span>{{end}}{{.Label}}</span>
+{{- end}}
+
+{{define "cell" -}}
+{{if .Href}}<a href="{{.Href}}">{{.Text}}</a>{{else}}{{.Text}}{{end}}{{range .Badges}} {{template "badge" .}}{{end}}
+{{- end}}
+
+{{/*
+  Таблица. Сортировка и страницы — обычные ссылки; при заданном ID заголовок и пагинация получают hx-boost
+  с подменой только обёртки таблицы (hx-select из полной страницы), адрес попадает в историю.
+*/}}
+{{define "table" -}}
+{{$id := .ID}}
+<div class="table-wrap"{{with $id}} id="{{.}}"{{end}}>
+{{if .Rows}}
+<table class="table">
+{{with .Caption}}<caption>{{.}}</caption>{{end}}
+<thead{{template "hx_boost" $id}}>
+<tr>
+{{range .Columns}}
+<th scope="col"{{if .Numeric}} class="num"{{end}}{{with .SortDir.Aria}} aria-sort="{{.}}"{{end}}>
+{{if .SortURL}}<a class="sort-link" href="{{.SortURL}}">{{.Label}} <span class="sort-arrow" aria-hidden="true">{{.SortDir.Arrow}}</span></a>{{else}}{{.Label}}{{end}}
+</th>
+{{end}}
+</tr>
+</thead>
+<tbody>
+{{range .Rows}}
+<tr{{with .ID}} id="{{.}}"{{end}}>
+{{range $i, $c := .Cells}}
+<td{{if $.IsNumeric $i}} class="num"{{end}}>{{template "cell" $c}}</td>
+{{end}}
+</tr>
+{{end}}
+</tbody>
+</table>
+{{else}}
+{{template "empty" .Empty}}
+{{end}}
+{{with .Pager}}{{template "pagination" .}}{{end}}
+</div>
+{{- end}}
+
+{{define "hx_boost"}}{{with .}} hx-boost="true" hx-target="#{{.}}" hx-select="#{{.}}" hx-swap="outerHTML"{{end}}{{end}}
+
+{{define "pagination" -}}
+{{if .Total}}
+<nav class="pagination" aria-label="Страницы"{{template "hx_boost" .Target}}>
+<p class="pagination__summary">Показаны {{.From}}–{{.To}} из {{.Total}}</p>
+{{if .Links}}
+<ul>
+{{range .Links}}
+<li>{{if .Gap}}<span class="pagination__item">…</span>{{else}}<a href="{{.URL}}"{{if .Current}} aria-current="page"{{end}}{{with .Rel}} rel="{{.}}"{{end}}>{{.Label}}</a>{{end}}</li>
+{{end}}
+</ul>
+{{end}}
+</nav>
+{{end}}
+{{- end}}
+
+{{define "empty" -}}
+<div class="empty">
+<p>{{.Message}}</p>
+{{with .ActionURL}}<a class="btn" href="{{.}}">{{$.ActionLabel}}</a>{{end}}
+</div>
+{{- end}}
+
+{{define "kv_card" -}}
+<section class="card">
+{{with .Title}}<h2>{{.}}</h2>{{end}}
+<dl class="kv">
+{{range .Items}}
+<dt>{{.Key}}</dt>
+<dd{{if .Numeric}} class="num"{{end}}>{{template "cell" .Cell}}</dd>
+{{end}}
+</dl>
+</section>
+{{- end}}
