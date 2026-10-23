@@ -142,6 +142,15 @@ func (Store) UrgencyWindow(ctx context.Context, db app.DB, urgencyCode string) (
 	return time.Duration(m) * time.Minute, nil
 }
 
+// UnknownClinics — клиники, которых нет в справочнике.
+func (Store) UnknownClinics(ctx context.Context, db app.DB, ids []int64) ([]int64, error) {
+	out, err := q(db).UnknownClinics(ctx, nonNil(ids))
+	if err != nil {
+		return nil, fmt.Errorf("проверка клиник: %w", err)
+	}
+	return out, nil
+}
+
 // CASStatus — UPDATE … WHERE status = :ожидаемый AND version = :прочитанная.
 func (Store) CASStatus(ctx context.Context, db app.DB, o domain.Obligation, next domain.Status, reason string, now time.Time) (bool, error) {
 	n, err := q(db).CASStatus(ctx, gen.CASStatusParams{

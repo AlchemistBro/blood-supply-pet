@@ -3,6 +3,7 @@
 package app_test
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 	"time"
@@ -176,6 +177,41 @@ func TestTimerEscalatesToNextSourceAndExpiresWithoutOne(t *testing.T) {
 	}
 	if len(list) != 2 {
 		t.Fatalf("по заявке %d заданий, ожидали 2 (истёкшее и новое)", len(list))
+	}
+}
+
+// Одно битое задание (неизвестный запасной источник: FK при открытии эскалации) не мешает истечь остальным.
+func TestBrokenObligationDoesNotBlockExpiryOfOthers(t *testing.T) {
+	h := setup(t)
+	broken := h.openWith(newObligation(1, "PLT", 1, []int64{2}, domain.ReplacementSpec{RuleVersion: rule}))
+	healthy := h.open(1, "PLT", 1)
+	// Обход проверки открытия: так выглядело бы задание, записанное до неё (у массива нет FK).
+	if _, err := h.pool.Exec(h.ctx, `UPDATE obligation SET fallback_sources = '{999999}' WHERE obligation_id = $1`, broken); err != nil {
+		t.Fatal(err)
+	}
+	h.clock.Advance(16 * time.Minute)
+
+	escalations, err := h.svc.ExpireOverdue(h.ctx)
+	if err == nil {
+		t.Error("ошибка битого задания должна вернуться вызывающему")
+	}
+	if s := h.view(healthy).Status; s != domain.StatusExpired {
+		t.Fatalf("исправное задание не истекло из-за битого: %s", s)
+	}
+	if s := h.view(broken).Status; s != domain.StatusPending {
+		t.Fatalf("битое задание: %s, ожидали откат и PENDING", s)
+	}
+	if len(escalations) != 1 || escalations[0].ExpiredID != healthy {
+		t.Fatalf("эскалации: %+v", escalations)
+	}
+}
+
+// Неизвестный запасной источник отклоняется при открытии, а не при эскалации.
+func TestOpenRejectsUnknownFallbackClinic(t *testing.T) {
+	h := setup(t)
+	_, err := h.svc.Open(h.ctx, nil, newObligation(1, "RBC", 1, []int64{999999}, domain.ReplacementSpec{RuleVersion: rule}))
+	if !errors.Is(err, domain.ErrInvalidObligation) {
+		t.Fatalf("ожидали ErrInvalidObligation, получили %v", err)
 	}
 }
 

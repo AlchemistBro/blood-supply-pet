@@ -56,6 +56,8 @@ type Store interface {
 	ObligationsBySource(ctx context.Context, db DB, sourceClinicID int64, status *domain.Status, limit int) ([]domain.Obligation, error)
 	PendingDueBy(ctx context.Context, db DB, now time.Time, limit int) ([]uuid.UUID, error)
 	UrgencyWindow(ctx context.Context, db DB, urgencyCode string) (time.Duration, error)
+	// UnknownClinics — клиники из списка, которых нет в справочнике ref_clinic.
+	UnknownClinics(ctx context.Context, db DB, ids []int64) ([]int64, error)
 
 	CASStatus(ctx context.Context, db DB, o domain.Obligation, next domain.Status, reason string, now time.Time) (bool, error)
 	CASConfirm(ctx context.Context, db DB, o domain.Obligation, qty int, key string, now time.Time) (bool, error)

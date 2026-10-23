@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -18,12 +19,15 @@ const reasonDeadline = "DEADLINE"
 // (choice_id = uuid5 от старого id) или EscalationRaised(EXPIRED_NO_FALLBACK), если источников нет.
 // Позднее подтверждение первого источника проигрывает CAS: две отправки невозможны.
 // Блокируется только строка O07: Остаток таймер не трогает.
+// Ошибка по одному заданию не останавливает остальные: его транзакция откатывается, оно остаётся PENDING
+// и пробуется на следующем проходе; ошибки идут в лог, в метрику и в возвращаемую ошибку.
 func (s *Service) ExpireOverdue(ctx context.Context) ([]Escalation, error) {
 	ids, err := s.store.PendingDueBy(ctx, s.pool, s.clock.Now(), s.cfg.ExpiryBatch)
 	if err != nil {
 		return nil, err
 	}
 	var out []Escalation
+	var failures []error
 	for _, id := range ids {
 		var esc *Escalation
 		err := s.inTx(ctx, nil, func(ctx context.Context, tx pgx.Tx) error {
@@ -32,13 +36,19 @@ func (s *Service) ExpireOverdue(ctx context.Context) ([]Escalation, error) {
 			return err
 		})
 		if err != nil {
-			return out, fmt.Errorf("истечение %s: %w", id, err)
+			if ctx.Err() != nil {
+				return out, ctx.Err()
+			}
+			s.metrics.expiryFailed(ctx)
+			s.log.ErrorContext(ctx, "истечение обязательства не удалось, повтор на следующем проходе", "obligation_id", id, "err", err)
+			failures = append(failures, fmt.Errorf("истечение %s: %w", id, err))
+			continue
 		}
 		if esc != nil {
 			out = append(out, *esc)
 		}
 	}
-	return out, nil
+	return out, errors.Join(failures...)
 }
 
 func (s *Service) expire(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*Escalation, error) {

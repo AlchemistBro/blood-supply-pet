@@ -780,6 +780,32 @@ func (q *Queries) UnitCopies(ctx context.Context, unitIds []uuid.UUID) ([]UnitCo
 	return items, nil
 }
 
+const unknownClinics = `-- name: UnknownClinics :many
+SELECT c::bigint AS clinic_id FROM unnest($1::bigint[]) AS c
+WHERE NOT EXISTS (SELECT 1 FROM ref_clinic r WHERE r.clinic_id = c)
+`
+
+// Клиники из списка, которых нет в справочнике: проверка источника, получателя и fallback_sources при открытии.
+func (q *Queries) UnknownClinics(ctx context.Context, clinicIds []int64) ([]int64, error) {
+	rows, err := q.db.Query(ctx, unknownClinics, clinicIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var clinic_id int64
+		if err := rows.Scan(&clinic_id); err != nil {
+			return nil, err
+		}
+		items = append(items, clinic_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const upsertUnitCopy = `-- name: UpsertUnitCopy :execrows
 INSERT INTO unit_copy (unit_id, clinic_id, component_kind_code, blood_group_code, rh_positive, phenotype, volume_ml,
                        expires_at, status, status_reason, version, updated_at)

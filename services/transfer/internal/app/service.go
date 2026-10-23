@@ -57,6 +57,7 @@ type Service struct {
 	clock   clock.Clock
 	log     *slog.Logger
 	cfg     Config
+	metrics metrics
 }
 
 // New собирает сервис.
@@ -71,7 +72,8 @@ func New(pool *pgxpool.Pool, store Store, checker UnitStatusChecker, journal *me
 	if cfg.ExpiryBatch <= 0 {
 		cfg.ExpiryBatch = 100
 	}
-	return &Service{pool: pool, store: store, checker: checker, journal: journal, clock: clk, log: log, cfg: cfg}
+	return &Service{pool: pool, store: store, checker: checker, journal: journal, clock: clk, log: log, cfg: cfg,
+		metrics: newMetrics()}
 }
 
 // inTx выполняет fn в транзакции. Если задано входящее сообщение, сначала отмечает его в inbox:
@@ -135,6 +137,16 @@ func (s *Service) Open(ctx context.Context, msg *messaging.Message, n domain.New
 // openTx вставляет задание и пишет ObligationOpened и аудит, только если вставка была первой.
 func (s *Service) openTx(ctx context.Context, tx pgx.Tx, n domain.NewObligation, actor string) (uuid.UUID, bool, error) {
 	now := s.clock.Now()
+	// Клиники проверяются по справочнику до вставки: неизвестный запасной источник иначе всплыл бы только
+	// при эскалации нарушением FK.
+	clinics := append([]int64{n.SourceClinicID, n.TargetClinicID}, n.FallbackSources...)
+	unknown, err := s.store.UnknownClinics(ctx, tx, clinics)
+	if err != nil {
+		return uuid.Nil, false, err
+	}
+	if len(unknown) > 0 {
+		return uuid.Nil, false, fmt.Errorf("%w: неизвестные клиники %v", domain.ErrInvalidObligation, unknown)
+	}
 	window := n.ConfirmWindow
 	if window == 0 {
 		w, err := s.store.UrgencyWindow(ctx, tx, n.UrgencyCode)

@@ -150,3 +150,8 @@ WHERE source_clinic_id = sqlc.arg('source_clinic_id')
   AND (sqlc.narg('status')::text IS NULL OR status = sqlc.narg('status'))
 ORDER BY created_at DESC, obligation_id
 LIMIT sqlc.arg('max_rows');
+
+-- name: UnknownClinics :many
+-- Клиники из списка, которых нет в справочнике: проверка источника, получателя и fallback_sources при открытии.
+SELECT c::bigint AS clinic_id FROM unnest(sqlc.arg('clinic_ids')::bigint[]) AS c
+WHERE NOT EXISTS (SELECT 1 FROM ref_clinic r WHERE r.clinic_id = c);
