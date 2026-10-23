@@ -58,7 +58,8 @@
         "NO_SOURCE",
         "SOURCE_REJECTED",
         "NOT_CONFIRMED_IN_TIME",
-        "UNIT_WITHDRAWN"
+        "UNIT_WITHDRAWN",
+        "BELOW_UNIT_REMAINDER"
       ]
     }
   }

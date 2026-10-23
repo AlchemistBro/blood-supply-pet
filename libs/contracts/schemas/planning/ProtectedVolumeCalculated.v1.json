@@ -3,15 +3,16 @@
   "$id": "https://blood-supply.dev/schemas/planning/ProtectedVolumeCalculated.v1.json",
   "title": "ProtectedVolumeCalculated",
   "type": "object",
-  "description": "Событие planning.events → inventory: защищённый объём источника по виду в ЕДИНИЦАХ (units), не в мл (ADR-0019: volume_units = ceil(volume_ml / typical_volume_ml вида)). Норматив + фон + обязательства (FR025, NFR013).",
+  "description": "Событие planning.events → inventory: защищённый объём источника по виду в ЕДИНИЦАХ (units), не в мл: volume_units = ceil((норматив + фон) / typical_volume_ml вида), без подтверждённых обязательств — их вычитает transfer (ADR-0019; FR025, NFR013).",
   "additionalProperties": false,
   "required": [
     "clinic_id",
     "component_kind",
     "volume_units",
+    "replenishment_plan_id",
     "version",
-    "reason",
-    "calculated_at"
+    "calculated_at",
+    "reason"
   ],
   "properties": {
     "clinic_id": {
@@ -30,29 +31,25 @@
     "volume_units": {
       "type": "integer",
       "minimum": 0,
-      "description": "В единицах компонента (units), не в мл: ceil(объём в мл / typical_volume_ml вида), ADR-0019"
-    },
-    "volume_ml": {
-      "type": "number",
-      "minimum": 0,
-      "description": "Исходный расчётный объём в мл, справочно"
-    },
-    "version": {
-      "type": "integer",
-      "minimum": 1
-    },
-    "reason": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 128
+      "description": "В единицах компонента (units), не в мл: ceil((норматив + фон) / typical_volume_ml вида), ADR-0019. Без подтверждённых обязательств"
     },
     "replenishment_plan_id": {
       "type": "string",
       "format": "uuid"
     },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Монотонная версия по клинике и виду"
+    },
     "calculated_at": {
       "type": "string",
       "format": "date-time"
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
     }
   }
 }

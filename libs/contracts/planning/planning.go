@@ -15,14 +15,18 @@ const (
 	DeficitSourceRejected     = "SOURCE_REJECTED"
 	DeficitNotConfirmedInTime = "NOT_CONFIRMED_IN_TIME"
 	DeficitUnitWithdrawn      = "UNIT_WITHDRAWN"
+	// DeficitBelowUnitRemainder — непокрытый остаток меньше одной единицы компонента: передачей его не закрыть.
+	DeficitBelowUnitRemainder = "BELOW_UNIT_REMAINDER"
 )
 
 // DeficitReasons — все причины дефицита плана в порядке схемы.
-var DeficitReasons = []string{DeficitNoSource, DeficitSourceRejected, DeficitNotConfirmedInTime, DeficitUnitWithdrawn}
+var DeficitReasons = []string{DeficitNoSource, DeficitSourceRejected, DeficitNotConfirmedInTime, DeficitUnitWithdrawn,
+	DeficitBelowUnitRemainder}
 
 // UnitsForVolume пересчитывает защищённый объём из мл в единицы (ADR-0019): округление вверх по типовому
 // объёму единицы вида (ref_component_kind.typical_volume_ml), чтобы защищённый запас не оказался меньше
-// расчётного. Остаток transfer считает единицы, поэтому в ProtectedVolumeCalculated идут единицы.
+// расчётного. Остаток transfer считает единицы, поэтому в ProtectedVolumeCalculated идут единицы:
+// volume_units = UnitsForVolume(норматив + фон, typical_volume_ml).
 func UnitsForVolume(volumeML, typicalVolumeML int64) int64 {
 	if volumeML <= 0 || typicalVolumeML <= 0 {
 		return 0
@@ -109,18 +113,18 @@ func (PlanDeficitRecorded) MessageType() string { return "PlanDeficitRecorded" }
 func (PlanDeficitRecorded) SchemaVersion() int { return 1 }
 
 // ProtectedVolumeCalculated — защищённый объём источника по виду, посчитанный планированием (FR025, NFR013):
-// норматив + фоновая потребность за период + подтверждённые обязательства. VolumeUnits — в единицах, не в мл:
-// пересчёт UnitsForVolume (округление вверх по типовому объёму вида), ADR-0019. inventory как владелец
-// запаса публикует его дальше событием ProtectedVolumePublished.
+// норматив + фоновая потребность за период, в ЕДИНИЦАХ (volume_units = UnitsForVolume(норматив + фон,
+// typical_volume_ml), ADR-0019). Подтверждённые обязательства сюда не входят: transfer сам учитывает
+// закреплённые единицы в Остатке. Цепочка: planning → inventory (ProtectedVolumePublished) → transfer.
+// Version монотонно растёт по (clinic_id, component_kind).
 type ProtectedVolumeCalculated struct {
-	ClinicID            int64      `json:"clinic_id"`
-	ComponentKind       string     `json:"component_kind"`
-	VolumeUnits         int64      `json:"volume_units"`
-	VolumeML            *float64   `json:"volume_ml,omitempty"`
-	Version             int64      `json:"version"`
-	Reason              string     `json:"reason"`
-	ReplenishmentPlanID *uuid.UUID `json:"replenishment_plan_id,omitempty"`
-	CalculatedAt        time.Time  `json:"calculated_at"`
+	ClinicID            int64     `json:"clinic_id"`
+	ComponentKind       string    `json:"component_kind"`
+	VolumeUnits         int64     `json:"volume_units"`
+	ReplenishmentPlanID uuid.UUID `json:"replenishment_plan_id"`
+	Version             int64     `json:"version"`
+	CalculatedAt        time.Time `json:"calculated_at"`
+	Reason              string    `json:"reason"`
 }
 
 // MessageType реализует contracts.Payload.
