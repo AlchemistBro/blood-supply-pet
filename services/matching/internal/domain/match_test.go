@@ -455,8 +455,8 @@ func TestRankingFactors(t *testing.T) {
 			mutate: func(in *domain.Input) {
 				in.Delivery[remote2] = domain.DeliveryEstimate{Minutes: 30, EstimatedAt: at}
 				in.Stock = map[domain.StockKey]domain.SourceStock{
-					{ClinicID: remote2, ComponentKind: "RBC"}: {AvailableVolumeML: 3000, ProtectedVolumeML: 0},
-					{ClinicID: remote3, ComponentKind: "RBC"}: {AvailableVolumeML: 600, ProtectedVolumeML: 600},
+					{ClinicID: remote2, ComponentKind: "RBC"}: {AvailableUnits: 10, ProtectedUnits: 0},
+					{ClinicID: remote3, ComponentKind: "RBC"}: {AvailableUnits: 2, ProtectedUnits: 2},
 				}
 			},
 			want: []int64{remote2, remote3},
@@ -468,7 +468,7 @@ func TestRankingFactors(t *testing.T) {
 			mutate: func(in *domain.Input) {
 				in.Delivery[remote2] = domain.DeliveryEstimate{Minutes: 30, EstimatedAt: at}
 				in.Stock = map[domain.StockKey]domain.SourceStock{
-					{ClinicID: remote3, ComponentKind: "RBC"}: {AvailableVolumeML: 3000, ProtectedVolumeML: 0},
+					{ClinicID: remote3, ComponentKind: "RBC"}: {AvailableUnits: 10, ProtectedUnits: 0},
 				}
 			},
 			want: []int64{remote3, remote2},
@@ -521,8 +521,8 @@ func TestRankingIsDeterministic(t *testing.T) {
 	base.Policy.OfferSubstitutesWhenPreferredCovers = true
 	base.Delivery[5] = domain.DeliveryEstimate{Minutes: 45, EstimatedAt: at}
 	base.Stock = map[domain.StockKey]domain.SourceStock{
-		{ClinicID: remote2, ComponentKind: "RBC"}: {AvailableVolumeML: 5000, ProtectedVolumeML: 4800},
-		{ClinicID: remote3, ComponentKind: "RBC"}: {AvailableVolumeML: 5000, ProtectedVolumeML: 1000},
+		{ClinicID: remote2, ComponentKind: "RBC"}: {AvailableUnits: 20, ProtectedUnits: 19},
+		{ClinicID: remote3, ComponentKind: "RBC"}: {AvailableUnits: 20, ProtectedUnits: 4},
 	}
 	want := mustMatch(t, base)
 	if len(want.Variants) < 12 {
@@ -568,8 +568,45 @@ func TestVariantUnitsAreSelectedFEFO(t *testing.T) {
 	if !v.EarliestExpiresAt.Equal(at.Add(3 * day24)) {
 		t.Fatalf("ближайшая годность %v", v.EarliestExpiresAt)
 	}
-	if v.IsDeficitStockUsed || v.Protected.Known {
+	if v.IsDeficitStockUsed || v.ProtectedKnown {
 		t.Fatalf("местный вариант не расходует защищённый запас источника: %+v", v.Protected)
+	}
+}
+
+// FR033, ADR-0019: защищённый объём в единицах. Расходует защищённый запас вариант, после которого
+// остаток источника по виду меньше защищённого объёма.
+func TestProtectedStockInUnits(t *testing.T) {
+	cases := []struct {
+		name                 string
+		available, protected int
+		wantRemaining        int
+		wantConsumed         int
+		wantUsed             bool
+	}{
+		{"запас с избытком", 10, 3, 8, 0, false},
+		{"остаток ровно равен защищённому", 10, 8, 8, 0, false},
+		{"остаток на одну меньше защищённого", 10, 9, 8, 1, true},
+		{"весь вариант из защищённого", 2, 5, 0, 2, true},
+		{"сведения о запасе отстают: запас меньше варианта, остаток не уходит ниже нуля", 1, 0, 0, 0, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			in := input(t, request("RBC", "A+", "URGENT", 2),
+				unit(1, remote2, "RBC", "A+", 5*day24), unit(2, remote2, "RBC", "A+", 6*day24))
+			in.Stock = map[domain.StockKey]domain.SourceStock{
+				{ClinicID: remote2, ComponentKind: "RBC"}: {AvailableUnits: tc.available, ProtectedUnits: tc.protected},
+			}
+			res := mustMatch(t, in)
+			if len(res.Variants) != 1 {
+				t.Fatalf("ожидали один вариант, получили %+v", views(res))
+			}
+			v := res.Variants[0]
+			p := v.Protected
+			if !v.ProtectedKnown || p.AvailableUnits != tc.available || p.ProtectedUnits != tc.protected ||
+				p.RemainingAfterUnits != tc.wantRemaining || p.ConsumedUnits != tc.wantConsumed || v.IsDeficitStockUsed != tc.wantUsed {
+				t.Fatalf("защищённый запас %+v, расходует %v", p, v.IsDeficitStockUsed)
+			}
+		})
 	}
 }
 
@@ -578,7 +615,7 @@ func TestRemoteVariantDeliveryAndProtectedStock(t *testing.T) {
 	in := input(t, request("RBC", "A+", "URGENT", 2),
 		unit(1, remote2, "RBC", "A+", 5*day24), unit(2, remote2, "RBC", "A+", 6*day24), unit(3, remote4, "RBC", "A+", 5*day24))
 	in.Stock = map[domain.StockKey]domain.SourceStock{
-		{ClinicID: remote2, ComponentKind: "RBC"}: {AvailableVolumeML: 3000, ProtectedVolumeML: 2500},
+		{ClinicID: remote2, ComponentKind: "RBC"}: {AvailableUnits: 10, ProtectedUnits: 9},
 	}
 	res := mustMatch(t, in)
 	if len(res.Variants) != 2 {
@@ -590,14 +627,14 @@ func TestRemoteVariantDeliveryAndProtectedStock(t *testing.T) {
 		t.Fatalf("время получения удалённого варианта: %+v, прибытие %v", v.Delivery, v.ArrivalAt)
 	}
 	p := v.Protected
-	if !p.Known || p.RemainingAfterML != 2400 || p.ConsumedML != 100 || !v.IsDeficitStockUsed {
-		t.Fatalf("защищённый запас: %+v, расходует %v", p, v.IsDeficitStockUsed)
+	if !v.ProtectedKnown || p.RemainingAfterUnits != 8 || p.ConsumedUnits != 1 || !v.IsDeficitStockUsed {
+		t.Fatalf("защищённый запас: %+v, сведения %v, расходует %v", p, v.ProtectedKnown, v.IsDeficitStockUsed)
 	}
-	if !strings.Contains(v.Explanation, "2400 мл") || !strings.Contains(v.Explanation, "2500 мл") {
+	if !strings.Contains(v.Explanation, "останется 8 ед.") || !strings.Contains(v.Explanation, "защищённом 9 ед.") {
 		t.Fatalf("объяснение не показывает остаток источника после передачи: %s", v.Explanation)
 	}
 	u := res.Variants[1]
-	if u.SourceClinicID != remote4 || u.Delivery.Status != domain.DeliveryUnknown || u.Protected.Known || u.IsDeficitStockUsed {
+	if u.SourceClinicID != remote4 || u.Delivery.Status != domain.DeliveryUnknown || u.ProtectedKnown || u.IsDeficitStockUsed {
 		t.Fatalf("вариант без оценки и без сведений о запасе: %+v", u)
 	}
 	if !strings.Contains(u.Explanation, "оценки нет") {

@@ -71,15 +71,15 @@ func explainVariant(res Result, req Request, policy Policy, v Variant, prev *Var
 	switch {
 	case v.IsLocal:
 		b.WriteString("Защищённый объём: местный вариант, передачи нет.\n")
-	case !v.Protected.Known:
+	case !v.ProtectedKnown:
 		b.WriteString("Защищённый объём источника: сведений нет.\n")
 	default:
 		spend := "не расходует защищённый запас"
 		if v.IsDeficitStockUsed {
-			spend = fmt.Sprintf("расходует защищённый запас: %d мл", v.Protected.ConsumedML)
+			spend = fmt.Sprintf("расходует защищённый запас: %d ед.", v.Protected.ConsumedUnits)
 		}
-		fmt.Fprintf(&b, "Защищённый объём источника: после передачи останется %d мл при защищённом %d мл — %s.\n",
-			v.Protected.RemainingAfterML, v.Protected.ProtectedVolumeML, spend)
+		fmt.Fprintf(&b, "Защищённый объём источника: после передачи останется %d ед. при защищённом %d ед. — %s.\n",
+			v.Protected.RemainingAfterUnits, v.Protected.ProtectedUnits, spend)
 	}
 
 	// Почему такое место.

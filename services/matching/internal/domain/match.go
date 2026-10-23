@@ -44,10 +44,11 @@ type StockKey struct {
 	ComponentKind string
 }
 
-// SourceStock — доступный и защищённый объём источника по виду (FR025, FR033).
+// SourceStock — доступный запас и защищённый объём источника по виду в единицах (FR025, FR033;
+// ADR-0019: защищённый объём по (клиника, вид) публикуется в единицах, ProtectedVolumePublished.volume_units).
 type SourceStock struct {
-	AvailableVolumeML int64
-	ProtectedVolumeML int64
+	AvailableUnits int
+	ProtectedUnits int
 }
 
 // Policy — параметры подбора. Все значения демонстрационные (ADR-0010); нулевое поле заменяется
@@ -117,16 +118,15 @@ type Delivery struct {
 	EstimatedAt time.Time
 }
 
-// ProtectedStock — расход защищённого объёма источника предлагаемой передачей (FR033).
+// ProtectedStock — расход защищённого объёма источника предлагаемой передачей в единицах (FR033).
+// Заполнен, только если Variant.ProtectedKnown.
 type ProtectedStock struct {
-	// Known — есть сведения о доступном и защищённом объёме источника.
-	Known             bool
-	AvailableVolumeML int64
-	ProtectedVolumeML int64
-	// RemainingAfterML — доступный объём источника после передачи подобранных единиц.
-	RemainingAfterML int64
-	// ConsumedML — какая часть передачи уходит из защищённого объёма.
-	ConsumedML int64
+	AvailableUnits int
+	ProtectedUnits int
+	// RemainingAfterUnits — доступный запас источника по виду после передачи единиц варианта.
+	RemainingAfterUnits int
+	// ConsumedUnits — сколько единиц передачи уходит из защищённого объёма.
+	ConsumedUnits int
 }
 
 // ReplacementSpec — спецификация замены единицы (ADR-0011): по ней transfer проверяет равноценность
@@ -158,8 +158,12 @@ type Variant struct {
 	EarliestExpiresAt time.Time
 	ArrivalAt         time.Time
 	Delivery          Delivery
-	Protected         ProtectedStock
-	// IsDeficitStockUsed — передача расходует защищённый объём источника (FR033).
+	// ProtectedKnown — есть сведения о запасе и защищённом объёме источника. Для WP3 и UI: false у удалённого
+	// варианта — показать «сведений о защищённом объёме нет» (не «не расходует»); у местного варианта всегда
+	// false — передачи нет, защищённый объём не применяется.
+	ProtectedKnown bool
+	Protected      ProtectedStock
+	// IsDeficitStockUsed — остаток источника после передачи меньше защищённого объёма (FR033).
 	IsDeficitStockUsed bool
 	Spec               ReplacementSpec
 	Explanation        string
@@ -442,10 +446,8 @@ func buildVariants(in Input, policy Policy, permitted map[target]Rule, eligible 
 		n := min(req.RequestedUnits, len(units))
 		selected := units[:n]
 		ids := make([]uuid.UUID, 0, n)
-		var volume int64
 		for _, u := range selected {
 			ids = append(ids, u.UnitID)
-			volume += u.VolumeML
 		}
 		rule := permitted[target{kind: k.kind, group: k.group}]
 		arrivalAt, delivery := arrival(in, policy, k.clinic)
@@ -471,11 +473,12 @@ func buildVariants(in Input, policy Policy, permitted map[target]Rule, eligible 
 		// Защищённый объём охраняет источник при передаче (FR025); местный вариант — не передача.
 		if !v.IsLocal {
 			if s, ok := in.Stock[StockKey{ClinicID: k.clinic, ComponentKind: k.kind}]; ok {
-				remaining := s.AvailableVolumeML - volume
-				consumed := min(max(s.ProtectedVolumeML-remaining, 0), volume)
-				v.Protected = ProtectedStock{Known: true, AvailableVolumeML: s.AvailableVolumeML,
-					ProtectedVolumeML: s.ProtectedVolumeML, RemainingAfterML: remaining, ConsumedML: consumed}
-				v.IsDeficitStockUsed = consumed > 0
+				// Проекция запаса может отставать от проекции единиц: остаток не уходит ниже нуля.
+				remaining := max(s.AvailableUnits-n, 0)
+				v.ProtectedKnown = true
+				v.Protected = ProtectedStock{AvailableUnits: s.AvailableUnits, ProtectedUnits: s.ProtectedUnits,
+					RemainingAfterUnits: remaining, ConsumedUnits: min(max(s.ProtectedUnits-remaining, 0), n)}
+				v.IsDeficitStockUsed = remaining < s.ProtectedUnits
 			}
 		}
 		variants = append(variants, v)
@@ -525,16 +528,16 @@ var rankFactors = []rankFactor{
 	{
 		name: "расход защищённого запаса источника",
 		compare: func(a, b Variant) int {
-			if c := cmpBool(!a.IsLocal && !a.Protected.Known, !b.IsLocal && !b.Protected.Known); c != 0 {
+			if c := cmpBool(!a.IsLocal && !a.ProtectedKnown, !b.IsLocal && !b.ProtectedKnown); c != 0 {
 				return c
 			}
-			return cmp.Compare(a.Protected.ConsumedML, b.Protected.ConsumedML)
+			return cmp.Compare(a.Protected.ConsumedUnits, b.Protected.ConsumedUnits)
 		},
 		show: func(v Variant) string {
-			if !v.IsLocal && !v.Protected.Known {
+			if !v.IsLocal && !v.ProtectedKnown {
 				return "сведений нет"
 			}
-			return fmt.Sprintf("%d мл", v.Protected.ConsumedML)
+			return fmt.Sprintf("%d ед.", v.Protected.ConsumedUnits)
 		},
 	},
 	{
