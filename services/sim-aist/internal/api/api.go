@@ -152,13 +152,15 @@ func (h *Handler) changes(w http.ResponseWriter, r *http.Request) {
 			fmt.Sprintf("limit — целое от 1 до %d.", maxChangesLimit))
 		return
 	}
-	units, more := h.store.Changes(since, limit)
+	// current_version из того же снимка, что и страница: при has_more=false он равен last_version
+	// (самая свежая версия устаревшей не бывает), если since не ушёл дальше текущей версии.
+	units, more, current := h.store.Changes(since, limit)
 	last := since
 	if len(units) > 0 {
 		last = units[len(units)-1].Version
 	}
 	httpx.WriteJSON(w, http.StatusOK, changesResponse{
-		Units: units, LastVersion: last, CurrentVersion: h.store.Version(), HasMore: more,
+		Units: units, LastVersion: last, CurrentVersion: current, HasMore: more,
 	})
 }
 
