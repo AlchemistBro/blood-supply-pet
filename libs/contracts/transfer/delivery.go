@@ -36,9 +36,13 @@ var EscalationResolutions = []string{ResolutionManualTransport, ResolutionResolv
 type TransferDispatched struct {
 	ObligationID uuid.UUID `json:"obligation_id"`
 	// ObligationVersion — версия O07 после перехода: проекции применяют событие, только если версия выше сохранённой.
-	ObligationVersion *int64    `json:"obligation_version,omitempty"`
-	RequestID         uuid.UUID `json:"request_id"`
-	At                time.Time `json:"at"`
+	ObligationVersion *int64 `json:"obligation_version,omitempty"`
+	// SourceClinicID и TargetClinicID — клиники обязательства, необязательны: по ним web фильтрует живые статусы,
+	// не держа индекс «обязательство → клиники» в памяти.
+	SourceClinicID *int64    `json:"source_clinic_id,omitempty"`
+	TargetClinicID *int64    `json:"target_clinic_id,omitempty"`
+	RequestID      uuid.UUID `json:"request_id"`
+	At             time.Time `json:"at"`
 }
 
 // MessageType реализует contracts.Payload.
@@ -53,7 +57,11 @@ func (TransferDispatched) SchemaVersion() int { return 1 }
 type TransferDelivered struct {
 	ObligationID uuid.UUID `json:"obligation_id"`
 	// ObligationVersion — версия O07 после перехода: проекции применяют событие, только если версия выше сохранённой.
-	ObligationVersion  *int64    `json:"obligation_version,omitempty"`
+	ObligationVersion *int64 `json:"obligation_version,omitempty"`
+	// SourceClinicID и TargetClinicID — клиники обязательства, необязательны: по ним web фильтрует живые статусы,
+	// не держа индекс «обязательство → клиники» в памяти.
+	SourceClinicID     *int64    `json:"source_clinic_id,omitempty"`
+	TargetClinicID     *int64    `json:"target_clinic_id,omitempty"`
 	RequestID          uuid.UUID `json:"request_id"`
 	At                 time.Time `json:"at"`
 	ConditionsViolated *bool     `json:"conditions_violated,omitempty"`
@@ -71,11 +79,15 @@ func (TransferDelivered) SchemaVersion() int { return 1 }
 type ManualTransportAssigned struct {
 	ObligationID uuid.UUID `json:"obligation_id"`
 	// ObligationVersion — версия O07 после перехода: проекции применяют событие, только если версия выше сохранённой.
-	ObligationVersion *int64    `json:"obligation_version,omitempty"`
-	RequestID         uuid.UUID `json:"request_id"`
-	TransportRef      string    `json:"transport_ref"`
-	AssignedBy        string    `json:"assigned_by"`
-	At                time.Time `json:"at"`
+	ObligationVersion *int64 `json:"obligation_version,omitempty"`
+	// SourceClinicID и TargetClinicID — клиники обязательства, необязательны: по ним web фильтрует живые статусы,
+	// не держа индекс «обязательство → клиники» в памяти.
+	SourceClinicID *int64    `json:"source_clinic_id,omitempty"`
+	TargetClinicID *int64    `json:"target_clinic_id,omitempty"`
+	RequestID      uuid.UUID `json:"request_id"`
+	TransportRef   string    `json:"transport_ref"`
+	AssignedBy     string    `json:"assigned_by"`
+	At             time.Time `json:"at"`
 }
 
 // MessageType реализует contracts.Payload.
@@ -89,12 +101,16 @@ func (ManualTransportAssigned) SchemaVersion() int { return 1 }
 type EscalationClosed struct {
 	ObligationID uuid.UUID `json:"obligation_id"`
 	// ObligationVersion — версия O07 после перехода: проекции применяют событие, только если версия выше сохранённой.
-	ObligationVersion *int64    `json:"obligation_version,omitempty"`
-	RequestID         uuid.UUID `json:"request_id"`
-	Reason            string    `json:"reason,omitempty"`
-	Resolution        string    `json:"resolution"`
-	ClosedBy          string    `json:"closed_by"`
-	At                time.Time `json:"at"`
+	ObligationVersion *int64 `json:"obligation_version,omitempty"`
+	// SourceClinicID и TargetClinicID — клиники обязательства, необязательны: по ним web фильтрует живые статусы,
+	// не держа индекс «обязательство → клиники» в памяти.
+	SourceClinicID *int64    `json:"source_clinic_id,omitempty"`
+	TargetClinicID *int64    `json:"target_clinic_id,omitempty"`
+	RequestID      uuid.UUID `json:"request_id"`
+	Reason         string    `json:"reason,omitempty"`
+	Resolution     string    `json:"resolution"`
+	ClosedBy       string    `json:"closed_by"`
+	At             time.Time `json:"at"`
 }
 
 // MessageType реализует contracts.Payload.

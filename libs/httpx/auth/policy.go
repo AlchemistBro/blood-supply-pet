@@ -69,7 +69,7 @@ var policy = map[Operation][]Role{
 	OpViewTasks:          {RoleOperator, RoleDuty},
 	OpOpenObligation:     {RoleService},
 	OpCancelObligation:   {RoleService, RoleDuty},
-	OpViewObligation:     {RoleOperator, RolePhysician, RoleDuty, RoleService},
+	OpViewObligation:     {RoleOperator, RolePhysician, RoleDuty, RoleService, RoleITService},
 	OpConfirmTransfer:    {RoleOperator, RoleDuty},
 	OpReplaceUnit:        {RoleOperator, RoleDuty},
 	OpRejectTransfer:     {RoleOperator, RoleDuty},
