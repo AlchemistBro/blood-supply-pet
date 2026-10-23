@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/logistics/TransportRejected.v1.json",
+  "title": "TransportRejected",
+  "description": "Ответ logistics.replies: заказ не состоялся. OUTCOME_UNKNOWN — шлюз не смог проверить, дошёл ли заказ; если сверка найдёт его позже, придёт TransportAccepted.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["obligation_id", "reason"],
+  "properties": {
+    "obligation_id": { "type": "string", "format": "uuid" },
+    "reason": { "type": "string", "enum": ["REFUSED", "OUTCOME_UNKNOWN"] },
+    "details": { "type": "string", "maxLength": 512 }
+  }
+}

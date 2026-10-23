@@ -28,6 +28,9 @@ const (
 	OpViewPlan           Operation = "VIEW_PLAN"
 	OpAdjustForecast     Operation = "ADJUST_FORECAST"
 	OpViewTasks          Operation = "VIEW_TASKS"
+	OpOpenObligation     Operation = "OPEN_OBLIGATION"
+	OpCancelObligation   Operation = "CANCEL_OBLIGATION"
+	OpViewObligation     Operation = "VIEW_OBLIGATION"
 	OpConfirmTransfer    Operation = "CONFIRM_TRANSFER"
 	OpReplaceUnit        Operation = "REPLACE_UNIT"
 	OpRejectTransfer     Operation = "REJECT_TRANSFER"
@@ -46,6 +49,8 @@ const (
 )
 
 // policy — матрица: операция → роли, которым она разрешена.
+// Обязательство O07 (этап 1, FR048, FR049): открывают matching и planning служебным токеном, отменяет
+// служба или дежурный, смотрят участники передачи.
 var policy = map[Operation][]Role{
 	OpViewStock:          {RolePhysician, RoleOperator, RoleDuty, RoleITService},
 	OpEnterConsumption:   {RoleOperator},
@@ -55,6 +60,9 @@ var policy = map[Operation][]Role{
 	OpViewPlan:           {RoleOperator, RoleAnalyst, RoleDuty},
 	OpAdjustForecast:     {RoleOperator},
 	OpViewTasks:          {RoleOperator, RoleDuty},
+	OpOpenObligation:     {RoleService},
+	OpCancelObligation:   {RoleService, RoleDuty},
+	OpViewObligation:     {RoleOperator, RolePhysician, RoleDuty, RoleService},
 	OpConfirmTransfer:    {RoleOperator, RoleDuty},
 	OpReplaceUnit:        {RoleOperator, RoleDuty},
 	OpRejectTransfer:     {RoleOperator, RoleDuty},

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/transfer/CancelObligation.v1.json",
+  "title": "CancelObligation",
+  "description": "Команда transfer.commands: отменить обязательство (заявка отменена, план пересчитан, решение дежурного).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["obligation_id", "reason"],
+  "properties": {
+    "obligation_id": { "type": "string", "format": "uuid" },
+    "reason": { "type": "string", "enum": ["REQUEST_CANCELLED", "PLAN_RECALCULATED", "DUTY_OFFICER_DECISION"] }
+  }
+}

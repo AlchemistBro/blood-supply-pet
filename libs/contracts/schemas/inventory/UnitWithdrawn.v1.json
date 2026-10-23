@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/inventory/UnitWithdrawn.v1.json",
+  "title": "UnitWithdrawn",
+  "description": "Событие inventory.events: единица выбыла из наличия — выдана, списана, передана или истёк срок годности. Трансфузию система не наблюдает, только выдачу.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["unit_id", "clinic_id", "component_kind", "reason", "version"],
+  "properties": {
+    "unit_id": { "type": "string", "format": "uuid" },
+    "clinic_id": { "type": "integer", "minimum": 1 },
+    "component_kind": { "type": "string", "enum": ["RBC", "FFP", "PLT", "CRYO"] },
+    "reason": { "type": "string", "enum": ["ISSUED", "DISCARDED", "TRANSFERRED", "EXPIRED"] },
+    "version": { "type": "integer", "minimum": 1 }
+  }
+}
