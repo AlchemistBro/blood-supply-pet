@@ -34,6 +34,8 @@ func TestRequestValidate(t *testing.T) {
 		"нет вида":                      func(r *domain.Request) { r.ComponentKind = "" },
 		"ноль единиц":                   func(r *domain.Request) { r.RequestedUnits = 0 },
 		"нет срочности":                 func(r *domain.Request) { r.Urgency = "" },
+		"срочность строчными":           func(r *domain.Request) { r.Urgency = "urgent" },
+		"опечатка в срочности":          func(r *domain.Request) { r.Urgency = "EMERGENSY" },
 		"неизвестная группа":            func(r *domain.Request) { r.BloodGroup = "A" },
 		"фенотип без знака":             func(r *domain.Request) { r.Phenotype = "K" },
 		"фенотип противоречив":          func(r *domain.Request) { r.Phenotype = "K-K+" },

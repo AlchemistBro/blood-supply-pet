@@ -70,8 +70,8 @@ func (r Request) Validate() error {
 		return fmt.Errorf("%w: не указан вид компонента", ErrInvalidRequest)
 	case r.RequestedUnits <= 0:
 		return fmt.Errorf("%w: количество единиц должно быть положительным", ErrInvalidRequest)
-	case r.Urgency == "":
-		return fmt.Errorf("%w: не указана срочность", ErrInvalidRequest)
+	case !urgencies[r.Urgency]:
+		return fmt.Errorf("%w: неизвестная срочность %q", ErrInvalidRequest, r.Urgency)
 	case !bloodGroups[r.BloodGroup]:
 		return fmt.Errorf("%w: неизвестная группа %q", ErrInvalidRequest, r.BloodGroup)
 	case r.CreatedAt.IsZero():

@@ -2,9 +2,11 @@ package domain_test
 
 import (
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
+	"github.com/AlchemistBro/blood-supply-pet/libs/refdata"
 	"github.com/AlchemistBro/blood-supply-pet/services/matching/internal/domain"
 )
 
@@ -33,6 +35,13 @@ func TestRuleValidate(t *testing.T) {
 		"условие без значения":        func(r *domain.Rule) { r.Condition = "URGENCY=" },
 		"условие без знака равенства": func(r *domain.Rule) { r.Condition = "URGENCY" },
 	}
+	// Опечатки в значениях условия: правило с ними никогда бы не применилось, ошибка видна только при вводе.
+	cases["опечатка в срочности"] = func(r *domain.Rule) { r.Condition = "URGENCY=URGNET" }
+	cases["срочность строчными"] = func(r *domain.Rule) { r.Condition = "URGENCY=urgent" }
+	cases["опечатка во второй срочности"] = func(r *domain.Rule) { r.Condition = "URGENCY=URGENT|EMERGENSY" }
+	cases["опечатка в ограничении"] = func(r *domain.Rule) { r.Condition = "CONSTRAINT=IRADIATED" }
+	cases["опечатка в запрете ограничения"] = func(r *domain.Rule) { r.Condition = "NOT_CONSTRAINT=NO_GROUP_SUBST" }
+	cases["опечатка во второй части условия"] = func(r *domain.Rule) { r.Condition = "URGENCY=URGENT;CONSTRAINT=IRRADIATE" }
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
 			r := valid
@@ -106,6 +115,26 @@ func TestActiveRulesRejectsInvalidRule(t *testing.T) {
 	bad := domain.Rule{Code: "R", Version: 1, ComponentKind: "RBC", Priority: 0, ValidFrom: day(2026, 1, 1)}
 	if _, err := domain.ActiveRules([]domain.Rule{bad}, day(2026, 5, 1)); !errors.Is(err, domain.ErrInvalidRule) {
 		t.Fatalf("ожидали ErrInvalidRule, получили %v", err)
+	}
+}
+
+// Закрытые наборы домена совпадают со справочниками libs/refdata (ref_blood_group, ref_urgency).
+func TestClosedSetsMatchRefdata(t *testing.T) {
+	ref := refdata.MustLoad()
+	var groups, urgency []string
+	for _, g := range ref.BloodGroups {
+		groups = append(groups, g.Code)
+	}
+	for _, u := range ref.Urgency {
+		urgency = append(urgency, u.Code)
+	}
+	slices.Sort(groups)
+	slices.Sort(urgency)
+	if !slices.Equal(groups, domain.BloodGroupCodes()) {
+		t.Fatalf("группы домена %v, справочника %v", domain.BloodGroupCodes(), groups)
+	}
+	if !slices.Equal(urgency, domain.UrgencyCodes()) {
+		t.Fatalf("срочность домена %v, справочника %v", domain.UrgencyCodes(), urgency)
 	}
 }
 

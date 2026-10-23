@@ -13,9 +13,28 @@ import (
 // ErrInvalidRule — версия правила O15 нарушает структуру справочника (FR047).
 var ErrInvalidRule = errors.New("некорректное правило подбора")
 
-// bloodGroups — коды AB0/Rh (FR004, FR005); перечень закрыт, совпадает с ref_blood_group.
+// bloodGroups — коды AB0/Rh (FR004, FR005); перечень закрыт, совпадает с ref_blood_group
+// (libs/refdata/data/dicts.json, сверяет тест). Домен не импортирует libs/refdata: там драйвер БД.
 var bloodGroups = map[string]bool{
 	"O+": true, "O-": true, "A+": true, "A-": true, "B+": true, "B-": true, "AB+": true, "AB-": true,
+}
+
+// urgencies — коды срочности; перечень закрыт, совпадает с ref_urgency (сверяет тест).
+var urgencies = map[string]bool{"PLANNED": true, "URGENT": true, "EMERGENCY": true}
+
+// BloodGroupCodes — известные домену коды групп по алфавиту.
+func BloodGroupCodes() []string { return sortedKeys(bloodGroups) }
+
+// UrgencyCodes — известные домену коды срочности по алфавиту.
+func UrgencyCodes() []string { return sortedKeys(urgencies) }
+
+func sortedKeys(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	slices.Sort(out)
+	return out
 }
 
 // Rule — версия правила подбора O15 (matching_rule). Содержание правил синтетическое (ADR-0010):
@@ -171,6 +190,13 @@ func ParseCondition(s string) (Condition, error) {
 			v = strings.TrimSpace(v)
 			if v == "" {
 				return Condition{}, fmt.Errorf("условие %q: пустое значение", part)
+			}
+			// Значения только из закрытых наборов: опечатка в условии иначе молча выключила бы правило.
+			if key == condUrgency && !urgencies[v] {
+				return Condition{}, fmt.Errorf("условие %q: неизвестная срочность %q", part, v)
+			}
+			if _, known := constraintNeedsValue[v]; key != condUrgency && !known {
+				return Condition{}, fmt.Errorf("условие %q: неизвестное ограничение %q", part, v)
 			}
 			values = append(values, v)
 		}
