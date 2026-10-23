@@ -116,7 +116,7 @@ func TestGoldenLayout(t *testing.T) {
 		`<li aria-current="page">Задания на передачу</li>`,
 		`<input type="hidden" name="csrf_token" value="tok123">`,
 		`hx-headers="{&#34;X-CSRF-Token&#34;:&#34;tok123&#34;}"`,
-		`Демо: синтетические данные и правила.`,
+		`Демонстрационные данные и правила. Клиническое решение принимает врач.`,
 		`<a class="btn btn--primary" href="/operator/tasks/new">Создать</a>`,
 		`<p>Содержимое экрана</p>`,
 	} {
