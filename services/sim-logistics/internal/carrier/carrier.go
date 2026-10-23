@@ -119,6 +119,8 @@ type Faults struct {
 // Carrier — имитатор C03. Безопасен для параллельных вызовов.
 type Carrier struct {
 	clock clock.Clock
+	// sleep — ожидание задержки Slow; подменяется в тестах, чтобы обойтись без реального времени.
+	sleep func(ctx context.Context, d time.Duration) error
 
 	mu        sync.Mutex
 	shipments []Shipment
@@ -128,7 +130,12 @@ type Carrier struct {
 
 // New создаёт перевозчика без заказов и сбоев.
 func New(c clock.Clock) *Carrier {
-	return &Carrier{clock: c}
+	return &Carrier{clock: c, sleep: timerSleep}
+}
+
+// SetSleep подменяет ожидание задержки отправки (для тестов). Вызывать до первой отправки.
+func (c *Carrier) SetSleep(fn func(ctx context.Context, d time.Duration) error) {
+	c.sleep = fn
 }
 
 // Submit создаёт заказ. Повтор с тем же ClientRef создаёт ещё один заказ (нарочно).
@@ -273,6 +280,11 @@ func (c *Carrier) pause(ctx context.Context) error {
 	if d <= 0 {
 		return nil
 	}
+	return c.sleep(ctx, d)
+}
+
+// timerSleep — настоящее ожидание; отмена контекста прерывает его, заказ тогда не создаётся.
+func timerSleep(ctx context.Context, d time.Duration) error {
 	t := time.NewTimer(d)
 	defer t.Stop()
 	select {

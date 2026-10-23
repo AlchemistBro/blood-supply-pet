@@ -220,8 +220,10 @@ erDiagram
 
 ## logistics
 
-`transport_request(obligation_id PK, request_id, source_clinic_id, target_clinic_id, component_kind_code, quantity, status REQUESTING/ACCEPTED/REJECTED/UNKNOWN/FAILED/CANCELLED, shipment_ref, cancel_requested, attempts, next_attempt_at, lease_owner, lease_until, last_error, created_at, updated_at)`
+`transport_request(obligation_id PK, request_id, source_clinic_id, target_clinic_id, component_kind_code, quantity, temperature_regime COLD_2_6/FROZEN_MINUS_25/ROOM_20_24, status REQUESTING/ACCEPTED/REJECTED/UNKNOWN/FAILED/CANCELLED, shipment_ref, cancel_requested, attempts, next_attempt_at, lease_owner, lease_until, last_error, created_at, updated_at)`
 плюс `delivery_estimate(source_clinic_id, target_clinic_id, minutes, estimated_at)`, `outbox`, `inbox`.
+Маршрут и груз допускают NULL только у «надгробия» (`status = CANCELLED`, отмена обогнала заказ). Режим перевозки — условие транспортировки компонентов крови по ПП РФ № 641; диапазоны демо (ADR-0010).
+Аренда строки сравнивается по часам экземпляра шлюза, как в прототипе: экземпляры синхронизируют время (NTP), расхождение часов должно быть много меньше запаса «аренда − 2 × таймаут вызова C03» (около 20 с при значениях по умолчанию).
 
 ## notification
 
