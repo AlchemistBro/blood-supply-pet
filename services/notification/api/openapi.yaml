@@ -2,11 +2,53 @@ openapi: 3.0.3
 info:
   title: notification
   version: 0.1.0
-  description: "Контракт сервиса notification. Источник истины для HTTP: код сервера генерируется из этого файла."
+  description: |
+    Уведомления по почте (C04, ИНТ-04, в демо Mailpit): письмо оператору клиники-источника о срочном задании на передачу
+    по выбору врача (FR044), письма дежурному смены об эскалации и о нарушении обязательства на передачу.
+    Адресаты - служебные ящики подразделений из статического справочника (ADR-0021). Текст письма не хранится,
+    в письмах нет номера случая пациента, фенотипа и ФИО. Данные демонстрационные.
 servers:
   - url: http://localhost:8107
-paths: {}
+paths:
+  /notifications:
+    get:
+      operationId: listNotifications
+      summary: Журнал писем, новые сначала (роли IT_SERVICE, DUTY_OFFICER)
+      x-bs-operation: READ_AUDIT
+      parameters:
+        - name: status
+          in: query
+          description: Только записи в этом статусе
+          schema: { $ref: "#/components/schemas/NotificationStatus" }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+      responses:
+        "200":
+          description: Записи журнала писем
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NotificationPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
 components:
+  responses:
+    BadRequest:
+      description: Неверный запрос
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Unauthorized:
+      description: Требуется вход
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Forbidden:
+      description: Недостаточно прав
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
   schemas:
     Problem:
       type: object
@@ -18,3 +60,38 @@ components:
         detail: { type: string }
         instance: { type: string }
         correlation_id: { type: string }
+    NotificationStatus:
+      type: string
+      enum: [PENDING, SENT, FAILED]
+    Notification:
+      type: object
+      required: [notification_id, kind, obligation_id, recipient_role, subject, status, attempts, next_attempt_at, created_at]
+      properties:
+        notification_id: { type: string, format: uuid }
+        kind:
+          type: string
+          enum: [URGENT_TASK, ESCALATION, TRANSFER_BROKEN]
+          description: URGENT_TASK - срочное задание оператору источника; ESCALATION и TRANSFER_BROKEN - дежурному смены
+        obligation_id: { type: string, format: uuid }
+        request_id: { type: string, format: uuid }
+        recipient_role: { type: string, enum: [CLINIC_OPERATOR, DUTY_OFFICER] }
+        recipient_clinic_id: { type: integer, format: int64 }
+        recipient_email:
+          type: string
+          description: Служебный ящик подразделения; отсутствует, если адресат не настроен
+        subject: { type: string }
+        status: { $ref: "#/components/schemas/NotificationStatus" }
+        attempts: { type: integer, minimum: 0 }
+        next_attempt_at: { type: string, format: date-time }
+        last_error:
+          type: string
+          description: Ответ почтового сервера или описание сбоя, без текста письма
+        created_at: { type: string, format: date-time }
+        sent_at: { type: string, format: date-time }
+    NotificationPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Notification" }
