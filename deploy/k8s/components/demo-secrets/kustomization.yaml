@@ -83,3 +83,14 @@ secretGenerator:
     literals:
       - ACCESS_KEY_ID=pg-backup
       - ACCESS_SECRET_KEY=pg-backup-demo-password
+
+  # ---------------------------------------------------------------- bs-edge: Keycloak
+  - name: keycloak-admin
+    namespace: bs-edge
+    type: kubernetes.io/basic-auth
+    literals: [username=admin, password=admin]
+  # Тот же пароль, что у роли keycloak в pg-role-keycloak (bs-data): секрет не виден между namespace.
+  - name: keycloak-db
+    namespace: bs-edge
+    type: kubernetes.io/basic-auth
+    literals: [username=keycloak, password=keycloak]

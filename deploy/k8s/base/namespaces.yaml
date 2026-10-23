@@ -1,5 +1,5 @@
 # Сегменты сети ПР4 (docs/architecture/deployment.md, security.md) как namespace.
-# Метка blood-supply.io/segment — опора для NetworkPolicy (пакет S8-WP3): политики выбирают
+# Метка blood-supply.io/segment — опора для NetworkPolicy: политики выбирают
 # соседей по ней, а не по имени namespace.
 # Pod Security Admission: restricted везде, где образы позволяют non-root; bs-observability —
 # baseline, потому что grafana/otel-lgtm работает от root.

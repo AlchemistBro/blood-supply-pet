@@ -13,7 +13,7 @@ resources:
   - namespaces.yaml
   - data
   - platform
-  # Сервисы приложения (пакет S8-WP2): services/<svc>/ — Deployment, Service, HPA, PDB.
+  # Сервисы приложения: services/<svc>/ — Deployment, Service, HPA, PDB.
   # - services
-  # Вход (пакет S8-WP3): ingress, NetworkPolicy по сегментам.
+  # Вход: ingress, NetworkPolicy по сегментам.
   # - ingress
