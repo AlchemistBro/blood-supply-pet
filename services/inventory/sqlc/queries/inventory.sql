@@ -46,7 +46,7 @@ VALUES ($1, $2, $3, $4, $5);
 -- Курсор и счётчик двигаются в транзакции страницы: обрыв не теряет применённое и не повторяет его зря.
 UPDATE sync_run
 SET source_version = @source_version,
-    changes_count  = changes_count + @changes::integer
+    changes_count  = changes_count + @changes::bigint
 WHERE sync_run_id = @sync_run_id;
 
 -- name: FinishSyncRun :exec

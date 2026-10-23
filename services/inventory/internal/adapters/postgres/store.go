@@ -113,8 +113,7 @@ func (s *Store) AdvanceSyncRun(ctx context.Context, tx pgx.Tx, id uuid.UUID, sou
 	if tx != nil {
 		q = q.WithTx(tx)
 	}
-	//nolint:gosec // число изменений за страницу ограничено размером страницы (не больше 5000)
-	err := q.AdvanceSyncRun(ctx, gen.AdvanceSyncRunParams{SourceVersion: sourceVersion, Changes: int32(changes), SyncRunID: id})
+	err := q.AdvanceSyncRun(ctx, gen.AdvanceSyncRunParams{SourceVersion: sourceVersion, Changes: int64(changes), SyncRunID: id})
 	if err != nil {
 		return fmt.Errorf("курсор сеанса обмена: %w", err)
 	}

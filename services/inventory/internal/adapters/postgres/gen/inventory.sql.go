@@ -15,13 +15,13 @@ import (
 const advanceSyncRun = `-- name: AdvanceSyncRun :exec
 UPDATE sync_run
 SET source_version = $1,
-    changes_count  = changes_count + $2::integer
+    changes_count  = changes_count + $2::bigint
 WHERE sync_run_id = $3
 `
 
 type AdvanceSyncRunParams struct {
 	SourceVersion int64
-	Changes       int32
+	Changes       int64
 	SyncRunID     uuid.UUID
 }
 
