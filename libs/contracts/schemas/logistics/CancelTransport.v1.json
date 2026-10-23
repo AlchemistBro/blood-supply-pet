@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/logistics/CancelTransport.v1.json",
+  "title": "CancelTransport",
+  "description": "Команда logistics.commands: компенсация саги, снять заказ перевозки, если он был. Шлюз отвечает TransportCancelled и тогда, когда заказа не было.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["obligation_id", "reason"],
+  "properties": {
+    "obligation_id": { "type": "string", "format": "uuid" },
+    "reason": { "type": "string", "enum": ["UNIT_WITHDRAWN", "UNIT_QUARANTINED", "OBLIGATION_CANCELLED"] }
+  }
+}

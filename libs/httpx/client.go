@@ -4,11 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 
 	"github.com/cenkalti/backoff/v5"
 	"github.com/sony/gobreaker/v2"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/metric/noop"
 
 	"github.com/AlchemistBro/blood-supply-pet/libs/correlation"
 )
@@ -23,13 +28,30 @@ type ClientConfig struct {
 	BreakerFailures uint32
 	// BreakerOpen — сколько держать цепь разомкнутой.
 	BreakerOpen time.Duration
+	// Meter — откуда брать счётчик исходов; по умолчанию глобальный провайдер OTel, который
+	// libs/observability выводит в /metrics (Prometheus).
+	Meter metric.Meter
 }
+
+// ClientCallsMetric — счётчик вызовов клиента с атрибутами client (имя клиента) и outcome
+// (ok, error, timeout, circuit_open). В Prometheus — httpx_client_calls_total.
+const ClientCallsMetric = "httpx.client.calls"
+
+// Исходы вызова для метрики. ok — ответ получен (в том числе 4xx: это ответ, а не отказ), error — сетевая
+// ошибка или 5xx после повторов, timeout — истёк таймаут, circuit_open — предохранитель не пустил вызов.
+const (
+	OutcomeOK          = "ok"
+	OutcomeError       = "error"
+	OutcomeTimeout     = "timeout"
+	OutcomeCircuitOpen = "circuit_open"
+)
 
 // Client — HTTP-клиент с корреляцией, повторами и предохранителем (ADR-0004: таймаут 3 с для статуса единиц).
 type Client struct {
 	http    *http.Client
 	cfg     ClientConfig
 	breaker *gobreaker.CircuitBreaker[*http.Response]
+	calls   metric.Int64Counter
 }
 
 // ErrCircuitOpen — предохранитель разомкнут, вызов не делался.
@@ -57,16 +79,48 @@ func NewClient(cfg ClientConfig) *Client {
 			return err == nil
 		},
 	})
+	if cfg.Meter == nil {
+		cfg.Meter = otel.GetMeterProvider().Meter("github.com/AlchemistBro/blood-supply-pet/libs/httpx")
+	}
+	calls, err := cfg.Meter.Int64Counter(ClientCallsMetric,
+		metric.WithDescription("Вызовы HTTP-клиента по исходу: ok, error, timeout, circuit_open"))
+	if err != nil {
+		// Счётчик без имени и единиц не может не создаться; на всякий случай работаем без метрики.
+		calls = noop.Int64Counter{}
+	}
 	return &Client{
 		http:    &http.Client{Timeout: cfg.Timeout, Transport: &correlationTransport{base: http.DefaultTransport}},
 		cfg:     cfg,
 		breaker: cb,
+		calls:   calls,
 	}
 }
 
 // Do выполняет запрос через предохранитель; 5xx и сетевые ошибки считаются отказами,
 // идемпотентные запросы повторяются с экспоненциальной паузой и джиттером.
+// Исход вызова (после всех повторов) попадает в счётчик ClientCallsMetric.
 func (c *Client) Do(req *http.Request) (*http.Response, error) {
+	resp, err := c.do(req)
+	c.calls.Add(req.Context(), 1, metric.WithAttributes(
+		attribute.String("client", c.cfg.Name), attribute.String("outcome", outcomeOf(err))))
+	return resp, err
+}
+
+func outcomeOf(err error) string {
+	if err == nil {
+		return OutcomeOK
+	}
+	if errors.Is(err, ErrCircuitOpen) {
+		return OutcomeCircuitOpen
+	}
+	var ne net.Error
+	if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &ne) && ne.Timeout()) {
+		return OutcomeTimeout
+	}
+	return OutcomeError
+}
+
+func (c *Client) do(req *http.Request) (*http.Response, error) {
 	attempts := 1
 	if idempotent(req.Method) && c.cfg.Retries > 0 {
 		attempts += c.cfg.Retries
