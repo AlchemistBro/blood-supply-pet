@@ -40,6 +40,8 @@ func TestObligationOperations(t *testing.T) {
 		{auth.OpOpenObligation, []auth.Role{auth.RoleService}},
 		{auth.OpCancelObligation, []auth.Role{auth.RoleService, auth.RoleDuty}},
 		{auth.OpViewObligation, []auth.Role{auth.RoleOperator, auth.RolePhysician, auth.RoleDuty, auth.RoleService}},
+		// этап 4: файлы, версии оценки и доли видят аналитик и дежурный (FR016–FR020)
+		{auth.OpViewDemand, []auth.Role{auth.RoleAnalyst, auth.RoleDuty}},
 	}
 	all := []auth.Role{auth.RolePhysician, auth.RoleOperator, auth.RoleAnalyst, auth.RoleDuty, auth.RoleITService, auth.RoleService}
 	for _, c := range cases {

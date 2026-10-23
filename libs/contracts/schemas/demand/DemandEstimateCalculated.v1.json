@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/demand/DemandEstimateCalculated.v1.json",
+  "title": "DemandEstimateCalculated",
+  "type": "object",
+  "description": "Событие demand.events: рассчитана версия оценки потребности (CALCULATED, FR019).",
+  "additionalProperties": false,
+  "required": [
+    "demand_estimate_id",
+    "version_no",
+    "period_start",
+    "period_end"
+  ],
+  "properties": {
+    "demand_estimate_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "version_no": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "period_start": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "period_end": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

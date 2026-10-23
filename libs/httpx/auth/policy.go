@@ -25,6 +25,7 @@ const (
 	OpSyncOnDemand       Operation = "SYNC_ON_DEMAND"
 	OpUploadStatistics   Operation = "UPLOAD_STATISTICS"
 	OpPublishEstimate    Operation = "PUBLISH_ESTIMATE"
+	OpViewDemand         Operation = "VIEW_DEMAND"
 	OpViewPlan           Operation = "VIEW_PLAN"
 	OpAdjustForecast     Operation = "ADJUST_FORECAST"
 	OpViewTasks          Operation = "VIEW_TASKS"
@@ -57,6 +58,7 @@ var policy = map[Operation][]Role{
 	OpSyncOnDemand:       {RoleOperator},
 	OpUploadStatistics:   {RoleAnalyst},
 	OpPublishEstimate:    {RoleAnalyst},
+	OpViewDemand:         {RoleAnalyst, RoleDuty},
 	OpViewPlan:           {RoleOperator, RoleAnalyst, RoleDuty},
 	OpAdjustForecast:     {RoleOperator},
 	OpViewTasks:          {RoleOperator, RoleDuty},

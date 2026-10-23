@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/demand/DemandEstimatePublished.v1.json",
+  "title": "DemandEstimatePublished",
+  "type": "object",
+  "description": "Событие demand.events: версия оценки потребности опубликована аналитиком (FR020, NFR009).",
+  "additionalProperties": false,
+  "required": [
+    "demand_estimate_id",
+    "version_no",
+    "period_start",
+    "period_end",
+    "confirmed_by",
+    "clinic_share_version_id",
+    "lines"
+  ],
+  "properties": {
+    "demand_estimate_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "version_no": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "period_start": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "period_end": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "confirmed_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "clinic_share_version_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "lines": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "clinic_id",
+          "component_kind",
+          "demand_volume_ml"
+        ],
+        "properties": {
+          "clinic_id": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "component_kind": {
+            "type": "string",
+            "enum": [
+              "RBC",
+              "FFP",
+              "PLT",
+              "CRYO"
+            ]
+          },
+          "blood_group": {
+            "type": "string",
+            "enum": [
+              "O+",
+              "O-",
+              "A+",
+              "A-",
+              "B+",
+              "B-",
+              "AB+",
+              "AB-"
+            ]
+          },
+          "demand_volume_ml": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      }
+    }
+  }
+}
