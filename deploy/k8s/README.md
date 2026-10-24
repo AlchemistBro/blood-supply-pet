@@ -75,7 +75,14 @@ kubectl kustomize deploy/k8s/overlays/local | go run ./tools/k8scheck
 
 ## Порядок развёртывания
 
-Выполняется автоматизацией `task k8s:up` (её ещё нет); вручную:
+Автоматизация: `task k8s:up`, затем `task k8s:smoke`. На Windows запускать из Git Bash.
+`up` создаёт только kind `blood-supply`, устанавливает Calico 3.30.3, проверяет исполнение NetworkPolicy,
+собирает и загружает образы, применяет платформу и ждёт топики до запуска приложения (ADR-0035).
+`BS_K8S_OVERLAY=ci` выбирает облегчённый overlay; `BS_K8S_BUILD_IMAGES=0` использует уже загруженные образы.
+Команды не выполнялись на рабочей машине по решению владельца: подтверждена только статическая корректность.
+Сценарий CI находится в `.github/workflows/k8s.yml`, результаты выполнения ещё не получены.
+
+Ручной порядок:
 
 1. Оператор CloudNativePG **1.27.0** (CRD в репозиторий не кладём, ставятся из релиза оператора):
 
@@ -95,8 +102,9 @@ kubectl kustomize deploy/k8s/overlays/local | go run ./tools/k8scheck
    kubectl wait -n ingress-nginx --for=condition=Ready pod -l app.kubernetes.io/component=controller --timeout=180s
    ```
 
-   CNI кластера должен исполнять NetworkPolicy (kindnet в kind 0.24+ это делает; иначе политики молча
-   не действуют). Секрет TLS `bs-tls` — раздел «Вход и TLS».
+   CNI кластера должен исполнять NetworkPolicy. Автоматизация отключает стандартный CNI kind и устанавливает
+   Calico; `task k8s:network-check` проверяет разрешённый и запрещённый потоки. Наличие политики в API само по
+   себе не подтверждает изоляцию. Секрет TLS `bs-tls` — раздел «Вход и TLS».
 2. Overlay: `kubectl apply --server-side -k deploy/k8s/overlays/local`.
    Дальше всё сходится само, в таком порядке:
    - namespace и секреты; MinIO; Job `minio-setup` ждёт MinIO, создаёт бакет `pg-backups` с версионированием и

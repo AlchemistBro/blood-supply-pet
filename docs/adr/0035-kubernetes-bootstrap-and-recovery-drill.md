@@ -9,6 +9,9 @@ Deployment и HPA сервисов. Разделение выполняется 
 
 Проверка готовности проверяет службы HTTP, вход и отказ чужой роли. Исполнение NetworkPolicy проверяется
 отдельным отрицательным сетевым сценарием; наличия YAML недостаточно для подтверждения сегментации.
+В kind отключается CNI по умолчанию и устанавливается Calico 3.30.3 с отдельной подсетью pod.
+Сценарий установки проверяется отрицательной сетевой пробой до запуска приложения.
+Образ узла закреплён digest из [релиза kind 0.29.0](https://github.com/kubernetes-sigs/kind/releases/tag/v0.29.0).
 
 Учение работает только в этом kind-контексте. До отказа primary создаются маркер и завершённая базовая копия.
 Восстановление выполняется в отдельный кластер `pg-drill`, по времени между двумя маркерами, из архива `pg`.
@@ -19,3 +22,4 @@ Deployment и HPA сервисов. Разделение выполняется 
 `barmanObjectStore` используется API ветки CNPG 1.27; его устаревание и миграция на плагин описаны в README.
 Источники: [kind configuration](https://kind.sigs.k8s.io/docs/user/configuration/),
 [CNPG recovery](https://cloudnative-pg.io/docs/1.27/recovery/).
+Манифест CNI: [Calico 3.30.3](https://raw.githubusercontent.com/projectcalico/calico/v3.30.3/manifests/calico.yaml).

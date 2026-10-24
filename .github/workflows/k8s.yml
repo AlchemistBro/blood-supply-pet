@@ -1,0 +1,63 @@
+name: Kubernetes
+
+on:
+  workflow_dispatch:
+    inputs:
+      drill:
+        description: Выполнить учебный отказ primary и PITR
+        type: boolean
+        default: false
+  pull_request:
+    types: [labeled, synchronize]
+  schedule:
+    - cron: "31 3 * * 0"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: k8s-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  kind:
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'k8s')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      BS_K8S_OVERLAY: ci
+      BS_K8S_BUILD_IMAGES: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27.2"
+          cache: true
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Установить kind
+        run: go install sigs.k8s.io/kind@v0.29.0
+      - name: Развернуть платформу и сервисы
+        run: task k8s:up
+      - name: Проверить готовность и права
+        run: task k8s:smoke
+      - name: Выполнить учение PITR
+        if: github.event_name == 'schedule' || inputs.drill
+        run: task k8s:drill
+      - name: Собрать диагностику
+        if: always()
+        run: |
+          mkdir -p artifacts
+          kubectl --context kind-blood-supply get pods -A -o wide > artifacts/pods.txt 2>&1 || true
+          kubectl --context kind-blood-supply get events -A --sort-by=.lastTimestamp > artifacts/events.txt 2>&1 || true
+          kubectl --context kind-blood-supply logs -n bs-app -l blood-supply.io/runtime=go-service --all-containers --prefix --max-log-requests=20 --tail=200 > artifacts/services.log 2>&1 || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kubernetes-diagnostics
+          path: |
+            artifacts/
+            docs/perf/drill-*.md
+          if-no-files-found: ignore
