@@ -8,6 +8,7 @@ func init() {
 		// команды
 		func() Payload { return &transfer.OpenObligation{} },
 		func() Payload { return &transfer.CancelObligation{} },
+		func() Payload { return &transfer.CancelRequestObligations{} },
 		// события
 		func() Payload { return &transfer.ObligationOpened{} },
 		func() Payload { return &transfer.TransferConfirmed{} },
