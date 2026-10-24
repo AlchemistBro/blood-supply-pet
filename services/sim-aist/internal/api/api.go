@@ -93,6 +93,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.Handle("GET /units/status", h.faulty(h.status))
 	mux.Handle("GET /snapshot.csv", h.faulty(h.snapshot))
 	mux.Handle("POST /allocations", h.faulty(h.allocate))
+	mux.Handle("DELETE /allocations/{key}", h.faulty(h.releaseAllocation))
 
 	mux.HandleFunc("POST /dev/units", h.createUnit)
 	mux.HandleFunc("POST /dev/units/{id}/withdraw", h.withdraw)
@@ -279,6 +280,14 @@ func (h *Handler) allocate(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) allocations(w http.ResponseWriter, _ *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, map[string]any{"allocations": h.store.Allocations()})
+}
+
+func (h *Handler) releaseAllocation(w http.ResponseWriter, r *http.Request) {
+	if err := h.store.Release(r.PathValue("key")); err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 type createUnitRequest struct {
