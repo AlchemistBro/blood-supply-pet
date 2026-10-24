@@ -120,3 +120,53 @@ func TestAnalystUploadsCSVWithoutJavaScriptAndWithCSRF(t *testing.T) {
 		t.Fatalf("загрузка: %d, вызовов %d, %s", rec.Code, uploads, rec.Body.String())
 	}
 }
+
+// Отсутствующие входы не должны оставлять пустой обязательный select и доступную кнопку расчёта.
+
+func TestDemandCalculationExplainsMissingInputs(t *testing.T) {
+	for _, ready := range []bool{false, true} {
+		t.Run(map[bool]string{false: "missing shares", true: "ready"}[ready], func(t *testing.T) {
+			e := newEnv(t)
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch r.URL.Path {
+				case "/estimates":
+					_, _ = io.WriteString(w, `[]`)
+				case "/files":
+					_, _ = io.WriteString(w, `{"items":[{"id":"`+taskID+`","file_name":"profile.csv","file_kind":"DISTRICT_PROFILE","check_status":"ACCEPTED"}]}`)
+				case "/history":
+					_, _ = io.WriteString(w, `{"items":[{"id":"`+unitID+`","component_kind_code":"RBC","period_start":"2025-01-01","period_end":"2025-12-31","consumed_volume_ml":300}]}`)
+				case "/shares/versions":
+					if ready {
+						_, _ = io.WriteString(w, `{"items":[{"id":"`+taskID+`","version_no":3}]}`)
+					} else {
+						_, _ = io.WriteString(w, `{"items":[]}`)
+					}
+				}
+			}))
+			t.Cleanup(upstream.Close)
+			e.srv.demand = svcclient.New("demand", upstream.URL)
+			mux := http.NewServeMux()
+			e.srv.Register(mux)
+			e.handler = httpx.Chain(mux, e.srv.Middleware()...)
+			j := e.login(oidctest.User{Username: "analyst1", Roles: []auth.Role{auth.RoleAnalyst}}, "/demand")
+			rec := e.do(http.MethodGet, "/demand", j, nil)
+			body := rec.Body.String()
+			if rec.Code != http.StatusOK {
+				t.Fatalf("страница: %d", rec.Code)
+			}
+			if ready {
+				if !strings.Contains(body, `name="clinic_share_version_id"`) || !strings.Contains(body, "Версия 3") || strings.Contains(body, `type="submit" disabled`) {
+					t.Fatal("загруженные входы не открыли расчёт")
+				}
+				return
+			}
+			if !strings.Contains(body, "Для расчёта не хватает входных данных") || !strings.Contains(body, "Доли район → клиника") || !strings.Contains(body, `type="submit" disabled`) {
+				t.Fatal("нет объяснения отсутствующих долей и блокировки расчёта")
+			}
+			if strings.Contains(body, `name="clinic_share_version_id"`) {
+				t.Fatal("показан пустой обязательный список")
+			}
+		})
+	}
+}

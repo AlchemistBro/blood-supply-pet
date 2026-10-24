@@ -71,6 +71,33 @@ type demandScreen struct {
 	Errors    []demandRowError
 }
 
+type demandMissingInput struct {
+	Kind  string
+	Label string
+}
+
+// MissingInputs не даёт отправлять расчёт из формы с пустыми обязательными списками.
+func (d demandScreen) MissingInputs() []demandMissingInput {
+	var missing []demandMissingInput
+	profile := false
+	for _, file := range d.Files {
+		if file.Profile() {
+			profile = true
+			break
+		}
+	}
+	if !profile {
+		missing = append(missing, demandMissingInput{"DISTRICT_PROFILE", "Профиль районов"})
+	}
+	if len(d.Shares) == 0 {
+		missing = append(missing, demandMissingInput{"CLINIC_SHARE", "Доли район → клиника"})
+	}
+	if len(d.History) == 0 {
+		missing = append(missing, demandMissingInput{"CONSUMPTION_HISTORY", "История расхода"})
+	}
+	return missing
+}
+
 func (s *Server) registerDemand(mux *http.ServeMux) {
 	mux.Handle("GET /demand/templates/{kind}", s.guard.Require(auth.OpUploadStatistics)(http.HandlerFunc(s.demandCSVTemplate)))
 	mux.Handle("GET /demand/files/{id}", s.guard.Require(auth.OpUploadStatistics)(http.HandlerFunc(s.demandFile)))
