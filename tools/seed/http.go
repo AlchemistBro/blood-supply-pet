@@ -116,7 +116,10 @@ func (s seeder) file(token, kind string, file testdata.CSVFile) (uuid.UUID, erro
 	if err := s.call(http.MethodPost, s.demand+"/files", token, writer.FormDataContentType(), &body, &result); err != nil {
 		return uuid.Nil, fmt.Errorf("CSV %s: %w", kind, err)
 	}
-	if result.File.Status != "ACCEPTED" {
+	// Часть строк истории расхода отклоняется, если за эти периоды данные уже есть (повторный запуск на стенде
+	// с загруженной вручную историей). Оценка берёт всю существующую историю прошлого года, поэтому это не ошибка.
+	historyOverlap := kind == "CONSUMPTION_HISTORY" && result.File.Status == "PARTIAL"
+	if result.File.Status != "ACCEPTED" && !historyOverlap {
 		return uuid.Nil, fmt.Errorf("CSV %s не принят целиком", kind)
 	}
 	return result.File.ID, nil

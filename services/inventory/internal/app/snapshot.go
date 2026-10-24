@@ -22,7 +22,11 @@ type SnapshotSource interface {
 
 func (s *Service) completeDataSync(ctx context.Context, tx pgx.Tx, run SyncRun, res SyncResult, discrepancies int) error {
 	at := s.clock.Now()
-	items, err := s.store.CompleteDataSync(ctx, tx, run.ID, at, res.Result, discrepancies, run.Note)
+	// Холостой опрос изменений (ничего не применено, расхождений нет) прогон фиксирует, а полный снимок запаса
+	// не публикует: опрос идёт каждые пять секунд, и без этого outbox и проекции подписчиков растут без предела.
+	// Водяной знак (NFR015) двигается по самой записи успешного прогона.
+	idle := run.Kind == "CHANGES" && res.Applied == 0 && discrepancies == 0
+	items, err := s.store.CompleteDataSync(ctx, tx, run.ID, at, res.Result, discrepancies, run.Note, !idle)
 	if err != nil {
 		return err
 	}

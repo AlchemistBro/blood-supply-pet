@@ -34,12 +34,12 @@ func (s *Store) SnapshotMissingUnits(ctx context.Context, tx pgx.Tx, codes []str
 	return out, rows.Err()
 }
 
-func (s *Store) CompleteDataSync(ctx context.Context, tx pgx.Tx, runID uuid.UUID, at time.Time, result string, discrepancies int, note *string) ([]inventory.StockSnapshotPublished, error) {
+func (s *Store) CompleteDataSync(ctx context.Context, tx pgx.Tx, runID uuid.UUID, at time.Time, result string, discrepancies int, note *string, withSnapshot bool) ([]inventory.StockSnapshotPublished, error) {
 	var version int64
 	if err := tx.QueryRow(ctx, `UPDATE sync_run SET finished_at=$2,sync_result=$3,discrepancies_count=$4,error_text=$5 WHERE sync_run_id=$1 RETURNING sync_seq`, runID, at, result, discrepancies, note).Scan(&version); err != nil {
 		return nil, err
 	}
-	if result != "SUCCESS" {
+	if result != "SUCCESS" || !withSnapshot {
 		return nil, nil
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO stock_snapshot_key SELECT DISTINCT clinic_id,component_kind_code,blood_group_code FROM unit ON CONFLICT DO NOTHING`); err != nil {

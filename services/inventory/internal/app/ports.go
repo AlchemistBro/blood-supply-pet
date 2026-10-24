@@ -112,7 +112,7 @@ type Store interface {
 	CurrentNorm(ctx context.Context, tx pgx.Tx, clinicID int64, kind string) (*NormRecord, error)
 	CorrectUnitFromSnapshot(ctx context.Context, tx pgx.Tx, u domain.Unit) error
 	SnapshotMissingUnits(ctx context.Context, tx pgx.Tx, codes []string) ([]uuid.UUID, error)
-	CompleteDataSync(ctx context.Context, tx pgx.Tx, runID uuid.UUID, at time.Time, result string, discrepancies int, note *string) ([]inventory.StockSnapshotPublished, error)
+	CompleteDataSync(ctx context.Context, tx pgx.Tx, runID uuid.UUID, at time.Time, result string, discrepancies int, note *string, withSnapshot bool) ([]inventory.StockSnapshotPublished, error)
 	NextNormVersion(ctx context.Context, tx pgx.Tx) (int64, error)
 	SaveNorm(ctx context.Context, tx pgx.Tx, n NormRecord, annualID uuid.UUID, actor string) error
 	Norms(ctx context.Context, clinicID int64) ([]NormRecord, error)

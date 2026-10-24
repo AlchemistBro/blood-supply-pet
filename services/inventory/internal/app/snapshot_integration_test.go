@@ -55,3 +55,47 @@ func TestStockSnapshotClearsOldClinicAfterUnitMoves(t *testing.T) {
 		t.Fatal("снимок не обнулил запас прежней клиники")
 	}
 }
+
+func countSnapshots(t *testing.T, e env) int {
+	t.Helper()
+	n := 0
+	for _, msg := range outbox(t, e.pool) {
+		if msg.Type == "StockSnapshotPublished" {
+			n++
+		}
+	}
+	return n
+}
+
+// Холостой опрос (ничего не изменилось) не должен каждые пять секунд публиковать полный снимок запаса:
+// иначе outbox и проекции подписчиков растут без предела. Водяной знак NFR015 при этом обязан двигаться.
+func TestIdlePollDoesNotRepublishStockSnapshotsButMovesWatermark(t *testing.T) {
+	e := setup(t, 500)
+	e.aist.Add(fakeaist.Unit{AistUnitCode: "U-1", ClinicCode: "C001"})
+	e.sync(t)
+	first := countSnapshots(t, e)
+	if first == 0 {
+		t.Fatal("опрос с изменением обязан опубликовать снимок")
+	}
+	var runsBefore int
+	if err := e.pool.QueryRow(context.Background(), `SELECT count(*) FROM sync_run WHERE sync_result='SUCCESS'`).Scan(&runsBefore); err != nil {
+		t.Fatal(err)
+	}
+	e.sync(t)
+	e.sync(t)
+	if got := countSnapshots(t, e); got != first {
+		t.Fatalf("холостые опросы опубликовали снимки: было %d, стало %d", first, got)
+	}
+	var runsAfter int
+	if err := e.pool.QueryRow(context.Background(), `SELECT count(*) FROM sync_run WHERE sync_result='SUCCESS'`).Scan(&runsAfter); err != nil {
+		t.Fatal(err)
+	}
+	if runsAfter != runsBefore+2 {
+		t.Fatalf("успешные прогоны должны фиксироваться для водяного знака: было %d, стало %d", runsBefore, runsAfter)
+	}
+	e.aist.Add(fakeaist.Unit{AistUnitCode: "U-2", ClinicCode: "C001"})
+	e.sync(t)
+	if got := countSnapshots(t, e); got <= first {
+		t.Fatalf("после изменения снимок обязан обновиться: было %d, стало %d", first, got)
+	}
+}
