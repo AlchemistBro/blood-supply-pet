@@ -546,6 +546,23 @@ func TestProtectedVolumeIsRespected(t *testing.T) {
 	h.assertStockConsistent(1, "RBC")
 }
 
+// Команда опережает ProtectedVolumePublished из другого топика: порог плана всё равно действует.
+func TestPlanFloorPrecedesDelayedInventoryProjection(t *testing.T) {
+	h := setup(t)
+	units := h.registerUnits(1, "RBC", 4)
+	n := newObligation(1, "RBC", 2, nil, domain.ReplacementSpec{RuleVersion: rule})
+	n.ProtectedFloors = map[int64]int{1: 3}
+	id := h.openWith(n)
+	if res := h.confirm(id, units[:2], false); !isType[domain.ProtectedVolumeExceeded](res) {
+		t.Fatalf("порог команды потерян: %#v", res)
+	}
+	h.protect(1, "RBC", 4)
+	if res := h.confirm(id, units[:1], false); !isType[domain.ProtectedVolumeExceeded](res) {
+		t.Fatalf("более высокий актуальный порог потерян: %#v", res)
+	}
+	h.assertStockConsistent(1, "RBC")
+}
+
 // Ответы шлюза логистики (решения этапа 1): дубль, поздний ответ, отказ, неизвестный исход.
 func TestLogisticsRepliesFollowSaga(t *testing.T) {
 	h := setup(t)

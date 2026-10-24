@@ -36,6 +36,7 @@ const (
 // Obligation — обязательство на передачу O07 в том виде, в котором оно хранится в базе transfer.
 // Номера случая пациента здесь нет: заявку представляет только request_id.
 type Obligation struct {
+	ProtectedFloors map[int64]int
 	ID              uuid.UUID
 	ChoiceID        uuid.UUID
 	RequestID       uuid.UUID
@@ -62,6 +63,7 @@ type Obligation struct {
 
 // NewObligation — данные для открытия задания (команда OpenObligation или эскалация по таймеру).
 type NewObligation struct {
+	ProtectedFloors map[int64]int
 	ChoiceID        uuid.UUID
 	RequestID       uuid.UUID
 	Origin          Origin
@@ -80,6 +82,11 @@ var ErrInvalidObligation = errors.New("некорректная команда �
 
 // Validate проверяет инварианты, которые дублируют CHECK в схеме: ошибка понятнее нарушения ограничения.
 func (n NewObligation) Validate() error {
+	for clinic, floor := range n.ProtectedFloors {
+		if clinic <= 0 || floor < 0 || floor > 2147483647 {
+			return fmt.Errorf("%w: некорректный порог источника", ErrInvalidObligation)
+		}
+	}
 	var problem string
 	switch {
 	case n.ChoiceID == uuid.Nil:

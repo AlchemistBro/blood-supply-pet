@@ -53,6 +53,13 @@ func (s *Service) ExpireOverdue(ctx context.Context) ([]Escalation, error) {
 
 func (s *Service) expire(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*Escalation, error) {
 	now := s.clock.Now()
+	before, err := s.store.Obligation(ctx, tx, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.store.LockRequest(ctx, tx, before.RequestID); err != nil {
+		return nil, err
+	}
 	o, err := s.store.LockObligation(ctx, tx, id)
 	if err != nil {
 		return nil, err
@@ -71,12 +78,14 @@ func (s *Service) expire(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*Escalat
 			ChoiceID: domain.EscalationChoiceID(o.ID), RequestID: o.RequestID, Origin: o.Origin,
 			SourceClinicID: next, TargetClinicID: o.TargetClinicID, ComponentKind: o.ComponentKind,
 			RequestedQty: o.RequestedQty, UrgencyCode: o.UrgencyCode, ConfirmWindow: o.ConfirmWindow,
-			FallbackSources: rest, Spec: o.Spec,
+			FallbackSources: rest, Spec: o.Spec, ProtectedFloors: o.ProtectedFloors,
 		}, actorSystem)
 		if err != nil {
 			return nil, err
 		}
-		esc.NextID = &nextID
+		if nextID != uuid.Nil {
+			esc.NextID = &nextID
+		}
 	}
 
 	r := refsAt(o, o.Version+1)
