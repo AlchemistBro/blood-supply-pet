@@ -176,15 +176,15 @@
         <bpmn:outgoing>Flow_X1s_X1t</bpmn:outgoing>
         <bpmn:messageEventDefinition id="X1s_ed" messageRef="Msg_Cancelled" />
       </bpmn:startEvent>
-      <bpmn:task id="X1t" name="ClinicalRequestCancelled; CancelObligation(REQUEST_CANCELLED) по открытым O07; аудит">
+      <bpmn:task id="X1t" name="Удалённый выбор: CANCELLATION_REQUESTED и CancelRequestObligations; иначе CANCELLED; аудит">
         <bpmn:incoming>Flow_X1s_X1t</bpmn:incoming>
         <bpmn:outgoing>Flow_X1t_X1t2</bpmn:outgoing>
       </bpmn:task>
-      <bpmn:task id="X1t2" name="transfer снимает закрепления; ReleasePatientAllocation в C01, если было закрепление">
+      <bpmn:task id="X1t2" name="transfer: надгробие, отмена до отправки и снятие ИНТ-05; ожидать RequestCancellationProcessed">
         <bpmn:incoming>Flow_X1t_X1t2</bpmn:incoming>
         <bpmn:outgoing>Flow_X1t2_X1e</bpmn:outgoing>
       </bpmn:task>
-      <bpmn:endEvent id="X1e" name="Заявка отменена">
+      <bpmn:endEvent id="X1e" name="CANCELLED либо CANCELLATION_REJECTED при отправленном грузе (ADR-0037)">
         <bpmn:incoming>Flow_X1t2_X1e</bpmn:incoming>
       </bpmn:endEvent>
       <bpmn:sequenceFlow id="Flow_X1s_X1t" sourceRef="X1s" targetRef="X1t" />
@@ -222,7 +222,7 @@
     <bpmn:sequenceFlow id="Flow_G4_Gm" sourceRef="G4" targetRef="Gm" name="да: предложить врачу" />
     <bpmn:sequenceFlow id="Flow_M_def2_E_def2" sourceRef="M_def2" targetRef="E_def2" />
     <bpmn:textAnnotation id="A_k1">
-      <bpmn:text>Номер случая (K1) хранится только в matching (pgcrypto) и показывается по отдельному запросу с записью READ_PATIENT_CASE в аудит (NFR016). ФИО и СНИЛС не вводятся.</bpmn:text>
+      <bpmn:text>Номер случая зашифрован AES-GCM (ADR-0020); ключ только у matching и inventory. Transfer переносит конверт без расшифровки. Чтение отдельно, после записи READ_PATIENT_CASE в аудит. ФИО и СНИЛС не вводятся.</bpmn:text>
     </bpmn:textAnnotation>
     <bpmn:association id="Assoc_A_k1" sourceRef="D1" targetRef="A_k1" />
     <bpmn:textAnnotation id="A_rule">
@@ -230,7 +230,7 @@
     </bpmn:textAnnotation>
     <bpmn:association id="Assoc_A_rule" sourceRef="M2" targetRef="A_rule" />
     <bpmn:textAnnotation id="A_ext">
-      <bpmn:text>Путь номера случая в ИНТ-05 задаёт ADR-0020 (запланирован, этап 6); в контрактах этапа 1 его нет (ADR-0027). Пока квитанции нет, O07 остаётся CONFIRMED (ADR-0003).</bpmn:text>
+      <bpmn:text>ИНТ-05 доставляется постоянной очередью inventory с повторами и снятием (ADR-0031). Квитанция закрепления отображается отдельно от статуса O07; заказ перевозки не ждёт квитанцию.</bpmn:text>
     </bpmn:textAnnotation>
     <bpmn:association id="Assoc_A_ext" sourceRef="T2" targetRef="A_ext" />
     <bpmn:textAnnotation id="A_esc">

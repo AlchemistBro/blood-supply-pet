@@ -129,7 +129,7 @@
       <bpmn:outgoing>Flow_G4_P10</bpmn:outgoing>
       <bpmn:outgoing>Flow_G4_Gm3</bpmn:outgoing>
     </bpmn:exclusiveGateway>
-    <bpmn:sendTask id="P10" name="CancelObligation(PLAN_RECALCULATED) по каждому">
+    <bpmn:sendTask id="P10" name="CancelRequestObligations(PLAN_RECALCULATED, only_pending); надгробие для поздних O07">
       <bpmn:incoming>Flow_G4_P10</bpmn:incoming>
       <bpmn:outgoing>Flow_P10_Gm3</bpmn:outgoing>
     </bpmn:sendTask>
@@ -248,7 +248,7 @@
     </bpmn:textAnnotation>
     <bpmn:association id="Assoc_A_nfr10" sourceRef="P1" targetRef="A_nfr10" />
     <bpmn:textAnnotation id="A_pv">
-      <bpmn:text>Защищённый объём публикуется: planning → ProtectedVolumeCalculated → inventory → ProtectedVolumePublished → Остаток источника в transfer (допущение этапа 5, ADR-0019 запланирован).</bpmn:text>
+      <bpmn:text>Защищённый объём: planning → ProtectedVolumeCalculated → inventory → ProtectedVolumePublished → Остаток transfer (ADR-0019). Порог дополнительно включён в OpenObligation и применяется под блокировкой (ADR-0028).</bpmn:text>
     </bpmn:textAnnotation>
     <bpmn:association id="Assoc_A_pv" sourceRef="P6" targetRef="A_pv" />
     <bpmn:textAnnotation id="A_local">

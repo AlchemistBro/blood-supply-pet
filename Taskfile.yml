@@ -167,6 +167,13 @@ tasks:
       - go run ./services/{{.SVC}}/cmd/{{.SVC}}
 
   # ---------------------------------------------------------------- прочее
+  docs:diagrams:
+    desc: Экспортировать Mermaid и BPMN в dist/diagrams (Node.js, npm и Chromium; без запуска приложения)
+    cmds:
+      - npm install --no-save --package-lock=false @mermaid-js/mermaid-cli@11 bpmn-js@18.9.1
+      - python tools/docs-diagrams/extract.py
+      - node tools/docs-diagrams/render.mjs
+
   docs:er:
     desc: Обновить ER восьми баз из Up-миграций без подключения к PostgreSQL
     cmds: [python tools/docs-er/generate.py]

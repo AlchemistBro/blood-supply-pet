@@ -35,21 +35,23 @@
 
 ## Экспорт в SVG
 
-SVG для README и презентаций делается отдельной задачей (этап 9, `task docs:diagrams`), потому что инструменты рендера
-загружаются из сети:
+`task docs:diagrams` экспортирует Mermaid и четыре BPMN в `dist/diagrams/`, с перечнем в `index.md`.
+Нужны Python, Node.js 22+ и доступ к npm для Mermaid CLI, bpmn-js и Chromium. Приложение и тесты не запускаются.
+Исходники и SVG связаны через `manifest.json`; в CI результат сохраняется артефактом `architecture-svg`.
+Локально подтверждены извлечение исходников и синтаксис инструмента; браузерный экспорт ещё не выполнялся.
 
 - Mermaid → SVG: `@mermaid-js/mermaid-cli` (`mmdc -i <файл>.md -o <файл>.svg`);
-- BPMN → изображение: `bpmn-to-image` (headless-браузер, `bpmn-to-image bpmn/<процесс>.bpmn:bpmn/<процесс>.png`)
-  или экспорт SVG вручную из demo.bpmn.io и Camunda Modeler.
+- BPMN → SVG: bpmn-js открывает исходный XML с DI и выполняет `saveSVG` через Chromium;
+  предупреждения импорта завершают экспорт ошибкой. Альтернатива — экспорт вручную из bpmn.io или Camunda Modeler.
 
-Готовые SVG кладутся рядом с исходником (`bpmn/<процесс>.svg`, `c4/*.svg`) и перегенерируются при каждом изменении
-исходника. Пока экспорта нет, смотреть схемы нужно по исходникам способами выше.
+Производные SVG не коммитятся: для показа скачивается артефакт CI или используется локальный каталог `dist/diagrams/`.
+Пока экспорт не выполнен, смотреть схемы нужно по исходникам способами выше.
 
 ## Проверка
 
-- BPMN: XML разбирается без ошибок (`python -c "import xml.dom.minidom,sys; xml.dom.minidom.parse(sys.argv[1])" <файл>`);
-  у каждого элемента процесса есть фигура или ребро в DI, потоки ссылаются на существующие узлы. В CI это делает
-  `docs.yml` (см. [testing.md](../testing.md)).
+- BPMN: `python tools/docs-diagrams/check-bpmn.py` статически проверяет XML, уникальность id, ссылки,
+  вызываемые процессы и наличие фигур/рёбер DI. В CI это делает `docs.yml` (см. [testing.md](../testing.md));
+  затем bpmn-js дополнительно проверяет импорт при экспорте.
 - Mermaid: рендер `mmdc` в `docs.yml`.
 - Схемы сверяются с кодом при изменении процесса: переходы O07 — с `services/transfer/internal/domain`, состояния
   заказа перевозки — с `services/logistics-gateway/internal/domain` и миграцией `transport_request`.

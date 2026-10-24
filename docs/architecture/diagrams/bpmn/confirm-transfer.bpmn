@@ -347,7 +347,7 @@
       <bpmn:incoming>Flow_K3_W_del</bpmn:incoming>
       <bpmn:outgoing>Flow_W_del_T_deliv</bpmn:outgoing>
     </bpmn:task>
-    <bpmn:task id="T_deliv" name="Приёмка получателем: DISPATCHED→DELIVERED">
+    <bpmn:task id="T_deliv" name="Приёмка: условия и метаданные единиц; DISPATCHED→DELIVERED, при нарушениях запрет использования и эскалация">
       <bpmn:incoming>Flow_W_del_T_deliv</bpmn:incoming>
       <bpmn:outgoing>Flow_T_deliv_E_done</bpmn:outgoing>
     </bpmn:task>
@@ -588,7 +588,7 @@
     </bpmn:textAnnotation>
     <bpmn:association id="Assoc_A_lease" sourceRef="W2" targetRef="A_lease" />
     <bpmn:textAnnotation id="A_st7">
-      <bpmn:text>Этап 7, ADR-0022 (предложен): C03 — служба перевозки субъекта обращения крови; ПП РФ № 641, п. 67–69, 73–75, 97–98. При нарушении условий перевозки единицы к клиническому использованию не допускаются, EscalationRaised дежурному.</bpmn:text>
+      <bpmn:text>ADR-0022, ADR-0033, ADR-0038: C03 сообщает факты перевозки; доступна ручная перевозка. При нарушении условий или спецификации использование заблокировано, EscalationRaised дежурному. Отправка исключает единицы из доступного запаса.</bpmn:text>
     </bpmn:textAnnotation>
     <bpmn:association id="Assoc_A_st7" sourceRef="T_disp" targetRef="A_st7" />
   </bpmn:process>
