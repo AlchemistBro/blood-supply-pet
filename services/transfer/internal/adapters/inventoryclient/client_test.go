@@ -140,6 +140,20 @@ func TestTimeoutIsSourceSystemUnavailable(t *testing.T) {
 	}
 }
 
+func TestNetworkErrorDoesNotExposeUnitIDs(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	base := srv.URL
+	srv.Close()
+	id := uuid.New()
+	_, err := newClient(t, base, time.Second).CheckUnits(context.Background(), []uuid.UUID{id})
+	if !errors.Is(err, app.ErrSourceSystemUnavailable) {
+		t.Fatalf("ожидали отказ источника, получили %v", err)
+	}
+	if strings.Contains(err.Error(), id.String()) || strings.Contains(err.Error(), base) {
+		t.Fatalf("сетевая ошибка раскрывает адрес запроса: %v", err)
+	}
+}
+
 // После нескольких отказов подряд предохранитель размыкается: inventory больше не вызывается.
 func TestCircuitBreakerStopsCalls(t *testing.T) {
 	var calls atomic.Int32

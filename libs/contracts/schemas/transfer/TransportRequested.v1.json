@@ -8,6 +8,7 @@
   "required": ["obligation_id", "shipment_ref"],
   "properties": {
     "obligation_id": { "type": "string", "format": "uuid" },
+    "obligation_version": { "type": "integer", "minimum": 0, "description": "Версия O07 после перехода; проекции применяют событие, только если версия выше сохранённой" },
     "shipment_ref": { "type": "string", "minLength": 1, "maxLength": 64 }
   }
 }

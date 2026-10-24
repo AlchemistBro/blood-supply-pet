@@ -222,7 +222,8 @@ func (s *Service) applyPage(ctx context.Context, runID uuid.UUID, p ChangesPage)
 	return applied, rejected, err
 }
 
-// applyUnit применяет одну запись под блокировкой строки единицы. true — копия изменилась и событие записано.
+// applyUnit применяет одну запись под блокировкой строки единицы. true — копия изменилась;
+// для уже выбывшей единицы событие не публикуется.
 func (s *Service) applyUnit(ctx context.Context, tx pgx.Tx, src domain.SourceUnit, now time.Time) (bool, error) {
 	for attempt := 0; attempt < 2; attempt++ {
 		prev, err := s.store.LockUnitByCode(ctx, tx, src.AistUnitCode)

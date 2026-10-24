@@ -22,25 +22,47 @@ type ClientCredentialsConfig struct {
 	TokenURL     string
 	ClientID     string
 	ClientSecret string
-	// RefreshBefore — за сколько до истечения получать новый токен (по умолчанию 30 с,
+	// RefreshBefore — за сколько до истечения начинать обновление (по умолчанию 30 с,
 	// но не больше половины срока жизни токена).
 	RefreshBefore time.Duration
+	// RefreshTimeout — предел одного запроса токена (по умолчанию 2 с). Запрос не зависит от контекста
+	// вызывающего: его могут ждать несколько вызовов сразу.
+	RefreshTimeout time.Duration
 	// HTTPClient — клиент для запроса токена; по умолчанию с таймаутом 5 с.
 	HTTPClient *http.Client
-	// Clock — часы для срока жизни кэша; по умолчанию системные.
+	// Clock — часы для срока жизни кэша и паузы после сбоя; по умолчанию системные.
 	Clock clock.Clock
 }
 
-// ServiceToken — источник служебного токена с кэшем. Токен берётся из кэша до окна обновления,
-// в окне обновляется заранее. Если Keycloak в этот момент недоступен, отдаётся прежний токен, пока он
-// не истёк: кратковременный сбой IdP не должен ронять внутренний вызов transfer → inventory.
-// Безопасен для одновременного использования; одновременные вызовы делают один запрос.
+// Пауза перед следующей попыткой после сбоя: удваивается до предела, сбрасывается после успеха.
+const (
+	refreshBackoffMin = time.Second
+	refreshBackoffMax = 30 * time.Second
+)
+
+// ServiceToken — источник служебного токена с кэшем.
+//
+// Вызов transfer → inventory укладывается в 3 с (ADR-0004), поэтому получение токена не должно его съедать:
+//   - пока токен не истёк, он отдаётся сразу, даже в окне обновления; обновление идёт одним фоновым запросом;
+//   - сетевой запрос выполняется вне мьютекса, одновременные вызовы делят один запрос (singleflight);
+//   - после сбоя следующая попытка не раньше паузы, чтобы не долбить недоступный Keycloak;
+//   - вызывающий без действующего токена ждёт запрос не дольше своего ctx.
 type ServiceToken struct {
-	cfg       ClientCredentialsConfig
-	mu        sync.Mutex
-	token     string
-	expiresAt time.Time
-	refreshAt time.Time
+	cfg ClientCredentialsConfig
+
+	mu          sync.Mutex
+	token       string
+	expiresAt   time.Time
+	refreshAt   time.Time
+	inflight    *refreshCall
+	failures    int
+	nextAttempt time.Time
+	lastErr     error
+}
+
+type refreshCall struct {
+	done chan struct{}
+	err  error
 }
 
 // TokenURL строит адрес эндпоинта токенов Keycloak по адресу realm (issuer).
@@ -56,6 +78,9 @@ func NewServiceToken(cfg ClientCredentialsConfig) (*ServiceToken, error) {
 	if cfg.RefreshBefore <= 0 {
 		cfg.RefreshBefore = 30 * time.Second
 	}
+	if cfg.RefreshTimeout <= 0 {
+		cfg.RefreshTimeout = 2 * time.Second
+	}
 	if cfg.HTTPClient == nil {
 		cfg.HTTPClient = &http.Client{Timeout: 5 * time.Second}
 	}
@@ -68,21 +93,79 @@ func NewServiceToken(cfg ClientCredentialsConfig) (*ServiceToken, error) {
 // Token возвращает действующий служебный токен.
 func (s *ServiceToken) Token(ctx context.Context) (string, error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	now := s.cfg.Clock.Now()
-	if s.token != "" && now.Before(s.refreshAt) {
-		return s.token, nil
+	valid := s.token != "" && now.Before(s.expiresAt)
+	if valid && now.Before(s.refreshAt) {
+		token := s.token
+		s.mu.Unlock()
+		return token, nil
 	}
+	call := s.startRefreshLocked(now)
+	if valid {
+		// Окно обновления: действующий токен отдаём сразу, обновление идёт в фоне.
+		token := s.token
+		s.mu.Unlock()
+		return token, nil
+	}
+	if call == nil {
+		err := s.lastErr
+		s.mu.Unlock()
+		return "", fmt.Errorf("служебный токен: пауза после сбоя: %w", err)
+	}
+	s.mu.Unlock()
+
+	select {
+	case <-call.done:
+	case <-ctx.Done():
+		return "", fmt.Errorf("служебный токен: %w", ctx.Err())
+	}
+	if call.err != nil {
+		return "", call.err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.token == "" {
+		return "", errors.New("служебный токен: не получен")
+	}
+	return s.token, nil
+}
+
+// startRefreshLocked запускает фоновый запрос токена или возвращает уже идущий. Во время паузы после
+// сбоя возвращает nil. Вызывается под s.mu.
+func (s *ServiceToken) startRefreshLocked(now time.Time) *refreshCall {
+	if s.inflight != nil {
+		return s.inflight
+	}
+	if now.Before(s.nextAttempt) {
+		return nil
+	}
+	call := &refreshCall{done: make(chan struct{})}
+	s.inflight = call
+	go s.refresh(call, now)
+	return call
+}
+
+func (s *ServiceToken) refresh(call *refreshCall, started time.Time) {
+	ctx, cancel := context.WithTimeout(context.Background(), s.cfg.RefreshTimeout)
+	defer cancel()
 	token, ttl, err := s.fetch(ctx)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if err != nil {
-		if s.token != "" && now.Before(s.expiresAt) {
-			return s.token, nil
-		}
-		return "", err
+		s.failures++
+		backoff := refreshBackoffMin << min(s.failures-1, 5)
+		s.nextAttempt = started.Add(min(backoff, refreshBackoffMax))
+		s.lastErr = err
+	} else {
+		// Срок считаем от начала запроса: так кэш не переживёт настоящий токен.
+		early := min(s.cfg.RefreshBefore, ttl/2)
+		s.token, s.expiresAt, s.refreshAt = token, started.Add(ttl), started.Add(ttl-early)
+		s.failures, s.nextAttempt, s.lastErr = 0, time.Time{}, nil
 	}
-	early := min(s.cfg.RefreshBefore, ttl/2)
-	s.token, s.expiresAt, s.refreshAt = token, now.Add(ttl), now.Add(ttl-early)
-	return token, nil
+	call.err = err
+	s.inflight = nil
+	close(call.done)
 }
 
 // Authorize ставит служебный токен в заголовок Authorization запроса.

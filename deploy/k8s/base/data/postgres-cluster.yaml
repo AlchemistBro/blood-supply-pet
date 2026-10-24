@@ -1,0 +1,149 @@
+# PostgreSQL под управлением CloudNativePG (ADR-0009): primary и реплика, непрерывный архив WAL
+# и базовые копии в MinIO, восстановление на момент времени (PITR) за 7 суток.
+# Заменяет Patroni + pgBackRest из ПР6 теми же гарантиями: NFR005 (реплика), NFR006 (RTO ≤ 60 мин),
+# NFR007 (RPO ≤ 15 мин), NFR012 (резервные копии).
+#
+# Требует оператор CloudNativePG 1.27 (установка — deploy/k8s/README.md). Встроенный
+# barmanObjectStore в 1.26+ помечен устаревшим в пользу Barman Cloud Plugin, но работает;
+# переход описан в README.
+#
+# Точки подключения для сервисов: pg-rw.bs-data.svc:5432 (запись), pg-ro.bs-data.svc:5432 (чтение с реплики).
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: pg
+  namespace: bs-data
+  labels:
+    app.kubernetes.io/name: postgresql
+    app.kubernetes.io/component: database
+spec:
+  instances: 2
+  # Образ с barman-cloud (вариант system): без него архив WAL в объектное хранилище не работает.
+  imageName: ghcr.io/cloudnative-pg/postgresql:16.9
+  primaryUpdateStrategy: unsupervised
+  enableSuperuserAccess: false
+
+  # Первичная инициализация создаёт базу keycloak; базы сервисов — объекты Database (postgres-databases.yaml),
+  # роли сервисов — managed.roles ниже. Так всё объявлено декларативно и сверяется оператором.
+  bootstrap:
+    initdb:
+      database: keycloak
+      owner: keycloak
+      secret:
+        name: pg-role-keycloak
+      encoding: UTF8
+
+  postgresql:
+    parameters:
+      # NFR007, RPO ≤ 15 мин: неполный сегмент WAL уходит в архив не реже раза в 5 минут
+      # даже при малой нагрузке. Обычно сегмент закрывается раньше по заполнению.
+      archive_timeout: "5min"
+      max_connections: "200"
+      shared_buffers: "128MB"
+      # Медленные запросы — в журнал; значения параметров при этом не пишутся
+      # (log_parameter_max_length = 0): в них бывает patient_case_no (K1).
+      log_min_duration_statement: "1s"
+      log_parameter_max_length: "0"
+      log_statement: "none"
+    # Своя база — только своей роли. Это заменяет REVOKE CONNECT ... FROM PUBLIC из
+    # deploy/compose/postgres/init.sql и строже его: чужая роль не пройдёт даже при выданном CONNECT.
+    # Правила оператора (репликация по сертификату, локальный доступ) стоят выше этих строк.
+    pg_hba:
+      - host inventory inventory all scram-sha-256
+      - host demand demand all scram-sha-256
+      - host planning planning all scram-sha-256
+      - host matching matching all scram-sha-256
+      - host transfer transfer all scram-sha-256
+      - host logistics logistics all scram-sha-256
+      - host notification notification all scram-sha-256
+      - host audit audit all scram-sha-256
+      - host keycloak keycloak all scram-sha-256
+      - host all all all reject
+
+  managed:
+    roles:
+      - name: inventory
+        ensure: present
+        login: true
+        connectionLimit: 40
+        passwordSecret:
+          name: pg-role-inventory
+      - name: demand
+        ensure: present
+        login: true
+        connectionLimit: 20
+        passwordSecret:
+          name: pg-role-demand
+      - name: planning
+        ensure: present
+        login: true
+        connectionLimit: 20
+        passwordSecret:
+          name: pg-role-planning
+      - name: matching
+        ensure: present
+        login: true
+        connectionLimit: 40
+        passwordSecret:
+          name: pg-role-matching
+      - name: transfer
+        ensure: present
+        login: true
+        connectionLimit: 20
+        passwordSecret:
+          name: pg-role-transfer
+      - name: logistics
+        ensure: present
+        login: true
+        connectionLimit: 20
+        passwordSecret:
+          name: pg-role-logistics
+      - name: notification
+        ensure: present
+        login: true
+        connectionLimit: 20
+        passwordSecret:
+          name: pg-role-notification
+      - name: audit
+        ensure: present
+        login: true
+        connectionLimit: 20
+        passwordSecret:
+          name: pg-role-audit
+
+  storage:
+    size: 5Gi
+  walStorage:
+    size: 2Gi
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+
+  affinity:
+    enablePodAntiAffinity: true
+    # В kind один узел: обязательное разнесение не дало бы запустить реплику.
+    podAntiAffinityType: preferred
+
+  backup:
+    # PITR до любой точки за 7 суток; более старые копии и WAL оператор удаляет.
+    retentionPolicy: "7d"
+    barmanObjectStore:
+      destinationPath: s3://pg-backups/
+      endpointURL: http://minio.bs-data.svc:9000
+      s3Credentials:
+        accessKeyId:
+          name: pg-backup-s3
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: pg-backup-s3
+          key: ACCESS_SECRET_KEY
+      wal:
+        compression: gzip
+        maxParallel: 2
+      data:
+        compression: gzip
+        jobs: 2

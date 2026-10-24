@@ -126,20 +126,29 @@ type EventKind int
 
 // События об единице.
 const (
+	// EventNone — копия не меняется (повтор или устаревшая версия).
 	EventNone EventKind = iota
 	EventRegistered
 	EventUpdated
 	EventWithdrawn
+	// EventSilent — копия и история статусов обновляются, событие не публикуется: единица уже выбыла
+	// из учёта, выбытие опубликовано однажды UnitWithdrawn, а UnitUpdated — только для единиц в учёте
+	// (статус IN_STOCK или QUARANTINE, контракт libs/contracts/inventory, ADR-0027).
+	EventSilent
 )
 
 func (k EventKind) String() string {
 	switch k {
+	case EventNone:
+		return "none"
 	case EventRegistered:
 		return "UnitRegistered"
 	case EventUpdated:
 		return "UnitUpdated"
 	case EventWithdrawn:
 		return "UnitWithdrawn"
+	case EventSilent:
+		return "silent"
 	}
 	return "none"
 }
@@ -158,7 +167,8 @@ type Change struct {
 // Apply применяет запись АИСТ-М к единице из копии (prev = nil — единицы ещё нет).
 // Повтор и устаревшая версия ничего не меняют: версия единицы только растёт.
 // Новая единица — UnitRegistered (со статусом на момент регистрации, даже если она уже выбыла);
-// переход в выбывший статус — UnitWithdrawn; остальное, включая IN_STOCK ↔ QUARANTINE, — UnitUpdated.
+// переход в выбывший статус — UnitWithdrawn; новая версия уже выбывшей единицы — без события (копия и история
+// обновляются); остальное, включая IN_STOCK ↔ QUARANTINE, — UnitUpdated.
 func Apply(prev *Unit, in SourceUnit, newID uuid.UUID, receivedAt time.Time) (Change, error) {
 	if err := in.Validate(); err != nil {
 		return Change{}, err
@@ -178,7 +188,10 @@ func Apply(prev *Unit, in SourceUnit, newID uuid.UUID, receivedAt time.Time) (Ch
 	}
 	next := Unit{UnitID: prev.UnitID, SourceUnit: in, StatusReceivedAt: receivedAt}
 	ch := Change{Event: EventUpdated, Unit: next, StatusChanged: prev.Status != in.Status}
-	if !IsWithdrawn(prev.Status) && IsWithdrawn(in.Status) {
+	switch {
+	case IsWithdrawn(prev.Status):
+		ch.Event = EventSilent
+	case IsWithdrawn(in.Status):
 		ch.Event = EventWithdrawn
 		ch.Reason = WithdrawReason(in.Status, in.WithdrawalReason)
 	}
