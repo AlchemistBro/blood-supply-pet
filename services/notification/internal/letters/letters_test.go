@@ -120,7 +120,7 @@ func TestLinksPointToWebScreens(t *testing.T) {
 	r := renderer(t)
 	d := drafts(t)
 	cases := map[string]string{
-		"urgent_task":     "http://localhost:8080/operator/tasks/" + obligationID.String(),
+		"urgent_task":     "http://localhost:8080/tasks/" + obligationID.String(),
 		"escalation":      "http://localhost:8080/duty/escalations",
 		"transfer_broken": "http://localhost:8080/duty/tasks",
 	}

@@ -38,7 +38,8 @@ type Server struct {
 // Start поднимает сервер; он закрывается в t.Cleanup.
 func Start(t testing.TB) *Server {
 	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	var listenConfig net.ListenConfig
+	ln, err := listenConfig.Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("фальшивый SMTP: %v", err)
 	}

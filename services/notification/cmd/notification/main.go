@@ -64,6 +64,7 @@ func setup(ctx context.Context, rt *runtime.Runtime) ([]runtime.Worker, error) {
 		return nil, err
 	}
 	appCfg := app.DefaultConfig()
+	appCfg.Lease = max(appCfg.Lease, cfg.SMTPTimeout+30*time.Second)
 	appCfg.Interval = cfg.SendInterval
 	if cfg.MaxAttempts > 0 {
 		appCfg.Retry.MaxAttempts = cfg.MaxAttempts

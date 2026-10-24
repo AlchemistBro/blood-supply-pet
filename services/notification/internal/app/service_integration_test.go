@@ -189,7 +189,7 @@ func TestDoctorChoiceLetterReachesSourceOperator(t *testing.T) {
 	if l.Subject != "[демо] Срочное задание на передачу № 0192f3a1" {
 		t.Fatalf("тема %q", l.Subject)
 	}
-	if !strings.Contains(l.Text, obligationID.String()) || !strings.Contains(l.HTML, "/operator/tasks/"+obligationID.String()) {
+	if !strings.Contains(l.Text, obligationID.String()) || !strings.Contains(l.HTML, "/tasks/"+obligationID.String()) {
 		t.Fatal("в письме нет номера задания или ссылки на карточку")
 	}
 	n = only(t, e)
@@ -203,6 +203,16 @@ func TestDoctorChoiceLetterReachesSourceOperator(t *testing.T) {
 	}
 	if sendDue(t, e) != 0 || len(e.smtp.Messages()) != 1 {
 		t.Fatal("отправленное письмо ушло повторно")
+	}
+}
+
+func TestPlannedDoctorChoiceDoesNotQueueUrgentLetter(t *testing.T) {
+	e := setup(t, nil)
+	event := opened(transfer.OriginDoctorChoice)
+	event.Urgency = transfer.UrgencyPlanned
+	handle(t, e, message(t, event, nil))
+	if items := list(t, e, nil); len(items) != 0 {
+		t.Fatalf("плановое задание вызвало срочное письмо: %+v", items)
 	}
 }
 

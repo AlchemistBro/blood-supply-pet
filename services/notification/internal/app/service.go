@@ -148,10 +148,10 @@ func (s *Service) HandleMessage(ctx context.Context, msg messaging.Message) erro
 
 func (s *Service) onObligationOpened(ctx context.Context, msg messaging.Message, e transfer.ObligationOpened) error {
 	o := domain.Obligation{
+		Urgency:      e.Urgency,
 		ObligationID: e.ObligationID, RequestID: e.RequestID, Origin: e.Origin,
 		SourceClinicID: e.SourceClinicID, TargetClinicID: e.TargetClinicID,
 		ComponentKind: e.ComponentKind, RequestedQty: e.RequestedQty, Deadline: e.Deadline,
-		// Срочности в ObligationOpened v1 нет (см. domain.OnObligationOpened).
 	}
 	openedAt := msg.OccurredAt
 	if openedAt.IsZero() {
@@ -229,13 +229,18 @@ func (s *Service) RunSender(ctx context.Context) error {
 
 // SendDue — один проход: берёт созревшие письма и отправляет их вне транзакций. Возвращает число отправленных.
 func (s *Service) SendDue(ctx context.Context) (int, error) {
-	now := s.Clock.Now()
-	due, err := s.Store.ClaimDue(ctx, now, now.Add(s.cfg.Lease), s.cfg.Batch)
-	if err != nil {
-		return 0, err
-	}
 	sent := 0
-	for _, n := range due {
+	for range s.cfg.Batch {
+		now := s.Clock.Now()
+		// Письмо берётся непосредственно перед отправкой: аренда не истекает в очереди медленного SMTP.
+		due, err := s.Store.ClaimDue(ctx, now, now.Add(s.cfg.Lease), 1)
+		if err != nil {
+			return sent, err
+		}
+		if len(due) == 0 {
+			break
+		}
+		n := due[0]
 		if ctx.Err() != nil {
 			// Взятые записи вернутся в работу по истечении аренды.
 			return sent, ctx.Err()

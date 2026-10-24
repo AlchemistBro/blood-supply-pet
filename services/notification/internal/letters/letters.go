@@ -133,7 +133,7 @@ func (r *Renderer) view(kind domain.Kind, f domain.Facts) (view, error) {
 			Title:  "Срочное задание на передачу",
 			Lead:   "Врач выбрал вашу клинику источником по заявке. Подтвердите передачу единиц компонента крови или откажите до указанного срока.",
 			Action: "Требования к единицам смотрите в карточке задания в системе.",
-			Link:   r.baseURL + "/operator/tasks/" + url.PathEscape(id),
+			Link:   r.baseURL + "/tasks/" + url.PathEscape(id),
 		}
 	case domain.KindEscalation:
 		v = view{
