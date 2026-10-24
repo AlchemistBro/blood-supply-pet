@@ -155,6 +155,9 @@ func (s *Store) Watermark(ctx context.Context) (*time.Time, error) {
 
 // NextProtectedVolumeVersion выдаёт следующую версию защищённого объёма.
 func (s *Store) NextProtectedVolumeVersion(ctx context.Context, tx pgx.Tx) (int64, error) {
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(1886151023)`); err != nil {
+		return 0, err
+	}
 	v, err := s.q.WithTx(tx).NextProtectedVolumeVersion(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("версия защищённого объёма: %w", err)

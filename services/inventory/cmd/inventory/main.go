@@ -4,6 +4,9 @@ package main
 import (
 	"context"
 
+	"github.com/AlchemistBro/blood-supply-pet/libs/contracts"
+	"github.com/AlchemistBro/blood-supply-pet/libs/messaging"
+
 	auditc "github.com/AlchemistBro/blood-supply-pet/libs/contracts/audit"
 	"github.com/AlchemistBro/blood-supply-pet/libs/runtime"
 	apispec "github.com/AlchemistBro/blood-supply-pet/services/inventory/api"
@@ -22,7 +25,7 @@ func main() {
 		Module:     auditc.ModuleInventory,
 		Migrations: migrations.FS,
 		OpenAPI:    apispec.Spec,
-		Setup: func(_ context.Context, rt *runtime.Runtime) ([]runtime.Worker, error) {
+		Setup: func(ctx context.Context, rt *runtime.Runtime) ([]runtime.Worker, error) {
 			cfg, err := config.Load()
 			if err != nil {
 				return nil, err
@@ -37,7 +40,18 @@ func main() {
 				},
 			})
 			api.Mount(rt.Mux, svc, rt.Deny(), api.Options{DevEnabled: rt.Cfg.Environment == "local"})
-			return []runtime.Worker{svc.RunSync, svc.RunSnapshots}, nil
+			workers := []runtime.Worker{svc.RunSync, svc.RunSnapshots}
+			if len(rt.Cfg.KafkaBrokers) > 0 {
+				if err := messaging.EnsureTopics(ctx, rt.Cfg.KafkaBrokers, 1, messaging.WithDLT(contracts.TopicPlanningEvents)...); err != nil {
+					return nil, err
+				}
+				consumer, err := messaging.NewConsumer(messaging.ConsumerConfig{Brokers: rt.Cfg.KafkaBrokers, Group: "inventory-planning", Topics: []string{contracts.TopicPlanningEvents}}, svc.HandlePlanning, rt.Log)
+				if err != nil {
+					return nil, err
+				}
+				workers = append(workers, consumer.Run)
+			}
+			return workers, nil
 		},
 	})
 }
