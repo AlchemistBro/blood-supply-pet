@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # Один Dockerfile на все сервисы: docker build -f deploy/docker/Dockerfile --build-arg SERVICE=audit .
 
-ARG GO_VERSION=1.27
+ARG GO_VERSION=1.27.3
 FROM golang:${GO_VERSION} AS build
 WORKDIR /src
 ENV CGO_ENABLED=0 GOFLAGS=-mod=readonly
