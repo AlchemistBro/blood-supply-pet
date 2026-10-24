@@ -62,7 +62,7 @@ var statuses = []string{"IN_STOCK", "QUARANTINE", "ISSUED", "DISCARDED", "TRANSF
 
 // Generate строит набор.
 func Generate(ref *refdata.Set, cfg Config) *Dataset {
-	rng := rand.New(rand.NewPCG(uint64(cfg.Seed), uint64(cfg.Seed)^0x9E3779B97F4A7C15))
+	rng := rand.New(rand.NewPCG(uint64(cfg.Seed), uint64(cfg.Seed)^0x9E3779B97F4A7C15)) //nolint:gosec // детерминированные демо-данные, секретов нет
 	weights := clinicWeights(ref)
 	kinds := make([]string, 0, len(ref.ComponentKinds))
 	kindW := make([]float64, 0, len(ref.ComponentKinds))

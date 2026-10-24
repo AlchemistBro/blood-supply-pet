@@ -1,5 +1,5 @@
 // Package refdata — общие справочники (схема ref ПР6): клиники, районы, виды компонентов,
-// группы крови, срочность. Статический набор одинаков у всех сервисов и сидируется в базу
+// группы крови, срочность, статусы единицы. Статический набор одинаков у всех сервисов и сидируется в базу
 // каждого при старте (ADR-0013). Данные синтетические (ADR-0010).
 package refdata
 
@@ -7,6 +7,7 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"math"
@@ -20,7 +21,7 @@ var dataFiles embed.FS
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
-// Migrations — DDL таблиц ref_* (версия 00002).
+// Migrations — DDL таблиц ref_* (версии 00002–00003).
 var Migrations fs.FS = mustSub(migrationFiles, "migrations")
 
 func mustSub(f embed.FS, dir string) fs.FS {
@@ -74,6 +75,15 @@ type Urgency struct {
 	ConfirmWindowMinutes int    `json:"confirm_window_minutes"`
 }
 
+// UnitStatus — статус единицы компонента крови. IsAvailable — единицу можно закрепить и передать.
+// Статусы единицы в базе, в том числе «на карантине» (ПП РФ № 641, п. 62 а);
+// закрепляется только IN_STOCK — решение проекта (ADR-0027).
+type UnitStatus struct {
+	Code        string `json:"unit_status_code"`
+	Name        string `json:"unit_status_name"`
+	IsAvailable bool   `json:"is_available"`
+}
+
 // Set — весь набор справочников.
 type Set struct {
 	Version        int
@@ -82,6 +92,7 @@ type Set struct {
 	ComponentKinds []ComponentKind
 	BloodGroups    []BloodGroup
 	Urgency        []Urgency
+	UnitStatuses   []UnitStatus
 }
 
 type clinicsFile struct {
@@ -95,6 +106,7 @@ type dictsFile struct {
 	ComponentKinds []ComponentKind `json:"component_kinds"`
 	BloodGroups    []BloodGroup    `json:"blood_groups"`
 	Urgency        []Urgency       `json:"urgency"`
+	UnitStatuses   []UnitStatus    `json:"unit_statuses"`
 }
 
 // Load читает встроенный набор и проверяет его целостность.
@@ -111,7 +123,7 @@ func Load() (*Set, error) {
 		return nil, fmt.Errorf("версии файлов справочников не совпадают: %d и %d", cf.Version, df.Version)
 	}
 	s := &Set{Version: cf.Version, Districts: cf.Districts, Clinics: cf.Clinics,
-		ComponentKinds: df.ComponentKinds, BloodGroups: df.BloodGroups, Urgency: df.Urgency}
+		ComponentKinds: df.ComponentKinds, BloodGroups: df.BloodGroups, Urgency: df.Urgency, UnitStatuses: df.UnitStatuses}
 	if err := s.Validate(); err != nil {
 		return nil, err
 	}
@@ -196,7 +208,37 @@ func (s *Set) Validate() error {
 		}
 		urg[u.Code] = true
 	}
+	statuses := map[string]bool{}
+	available := 0
+	for _, st := range s.UnitStatuses {
+		if st.Code == "" || st.Name == "" || statuses[st.Code] {
+			return fmt.Errorf("статус единицы %q пустой или повторяется", st.Code)
+		}
+		statuses[st.Code] = true
+		if st.IsAvailable {
+			available++
+		}
+	}
+	if len(s.UnitStatuses) > 0 && available == 0 {
+		return errors.New("ни один статус единицы не отмечен доступным: закреплять было бы нечего")
+	}
 	return nil
+}
+
+// UnitStatus находит статус единицы.
+func (s *Set) UnitStatus(code string) (UnitStatus, bool) {
+	for _, st := range s.UnitStatuses {
+		if st.Code == code {
+			return st, true
+		}
+	}
+	return UnitStatus{}, false
+}
+
+// IsUnitAvailable сообщает, можно ли закрепить единицу в этом статусе. Неизвестный статус — недоступна.
+func (s *Set) IsUnitAvailable(code string) bool {
+	st, ok := s.UnitStatus(code)
+	return ok && st.IsAvailable
 }
 
 // Clinic находит клинику по идентификатору.
@@ -264,6 +306,11 @@ func (s *Set) Seed(ctx context.Context, tx pgx.Tx) error {
 		b.Queue(`INSERT INTO ref_urgency (urgency_code, urgency_name, confirm_window_minutes) VALUES ($1,$2,$3)
 			ON CONFLICT (urgency_code) DO UPDATE SET urgency_name = EXCLUDED.urgency_name, confirm_window_minutes = EXCLUDED.confirm_window_minutes`,
 			u.Code, u.Name, u.ConfirmWindowMinutes)
+	}
+	for _, st := range s.UnitStatuses {
+		b.Queue(`INSERT INTO ref_unit_status (unit_status_code, unit_status_name, is_available) VALUES ($1,$2,$3)
+			ON CONFLICT (unit_status_code) DO UPDATE SET unit_status_name = EXCLUDED.unit_status_name, is_available = EXCLUDED.is_available`,
+			st.Code, st.Name, st.IsAvailable)
 	}
 	b.Queue(`INSERT INTO refdata_version (version, applied_at) VALUES ($1, now())`, s.Version)
 	res := tx.SendBatch(ctx, b)

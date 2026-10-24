@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/logistics/TransportDispatched.v1.json",
+  "title": "TransportDispatched",
+  "type": "object",
+  "description": "Ответ logistics.replies: груз принят уполномоченным работником службы перевозки и отправлен (ПП РФ № 641, п. 73; ADR-0022). courier_ref — служебный идентификатор, без ФИО.",
+  "additionalProperties": false,
+  "required": [
+    "obligation_id",
+    "dispatched_at",
+    "courier_ref"
+  ],
+  "properties": {
+    "obligation_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "shipment_ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "dispatched_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "courier_ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9._:-]{1,64}$",
+      "description": "Служебный идентификатор уполномоченного работника службы перевозки (учётная запись или табельный код из C03), без ФИО и пробелов (ПП РФ № 641, п. 73; ADR-0022)"
+    }
+  }
+}

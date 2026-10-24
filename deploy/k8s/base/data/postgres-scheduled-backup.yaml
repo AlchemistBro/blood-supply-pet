@@ -1,0 +1,16 @@
+# Суточная базовая копия (NFR012). Вместе с непрерывным архивом WAL даёт PITR на любой момент
+# в окне retentionPolicy (7 суток). immediate: первая копия сразу после создания кластера,
+# иначе до первой ночи восстанавливаться не из чего.
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: pg-daily
+  namespace: bs-data
+spec:
+  cluster:
+    name: pg
+  # Формат cron с секундами: каждый день в 01:00 UTC.
+  schedule: "0 0 1 * * *"
+  method: barmanObjectStore
+  immediate: true
+  backupOwnerReference: self

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/demand/StatisticsFileRejected.v1.json",
+  "title": "StatisticsFileRejected",
+  "type": "object",
+  "description": "Событие demand.events: файл статистики отклонён целиком. Только число ошибок, без содержимого строк.",
+  "additionalProperties": false,
+  "required": [
+    "statistics_file_id",
+    "file_kind",
+    "reason",
+    "rejected_rows",
+    "uploaded_by"
+  ],
+  "properties": {
+    "statistics_file_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "file_kind": {
+      "type": "string",
+      "enum": [
+        "DISTRICT_PROFILE",
+        "CONSUMPTION_HISTORY",
+        "CLINIC_SHARE"
+      ]
+    },
+    "reason": {
+      "type": "string",
+      "enum": [
+        "DUPLICATE_FILE",
+        "INVALID_FORMAT",
+        "INVALID_ROWS"
+      ]
+    },
+    "rejected_rows": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Число строк с ошибками (для INVALID_ROWS); содержимое строк не передаётся"
+    },
+    "uploaded_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    }
+  }
+}

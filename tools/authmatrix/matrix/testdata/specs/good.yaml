@@ -1,0 +1,24 @@
+openapi: 3.0.3
+info: { title: good, version: 0.1.0 }
+paths:
+  /records:
+    get:
+      operationId: listRecords
+      x-bs-operation: READ_AUDIT
+      responses: { "200": { description: ok } }
+    post:
+      operationId: appendRecord
+      x-bs-operation: WRITE_AUDIT
+      responses: { "201": { description: ok } }
+  /records/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getRecord
+      x-bs-operation: READ_AUDIT
+      responses: { "200": { description: ok } }
+  /healthz:
+    get:
+      operationId: healthz
+      x-bs-public: true
+      responses: { "200": { description: ok } }

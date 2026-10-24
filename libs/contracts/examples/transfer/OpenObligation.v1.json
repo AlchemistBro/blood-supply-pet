@@ -1,0 +1,20 @@
+{
+  "choice_id": "0192f3a1-7b2c-7d4e-8f90-100000000001",
+  "request_id": "0192f3a1-7b2c-7d4e-8f90-200000000001",
+  "origin": "DOCTOR_CHOICE",
+  "source_clinic_id": 1,
+  "target_clinic_id": 2,
+  "component_kind": "RBC",
+  "requested_qty": 3,
+  "urgency": "EMERGENCY",
+  "confirm_window_seconds": 900,
+  "fallback_sources": [5, 7],
+  "spec": {
+    "blood_group": "A+",
+    "rh_positive": true,
+    "phenotype": "CcDEe",
+    "min_expires_at": "2026-10-25T00:00:00Z",
+    "rule_version": "demo-o15-v1"
+  },
+  "patient_case_sealed": "v1.k1-2026-10.Q2lwaGVydGV4dC1kZW1vLW5vdC1yZWFs"
+}

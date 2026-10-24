@@ -29,6 +29,76 @@ func TestPolicyCoversEveryOperation(t *testing.T) {
 	}
 }
 
+// Операции обязательства этапа 1: открыть может только служебный токен (команда от matching/planning
+// приходит через Kafka, HTTP — для внутренних вызовов), отменить — служба или дежурный, смотреть —
+// участники передачи и служба. Роль без права получает отказ.
+func TestObligationOperations(t *testing.T) {
+	cases := []struct {
+		op      auth.Operation
+		allowed []auth.Role
+	}{
+		{auth.OpOpenObligation, []auth.Role{auth.RoleService}},
+		{auth.OpCancelObligation, []auth.Role{auth.RoleService, auth.RoleDuty}},
+		// IT_SERVICE — мониторинг заданий без ПДн (номера случая в обязательстве нет).
+		{auth.OpViewObligation, []auth.Role{auth.RoleOperator, auth.RolePhysician, auth.RoleDuty, auth.RoleService, auth.RoleITService}},
+		// этап 4: файлы, версии оценки и доли видят аналитик и дежурный (FR016–FR020)
+		{auth.OpViewDemand, []auth.Role{auth.RoleAnalyst, auth.RoleDuty}},
+		// этап 5: построить план вручную могут аналитик и дежурный; по прогнозу ЧС план строится сам (FR021–FR028)
+		{auth.OpBuildPlan, []auth.Role{auth.RoleAnalyst, auth.RoleDuty}},
+		// этап 6: заявки и варианты видят врач и дежурный; номер случая — отдельная операция READ_PATIENT_CASE
+		{auth.OpViewRequests, []auth.Role{auth.RolePhysician, auth.RoleDuty}},
+		// этап 7: состояние интеграций — ИТ-служба и дежурный; прослеживаемость выданных единиц за 12 месяцев
+		// (ПП РФ № 641, п. 54) — оператор клиники и дежурный; эскалации — только дежурный
+		{auth.OpViewIntegrations, []auth.Role{auth.RoleITService, auth.RoleDuty}},
+		{auth.OpTraceUnits, []auth.Role{auth.RoleOperator, auth.RoleDuty}},
+		{auth.OpHandleEscalation, []auth.Role{auth.RoleDuty}},
+	}
+	all := []auth.Role{auth.RolePhysician, auth.RoleOperator, auth.RoleAnalyst, auth.RoleDuty, auth.RoleITService, auth.RoleService}
+	for _, c := range cases {
+		want := map[auth.Role]bool{}
+		for _, r := range c.allowed {
+			want[r] = true
+		}
+		for _, r := range all {
+			if got := auth.Allowed(c.op, []auth.Role{r}); got != want[r] {
+				t.Errorf("%s для %s: разрешено=%v, ожидали %v", c.op, r, got, want[r])
+			}
+		}
+	}
+	known := map[auth.Operation]bool{}
+	for _, op := range auth.Operations() {
+		known[op] = true
+	}
+	for _, c := range cases {
+		if !known[c.op] {
+			t.Errorf("операция %s не внесена в матрицу", c.op)
+		}
+	}
+}
+
+// Операции, существовавшие до этапа 1, не меняют состав ролей.
+func TestExistingOperationsUnchanged(t *testing.T) {
+	cases := map[auth.Operation][]auth.Role{
+		auth.OpConfirmTransfer:    {auth.RoleOperator, auth.RoleDuty},
+		auth.OpReplaceUnit:        {auth.RoleOperator, auth.RoleDuty},
+		auth.OpRejectTransfer:     {auth.RoleOperator, auth.RoleDuty},
+		auth.OpInternalUnitStatus: {auth.RoleService},
+		auth.OpWriteAudit:         {auth.RoleService},
+	}
+	for op, want := range cases {
+		got := auth.RolesFor(op)
+		if len(got) != len(want) {
+			t.Errorf("%s: роли %v, ожидали %v", op, got, want)
+			continue
+		}
+		for i := range want {
+			if got[i] != want[i] {
+				t.Errorf("%s: роли %v, ожидали %v", op, got, want)
+			}
+		}
+	}
+}
+
 func TestVerifyAndRequire(t *testing.T) {
 	idp := authtest.New(t)
 	verifier := idp.Verifier(t, "blood-supply-api")

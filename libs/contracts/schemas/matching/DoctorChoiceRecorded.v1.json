@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/matching/DoctorChoiceRecorded.v1.json",
+  "title": "DoctorChoiceRecorded",
+  "type": "object",
+  "description": "Событие matching.events: врач выбрал вариант (FR043).",
+  "additionalProperties": false,
+  "required": [
+    "clinical_request_id",
+    "variant_offer_id",
+    "selected_by",
+    "is_local"
+  ],
+  "properties": {
+    "clinical_request_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "variant_offer_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "selected_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "is_local": {
+      "type": "boolean"
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{{define "content"}}
+{{$t := .Content.Task}}
+<p><a href="/tasks?clinic={{$t.Source}}">← Задания клиники-источника</a></p>
+{{with .Content.Message}}<div class="alert" role="status">{{.}}</div>{{end}}
+<dl><dt>Номер</dt><dd>{{$t.ID}}</dd><dt>Источник → получатель</dt><dd>Клиника № {{$t.Source}} → клиника № {{$t.Target}}</dd><dt>Компонент и группа крови</dt><dd>{{$t.Kind}} {{$t.Group}}</dd><dt>Количество</dt><dd>{{$t.Confirmed}} из {{$t.Requested}}</dd><dt>Срочность</dt><dd>{{$t.Urgency}}</dd><dt>Срок подтверждения</dt><dd>{{datetime $t.Deadline}}</dd><dt>Требования к фенотипу</dt><dd>{{if $t.Spec.PhenotypeRequired}}Есть{{else}}Нет{{end}}</dd></dl>
+<div hx-ext="sse" sse-connect="/events/obligations?clinic={{$t.Source}}"><span sse-swap="obligation-{{$t.ID}}" hx-swap="innerHTML" class="badge badge-{{$t.StatusBadge.Tone}}">{{$t.StatusBadge.Label}}</span></div>
+{{if .Content.CanAct}}
+{{if $t.Pending}}
+<h2>Выбор единиц компонента крови</h2><p>Порядок FEFO: первыми показаны единицы с ближайшим сроком годности. Демо-правила; клиническое решение принимает врач.</p>
+<form method="post" action="/tasks/{{$t.ID}}/confirm">
+<input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><input type="hidden" name="idempotency_key" value="{{.Content.Key}}">
+<table><thead><tr><th>Выбор</th><th>Единица</th><th>Группа</th><th>Объём, мл</th><th>Годна до</th><th>Место хранения</th></tr></thead><tbody>{{range .Content.Candidates}}<tr><td><input type="checkbox" name="unit_ids" value="{{.ID}}" aria-label="Выбрать единицу {{.ID}}"></td><td>{{.ID}}</td><td>{{.Group}}</td><td>{{.Volume}}</td><td>{{datetime .Expires}}</td><td>{{.Location}}</td></tr>{{else}}<tr><td colspan="6">Доступных единиц не найдено.</td></tr>{{end}}</tbody></table>
+<label><input type="checkbox" name="accept_partial" value="true"> Подтвердить частично, если часть выбранных единиц уже недоступна</label>
+<button class="button button--primary" type="submit">Подтвердить передачу</button></form>
+<h2>Отказать в передаче</h2><form method="post" action="/tasks/{{$t.ID}}/reject"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><label>Причина <select name="reason" required><option value="SOURCE_REFUSED">Клиника-источник не может выполнить передачу</option></select></label><button class="button button--danger" type="submit">Отказать в передаче</button></form>
+{{end}}
+{{if $t.Replaceable}}
+<h2>Заменить единицу</h2><form method="post" action="/tasks/{{$t.ID}}/replace"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+<label>Закреплённая единица <select name="old_unit_id" required>{{range $t.Units}}<option value="{{.}}">{{.}}</option>{{end}}</select></label>
+<label>Новая единица <select name="new_unit_id" required>{{range .Content.Candidates}}<option value="{{.ID}}">{{.ID}} — {{.Group}}, до {{datetime .Expires}}</option>{{end}}</select></label>
+<button class="button" type="submit">Заменить единицу</button></form>
+{{end}}{{end}}
+<h2>История задания</h2><table><thead><tr><th>Время</th><th>Действие</th><th>Результат</th></tr></thead><tbody>{{range .Content.History}}<tr><td>{{datetime .At}}</td><td>{{.Label}}</td><td>{{.Result}}</td></tr>{{else}}<tr><td colspan="3">Записей пока нет.</td></tr>{{end}}</tbody></table>
+{{end}}
