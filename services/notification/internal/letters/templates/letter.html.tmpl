@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+</head>
+<body style="margin:0;padding:16px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.4;color:#1a1a1a;background:#ffffff">
+<p style="margin:0 0 4px 0;font-size:12px;color:#5a5a5a">АС распределения компонентов донорской крови · демо</p>
+<h1 style="margin:0 0 12px 0;font-size:18px">{{.Title}}</h1>
+<p style="margin:0 0 12px 0">{{.Lead}}</p>
+<table style="border-collapse:collapse;margin:0 0 12px 0">
+{{- range .Rows}}
+<tr><th style="text-align:left;vertical-align:top;padding:4px 16px 4px 0;font-weight:normal;color:#5a5a5a">{{.Label}}</th><td style="padding:4px 0">{{.Value}}</td></tr>
+{{- end}}
+</table>
+<p style="margin:0 0 12px 0">{{.Action}}</p>
+<p style="margin:0 0 16px 0"><a href="{{.Link}}" style="color:#0b5cad">Открыть в системе</a></p>
+<p style="margin:0;font-size:12px;color:#5a5a5a">Письмо отправлено автоматически, отвечать на него не нужно. Демонстрационный стенд: данные и нормативы синтетические.</p>
+</body>
+</html>

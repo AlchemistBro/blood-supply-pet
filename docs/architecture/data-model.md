@@ -249,7 +249,9 @@ erDiagram
 
 ## notification
 
-`notification(notification_id PK, kind, recipient_user, recipient_email, subject, body_ref, obligation_id, status QUEUED/SENT/FAILED, attempts, sent_at)`, `inbox`.
+`notification(notification_id PK, kind, obligation_id, request_id, source_message_id, recipient_role, recipient_clinic_id, recipient_email, subject, source_clinic_id, target_clinic_id, component_kind_code, quantity, urgency_code, deadline, reason, status PENDING/SENT/FAILED, attempts, next_attempt_at, last_error, created_at, sent_at)`,
+индекс `(next_attempt_at) WHERE status = 'PENDING'`; проекция `obligation_projection` из `ObligationOpened` (данные задания для писем об эскалации и нарушении); `outbox`, `inbox`, `audit_local`.
+`recipient_email` — служебный ящик подразделения из статического справочника, `recipient_user` и `body_ref` не заводятся (ADR-0021).
 Письмо не содержит спецификации замены и номера случая: только ссылка на задание, вид, объём, срочность (FR044).
 
 ## audit

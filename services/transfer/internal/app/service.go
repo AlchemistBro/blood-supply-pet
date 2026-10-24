@@ -176,6 +176,7 @@ func (s *Service) openTx(ctx context.Context, tx pgx.Tx, n domain.NewObligation,
 		return existing, false, err
 	}
 	if err := s.event(ctx, tx, o.ID, ObligationOpened{
+		Urgency:      o.UrgencyCode,
 		ObligationID: o.ID, ObligationVersion: refsAt(o, o.Version).version, RequestID: o.RequestID, Origin: string(o.Origin), SourceClinicID: o.SourceClinicID,
 		TargetClinicID: o.TargetClinicID, ComponentKind: o.ComponentKind, RequestedQty: o.RequestedQty, Deadline: o.Deadline,
 	}); err != nil {

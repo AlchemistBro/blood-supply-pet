@@ -134,6 +134,8 @@ func (CancelObligation) SchemaVersion() int { return 1 }
 
 // ObligationOpened — обязательство создано в статусе PENDING.
 type ObligationOpened struct {
+	// Urgency — необязательна для совместимости с ранними событиями; новые события передают срочность явно.
+	Urgency      string    `json:"urgency,omitempty"`
 	ObligationID uuid.UUID `json:"obligation_id"`
 	// ObligationVersion — версия O07 после перехода: проекции применяют событие, только если версия выше сохранённой.
 	ObligationVersion *int64    `json:"obligation_version,omitempty"`
