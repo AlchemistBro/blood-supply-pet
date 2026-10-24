@@ -21,21 +21,23 @@ import (
 
 // Узкие DTO экрана намеренно не содержат фенотип и номер случая (ADR-0011, ADR-0020).
 type taskView struct {
-	PatientStatus string      `json:"patient_allocation_status"`
-	RequestID     uuid.UUID   `json:"request_id"`
-	Origin        string      `json:"origin"`
-	ID            uuid.UUID   `json:"obligation_id"`
-	Source        int64       `json:"source_clinic_id"`
-	Target        int64       `json:"target_clinic_id"`
-	Kind          string      `json:"component_kind"`
-	Group         string      `json:"blood_group"`
-	Requested     int         `json:"requested_qty"`
-	Confirmed     int         `json:"confirmed_qty"`
-	Status        string      `json:"status"`
-	Urgency       string      `json:"urgency"`
-	Deadline      time.Time   `json:"deadline"`
-	Units         []uuid.UUID `json:"units"`
-	Spec          struct {
+	ClinicalUseBlocked bool        `json:"clinical_use_blocked"`
+	Violations         []string    `json:"transport_violations"`
+	PatientStatus      string      `json:"patient_allocation_status"`
+	RequestID          uuid.UUID   `json:"request_id"`
+	Origin             string      `json:"origin"`
+	ID                 uuid.UUID   `json:"obligation_id"`
+	Source             int64       `json:"source_clinic_id"`
+	Target             int64       `json:"target_clinic_id"`
+	Kind               string      `json:"component_kind"`
+	Group              string      `json:"blood_group"`
+	Requested          int         `json:"requested_qty"`
+	Confirmed          int         `json:"confirmed_qty"`
+	Status             string      `json:"status"`
+	Urgency            string      `json:"urgency"`
+	Deadline           time.Time   `json:"deadline"`
+	Units              []uuid.UUID `json:"units"`
+	Spec               struct {
 		PhenotypeRequired bool `json:"phenotype_required"`
 	} `json:"spec"`
 }
@@ -73,17 +75,19 @@ type candidateView struct {
 	Available bool      `json:"available"`
 }
 type taskScreen struct {
-	CanReadCase bool
-	History     []historyView
-	Items       []taskView
-	Task        taskView
-	Candidates  []candidateView
-	Key         string
-	Clinic      int64
-	Status      string
-	Statuses    []ui.ObligationStatus
-	Message     string
-	CanAct      bool
+	Transport                          *transportView
+	CanDispatch, CanReceive, CanManual bool
+	CanReadCase                        bool
+	History                            []historyView
+	Items                              []taskView
+	Task                               taskView
+	Candidates                         []candidateView
+	Key                                string
+	Clinic                             int64
+	Status                             string
+	Statuses                           []ui.ObligationStatus
+	Message                            string
+	CanAct                             bool
 }
 
 type historyView struct {
@@ -130,6 +134,9 @@ func (s *Server) screenPage(r *http.Request, title string) ui.Page {
 	if s.matching != nil && auth.Allowed(auth.OpViewRules, p.Roles) {
 		page.Nav = append(page.Nav, ui.NavItem{Label: "Правила подбора", URL: "/rules", Active: strings.HasPrefix(r.URL.Path, "/rules")})
 	}
+	if s.transfer != nil && auth.Allowed(auth.OpHandleEscalation, p.Roles) {
+		page.Nav = append(page.Nav, ui.NavItem{Label: "Эскалации", URL: "/duty/escalations", Active: strings.HasPrefix(r.URL.Path, "/duty/escalations")}, ui.NavItem{Label: "Все задания", URL: "/duty/tasks", Active: strings.HasPrefix(r.URL.Path, "/duty/tasks")})
+	}
 	if s.inventory != nil && auth.Allowed(auth.OpViewStock, p.Roles) {
 		page.Nav = append(page.Nav, ui.NavItem{Label: "Запас клиники", URL: "/stock", Active: strings.HasPrefix(r.URL.Path, "/stock")})
 		var sync struct {
@@ -138,6 +145,9 @@ func (s *Server) screenPage(r *http.Request, title string) ui.Page {
 		if err := s.inventory.GetJSON(r.Context(), "/sync/last", &sync); err == nil && sync.Watermark != nil {
 			page.Header.Freshness = ui.NewFreshness(*sync.Watermark, s.clock.Now(), 5*time.Minute)
 		}
+	}
+	if s.auditReader != nil && auth.Allowed(auth.OpReadAudit, p.Roles) {
+		page.Nav = append(page.Nav, ui.NavItem{Label: "Журнал аудита", URL: "/audit", Active: strings.HasPrefix(r.URL.Path, "/audit")})
 	}
 	return page
 }
@@ -232,6 +242,19 @@ func (s *Server) taskCard(w http.ResponseWriter, r *http.Request) {
 func (s *Server) showTask(w http.ResponseWriter, r *http.Request, status int, task taskView, message string) {
 	p, _ := auth.FromContext(r.Context())
 	data := taskScreen{Task: task, Key: uuid.NewString(), Message: message, CanAct: auth.Allowed(auth.OpConfirmTransfer, p.Roles) && auth.SameClinic(p, task.Source), CanReadCase: s.matching != nil && auth.Allowed(auth.OpReadPatientCase, p.Roles) && task.Origin == "DOCTOR_CHOICE" && task.Replaceable()}
+	data.CanDispatch = task.Status == "TRANSPORT_REQUESTED" && auth.Allowed(auth.OpDispatchTransfer, p.Roles) && auth.SameClinic(p, task.Source)
+	data.CanReceive = task.Status == "DISPATCHED" && auth.Allowed(auth.OpReceiveTransfer, p.Roles) && auth.SameClinic(p, task.Target)
+	data.CanManual = task.Status == "CONFIRMED" && auth.Allowed(auth.OpHandleEscalation, p.Roles)
+	var transport transportView
+	if err := s.transfer.GetJSON(r.Context(), "/obligations/"+task.ID.String()+"/transport", &transport); err == nil {
+		data.Transport = &transport
+	} else {
+		var statusErr *svcclient.StatusError
+		if !errors.As(err, &statusErr) || statusErr.Code != 404 {
+			s.serviceFailure(w, r, err)
+			return
+		}
+	}
 	var history struct {
 		Items []historyView `json:"items"`
 	}

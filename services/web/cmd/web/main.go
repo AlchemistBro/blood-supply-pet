@@ -108,10 +108,11 @@ func setup(ctx context.Context, rt *runtime.Runtime) ([]runtime.Worker, error) {
 		SessionTTL: cfg.SessionTTL, CookieSecure: cfg.CookieSecure, HSTSMaxAge: cfg.HSTSMaxAge,
 		DemoAccess: cfg.DemoAccess, Version: runtime.Version,
 	}, server.Deps{OIDC: client, Codec: codec, Audit: recorder, Clock: rt.Clock, Log: rt.Log,
-		Matching: svcclient.New("matching", cfg.MatchingURL),
-		Planning: svcclient.New("planning", cfg.PlanningURL),
-		Demand:   svcclient.New("demand", cfg.DemandURL),
-		Transfer: svcclient.New("transfer", cfg.TransferURL), Inventory: svcclient.New("inventory", cfg.InventoryURL)})
+		AuditReader: auditReader(cfg.AuditURL),
+		Matching:    svcclient.New("matching", cfg.MatchingURL),
+		Planning:    svcclient.New("planning", cfg.PlanningURL),
+		Demand:      svcclient.New("demand", cfg.DemandURL),
+		Transfer:    svcclient.New("transfer", cfg.TransferURL), Inventory: svcclient.New("inventory", cfg.InventoryURL)})
 	if err != nil {
 		return nil, err
 	}
@@ -125,6 +126,13 @@ func setup(ctx context.Context, rt *runtime.Runtime) ([]runtime.Worker, error) {
 		return nil, err
 	}
 	return workers, nil
+}
+
+func auditReader(address string) *svcclient.Client {
+	if address == "" {
+		return nil
+	}
+	return svcclient.New("audit", address)
 }
 
 // liveEvents подключает живые статусы: consumer transfer.events → хаб → SSE. Каждый экземпляр web читает

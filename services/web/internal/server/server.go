@@ -57,36 +57,38 @@ type Config struct {
 
 // Deps — зависимости сервера.
 type Deps struct {
-	Matching  *svcclient.Client
-	Planning  *svcclient.Client
-	Demand    *svcclient.Client
-	Transfer  *svcclient.Client
-	Inventory *svcclient.Client
-	OIDC      OIDC
-	Codec     *session.Codec
-	Audit     auditclient.Recorder
-	Clock     clock.Clock
-	Log       *slog.Logger
+	AuditReader *svcclient.Client
+	Matching    *svcclient.Client
+	Planning    *svcclient.Client
+	Demand      *svcclient.Client
+	Transfer    *svcclient.Client
+	Inventory   *svcclient.Client
+	OIDC        OIDC
+	Codec       *session.Codec
+	Audit       auditclient.Recorder
+	Clock       clock.Clock
+	Log         *slog.Logger
 }
 
 // Server — обработчики и middleware web.
 type Server struct {
-	matching  *svcclient.Client
-	planning  *svcclient.Client
-	demand    *svcclient.Client
-	transfer  *svcclient.Client
-	inventory *svcclient.Client
-	ui        *ui.Renderer
-	cfg       Config
-	oidc      OIDC
-	sessions  *session.Store
-	login     *session.Store
-	audit     auditclient.Recorder
-	guard     *authz.Guard
-	clock     clock.Clock
-	log       *slog.Logger
-	pages     *pages
-	csp       string
+	auditReader *svcclient.Client
+	matching    *svcclient.Client
+	planning    *svcclient.Client
+	demand      *svcclient.Client
+	transfer    *svcclient.Client
+	inventory   *svcclient.Client
+	ui          *ui.Renderer
+	cfg         Config
+	oidc        OIDC
+	sessions    *session.Store
+	login       *session.Store
+	audit       auditclient.Recorder
+	guard       *authz.Guard
+	clock       clock.Clock
+	log         *slog.Logger
+	pages       *pages
+	csp         string
 	// mux — маршруты web: белый список адресов возврата после входа (safeNext).
 	mux *http.ServeMux
 }
@@ -112,10 +114,11 @@ func New(cfg Config, d Deps) (*Server, error) {
 		return nil, err
 	}
 	s := &Server{
-		matching: d.Matching,
-		planning: d.Planning,
-		demand:   d.Demand,
-		transfer: d.Transfer, inventory: d.Inventory, ui: renderer,
+		auditReader: d.AuditReader,
+		matching:    d.Matching,
+		planning:    d.Planning,
+		demand:      d.Demand,
+		transfer:    d.Transfer, inventory: d.Inventory, ui: renderer,
 		cfg: cfg, oidc: d.OIDC, audit: d.Audit, clock: d.Clock, log: d.Log, pages: p,
 		sessions: session.NewStore(d.Codec, SessionCookie, cfg.CookieSecure),
 		login:    session.NewStore(d.Codec, LoginCookie, cfg.CookieSecure),
@@ -139,6 +142,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.Handle("GET /static/", http.StripPrefix("/static/", s.ui.StaticHandler()))
 	if s.transfer != nil && s.inventory != nil {
 		s.registerOperator(mux)
+		s.registerDuty(mux)
 	}
 	if s.inventory != nil {
 		s.registerStock(mux)
@@ -151,6 +155,9 @@ func (s *Server) Register(mux *http.ServeMux) {
 	}
 	if s.matching != nil {
 		s.registerPhysician(mux)
+	}
+	if s.auditReader != nil {
+		s.registerAudit(mux)
 	}
 }
 
