@@ -7,7 +7,7 @@
 <div hx-get="/tasks?clinic={{.Content.Clinic}}&amp;status={{.Content.Status}}" hx-trigger="every 15s" hx-select="#task-list" hx-target="#task-list" hx-swap="outerHTML">
 <div id="task-list" hx-ext="sse" sse-connect="/events/obligations?clinic={{.Content.Clinic}}">
 <table class="data-table"><caption>Обязательства на передачу клиники-источника</caption><thead><tr><th>Задание</th><th>Получатель</th><th>Компонент</th><th>Количество</th><th>Срок подтверждения</th><th>Статус</th></tr></thead><tbody>
-{{range .Content.Items}}<tr><td><a href="/tasks/{{.ID}}">{{.ID}}</a></td><td>Клиника № {{.Target}}</td><td>{{.Kind}}</td><td>{{.Confirmed}} / {{.Requested}}</td><td><time datetime="{{iso .Deadline}}">{{datetime .Deadline}}</time></td><td><span sse-swap="obligation-{{.ID}}" hx-swap="innerHTML" class="badge badge--{{.StatusBadge.Tone}}">{{.StatusBadge.Label}}</span></td></tr>
+{{range .Content.Items}}<tr><td><a href="/tasks/{{.ID}}">{{.ID}}</a></td><td>Клиника № {{.Target}}</td><td>{{kindLabel .Kind}}</td><td>{{.Confirmed}} / {{.Requested}}</td><td><time datetime="{{iso .Deadline}}">{{datetime .Deadline}}</time></td><td><span sse-swap="obligation-{{.ID}}" hx-swap="innerHTML" class="badge badge--{{.StatusBadge.Tone}}">{{.StatusBadge.Label}}</span></td></tr>
 {{else}}<tr><td colspan="6">Заданий по выбранному фильтру нет. Укажите клинику-источник и обновите список.</td></tr>{{end}}
 </tbody></table></div></div>
 {{end}}

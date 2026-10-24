@@ -177,7 +177,7 @@ func (r *Renderer) AssetVersion() string { return r.version }
 // funcs — функции шаблонов. Ни одна не возвращает доверенные типы html/template: всё, что приходит из данных,
 // экранирует html/template.
 func (r *Renderer) funcs() template.FuncMap {
-	return template.FuncMap{
+	m := template.FuncMap{
 		"asset":        r.Asset,
 		"datetime":     FormatDateTime,
 		"date":         FormatDate,
@@ -193,6 +193,10 @@ func (r *Renderer) funcs() template.FuncMap {
 		"inDialog":     func(c Confirm) confirmView { return confirmView{Confirm: c, InDialog: true} },
 		"onPage":       func(c Confirm) confirmView { return confirmView{Confirm: c} },
 	}
+	for k, v := range labelFuncs() {
+		m[k] = v
+	}
+	return m
 }
 
 // statusBadgeAny принимает и ObligationStatus, и строку из ответа сервиса: text/template не приводит типы сам.

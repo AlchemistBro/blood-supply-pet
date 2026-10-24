@@ -1393,3 +1393,17 @@ th[aria-sort] .sort-arrow {
     overflow: visible;
   }
 }
+
+.muted {
+  color: var(--bs-text-muted);
+}
+
+.content h2 + .data-table,
+.content h2 + dl {
+  margin-top: 0;
+}
+
+.content .data-table + .data-table,
+.content .data-table + h2 {
+  margin-top: 24px;
+}

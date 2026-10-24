@@ -1,5 +1,5 @@
 {{define "content"}}
 <p><a href="/demand">← Потребность территории</a></p>
-{{with .Content.File}}<dl><dt>Файл</dt><dd>{{.Name}}</dd><dt>Вид</dt><dd>{{.Kind}}</dd><dt>Результат</dt><dd>{{.Status}}</dd><dt>Принято строк</dt><dd>{{.Accepted}}</dd><dt>Отклонено строк</dt><dd>{{.Rejected}}</dd></dl>{{end}}
+{{with .Content.File}}<dl><dt>Файл</dt><dd>{{.Name}}</dd><dt>Вид</dt><dd>{{kindLabel .Kind}}</dd><dt>Результат</dt><dd>{{.Status}}</dd><dt>Принято строк</dt><dd>{{.Accepted}}</dd><dt>Отклонено строк</dt><dd>{{.Rejected}}</dd></dl>{{end}}
 <table class="data-table"><caption>Сохранённые ошибки проверки</caption><thead><tr><th>Строка</th><th>Причина</th></tr></thead><tbody>{{range .Content.Errors}}<tr><td>{{.Row}}</td><td>{{.Reason}}</td></tr>{{else}}<tr><td colspan="2">Ошибок нет.</td></tr>{{end}}</tbody></table>
 {{end}}

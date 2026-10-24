@@ -1,5 +1,5 @@
 {{define "content"}}
 <p><a href="/stock/units?clinic={{.Content.Unit.ClinicID}}">← Единицы клиники</a></p>
-<dl>{{with .Content.Unit}}<dt>Идентификатор</dt><dd>{{.ID}}</dd><dt>Вид и группа</dt><dd>{{.Kind}} {{.Group}}</dd><dt>Статус</dt><dd>{{.Status}}</dd><dt>Объём, мл</dt><dd>{{.Volume}}</dd><dt>Годна до</dt><dd>{{datetime .Expires}}</dd><dt>Место хранения</dt><dd>{{.Location}}</dd>{{end}}</dl>
+<dl>{{with .Content.Unit}}<dt>Идентификатор</dt><dd>{{.ID}}</dd><dt>Вид и группа</dt><dd>{{kindLabel .Kind}} {{.Group}}</dd><dt>Статус</dt><dd>{{.Status}}</dd><dt>Объём, мл</dt><dd>{{.Volume}}</dd><dt>Годна до</dt><dd>{{datetime .Expires}}</dd><dt>Место хранения</dt><dd>{{.Location}}</dd>{{end}}</dl>
 <h2>История статусов</h2><table class="data-table"><thead><tr><th>Получено</th><th>Статус</th><th>Версия источника</th></tr></thead><tbody>{{range .Content.History}}<tr><td>{{datetime .At}}</td><td>{{.Status}}</td><td>{{.Version}}</td></tr>{{else}}<tr><td colspan="3">История пока отсутствует.</td></tr>{{end}}</tbody></table>
 {{end}}
