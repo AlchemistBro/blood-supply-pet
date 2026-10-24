@@ -63,3 +63,41 @@ func TestKeycloakWebHasIdentityWithoutPersonalScopes(t *testing.T) {
 		})
 	}
 }
+
+// Автор заявки сравнивается по sub. Клиент blood-supply-cli (seed, скрипты) выдаёт токены тем же людям, что и web:
+// без basic в его токене нет sub, заявка записывается на логин, а в браузере тот же врач имеет sub-UUID и её не видит.
+func TestKeycloakCLIAndWebIssueSameUserIdentity(t *testing.T) {
+	root, err := repoRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range []string{"deploy/compose/keycloak/realm-blood-supply.json", "deploy/k8s/base/platform/keycloak/realm-blood-supply.json"} {
+		raw, err := os.ReadFile(filepath.Join(root, file))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var realm struct {
+			Clients []struct {
+				ID      string   `json:"clientId"`
+				Default []string `json:"defaultClientScopes"`
+			} `json:"clients"`
+		}
+		if err := json.Unmarshal(raw, &realm); err != nil {
+			t.Fatal(err)
+		}
+		for _, id := range []string{"web", "blood-supply-cli"} {
+			found := false
+			for _, client := range realm.Clients {
+				if client.ID == id {
+					found = true
+					if !slices.Contains(client.Default, "basic") {
+						t.Errorf("%s: у клиента %s нет basic, в токене не будет sub", file, id)
+					}
+				}
+			}
+			if !found {
+				t.Errorf("%s: нет клиента %s", file, id)
+			}
+		}
+	}
+}

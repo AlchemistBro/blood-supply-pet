@@ -153,6 +153,7 @@
       "directAccessGrantsEnabled": true,
       "fullScopeAllowed": true,
       "defaultClientScopes": [
+        "basic",
         "web-origins",
         "acr",
         "profile",

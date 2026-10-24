@@ -96,3 +96,12 @@ func TestOperatorConfirmRejectsForeignRoleAndMissingCSRF(t *testing.T) {
 		t.Fatalf("форма без CSRF принята: %d", rec.Code)
 	}
 }
+
+// Все действия, которые пишет transfer в историю задания, показываются по-русски, а не кодом.
+func TestHistoryLabelsCoverDispatchAndDelivery(t *testing.T) {
+	for action, want := range map[string]string{"DISPATCHED": "Отправлено", "DELIVERED": "Доставлено"} {
+		if got := (historyView{Action: action}).Label(); got != want {
+			t.Errorf("%s: получено %q, ожидалось %q", action, got, want)
+		}
+	}
+}

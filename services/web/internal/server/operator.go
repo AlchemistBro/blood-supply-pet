@@ -97,7 +97,7 @@ type historyView struct {
 }
 
 func (h historyView) Label() string {
-	if label, ok := map[string]string{"OPENED": "Задание открыто", "CONFIRMED": "Передача подтверждена", "REJECTED": "Источник отказал в передаче", "EXPIRED": "Срок подтверждения истёк", "CANCELLED": "Задание отменено", "BROKEN": "Обязательство нарушено", "TRANSPORT_REQUESTED": "Перевозка запрошена", "UNIT_REPLACED": "Единица заменена"}[h.Action]; ok {
+	if label, ok := map[string]string{"OPENED": "Задание открыто", "CONFIRMED": "Передача подтверждена", "REJECTED": "Источник отказал в передаче", "EXPIRED": "Срок подтверждения истёк", "CANCELLED": "Задание отменено", "BROKEN": "Обязательство нарушено", "TRANSPORT_REQUESTED": "Перевозка запрошена", "UNIT_REPLACED": "Единица заменена", "DISPATCHED": "Отправлено", "DELIVERED": "Доставлено"}[h.Action]; ok {
 		return label
 	}
 	return h.Action
