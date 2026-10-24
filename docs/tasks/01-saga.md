@@ -70,6 +70,18 @@
 копии под блокировкой → падает гонка 2. Убрать частичный уникальный индекс → падают гонка 4 и тест 50 подтверждений.
 Разрешить закрепление `QUARANTINE` → падает `quarantinedUnitIsNeverAllocated`.
 
+### Фитнес-тесты transfer (WP8): ожидаемый результат по коду, прогон не выполнялся
+
+Тесты в `services/transfer/internal/fitness` написаны, но ещё не запускались (запуски временно запрещены владельцем).
+Ниже — какой тест должен упасть при снятии каждого правила; подтвердить прогоном перед закрытием этапа.
+
+| Снятое правило | Где | Должен упасть | Почему |
+| --- | --- | --- | --- |
+| Перепроверка копии под блокировкой Остатка (`NotInStockAmong` + `RecheckUnderLock` в `confirmLocked`) | `internal/app/confirm.go` | `TestRace2…`, `TestRaceQuarantine…` (нечётные раунды) | событие приходит в окне между проверкой АИСТ-М и транзакцией; без перепроверки закрепляется недоступная единица, исход `Confirmed` вместо `UnitsUnavailable` |
+| Частичный уникальный индекс `allocation_one_confirmed_per_unit` | `migrations/00100_transfer.sql` | `TestRace4…`, `TestRace1b…`, `app`: `TestUnitConfirmedInOneObligationIsTakenForAnother`, `TestReplacementWithUnitHeldByAnotherObligationIsTaken` | единица закрепляется дважды: два `Confirmed`/`Replaced` вместо одного и `UnitsTaken`/`UnitTaken` |
+| Блокировка `source_stock` в обработчиках inventory (`lockUnitScope`) | `internal/app/inventory.go`, `stocklock.go` | `TestRace2…` (чётные раунды), `TestRaceQuarantine…` | выбытие пишет копию без ожидания транзакции подтверждения: подтверждение читает старую копию, обработчик не видит закрепления — закреплённая выбывшая единица, рассинхрон резерва. Падение зависит от чередования (15 раундов); если не воспроизводится — увеличить число раундов |
+| Блокировка `source_stock` в подтверждении (`LockStock` в `confirmLocked`) | `internal/app/confirm.go` | `TestRace1…` | параллельные подтверждения читают один и тот же свободный остаток: больше 40 `Confirmed`, ниже защищённого объёма (NFR013) |
+
 ## Решённые вопросы
 - Экстренная заявка при недоступности АИСТ-М: всегда отказ `SourceSystemUnavailable` и `EscalationRaised(SOURCE_SYSTEM_UNAVAILABLE)`;
   флаг `BS_ALLOW_COPY_CONFIRM_EMERGENCY` по умолчанию `false` ([ADR-0027](../adr/0027-stage1-deviations.md), 23.10.2026).

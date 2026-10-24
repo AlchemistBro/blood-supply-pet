@@ -4,7 +4,7 @@ version: "3"
 
 vars:
   COMPOSE: docker compose -f deploy/compose/compose.yaml --env-file deploy/compose/.env
-  SERVICES: audit inventory logistics-gateway
+  SERVICES: audit inventory logistics-gateway transfer
   VERSION:
     sh: git describe --tags --always --dirty 2>/dev/null || echo dev
 
