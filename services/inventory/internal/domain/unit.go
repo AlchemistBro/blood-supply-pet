@@ -139,6 +139,8 @@ const (
 
 func (k EventKind) String() string {
 	switch k {
+	case EventNone:
+		return "none"
 	case EventRegistered:
 		return "UnitRegistered"
 	case EventUpdated:
