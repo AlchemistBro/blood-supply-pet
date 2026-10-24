@@ -122,7 +122,7 @@ func outcomeOf(err error) string {
 
 func (c *Client) do(req *http.Request) (*http.Response, error) {
 	attempts := 1
-	if idempotent(req.Method) && c.cfg.Retries > 0 {
+	if idempotent(req.Method) && c.cfg.Retries > 0 && (req.Body == nil || req.GetBody != nil) {
 		attempts += c.cfg.Retries
 	}
 	var lastErr error
@@ -130,9 +130,18 @@ func (c *Client) do(req *http.Request) (*http.Response, error) {
 	bo.InitialInterval = 100 * time.Millisecond
 	bo.MaxInterval = time.Second
 	for i := 0; i < attempts; i++ {
+		attemptReq := req
+		if i > 0 && req.GetBody != nil {
+			body, err := req.GetBody()
+			if err != nil {
+				return nil, fmt.Errorf("повтор тела запроса: %w", err)
+			}
+			attemptReq = req.Clone(req.Context())
+			attemptReq.Body = body
+		}
 		resp, err := c.breaker.Execute(func() (*http.Response, error) {
 			//nolint:gosec // адрес запроса задаёт конфигурация сервиса, пользовательского ввода здесь нет
-			r, err := c.http.Do(req)
+			r, err := c.http.Do(attemptReq)
 			if err != nil {
 				return nil, err
 			}
@@ -144,6 +153,9 @@ func (c *Client) do(req *http.Request) (*http.Response, error) {
 		})
 		if err == nil {
 			return resp, nil
+		}
+		if attemptReq.Body != nil {
+			_ = attemptReq.Body.Close()
 		}
 		if errors.Is(err, gobreaker.ErrOpenState) || errors.Is(err, gobreaker.ErrTooManyRequests) {
 			return nil, fmt.Errorf("%s: %w", c.cfg.Name, ErrCircuitOpen)
