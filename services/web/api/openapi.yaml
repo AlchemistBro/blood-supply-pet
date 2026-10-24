@@ -10,6 +10,12 @@ info:
 servers:
   - url: http://localhost:8080
 paths:
+  /integrations:
+    get:
+      operationId: integrationsPage
+      x-bs-operation: READ_AUDIT
+      responses:
+        "200": { description: Состояние обмена, заказов и доставки писем }
   /demand/files/{id}:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string, format: uuid } }

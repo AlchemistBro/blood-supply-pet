@@ -156,12 +156,24 @@ func (h *Handler) GetUnitHistory(ctx context.Context, req gen.GetUnitHistoryRequ
 	return gen.GetUnitHistory200JSONResponse(out), nil
 }
 
+func (h *Handler) GetIntegrationSync(ctx context.Context, _ gen.GetIntegrationSyncRequestObject) (gen.GetIntegrationSyncResponseObject, error) {
+	o, err := h.svc.LastSync(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return gen.GetIntegrationSync200JSONResponse(syncOverview(o)), nil
+}
+
 // GetLastSync — GET /sync/last.
 func (h *Handler) GetLastSync(ctx context.Context, _ gen.GetLastSyncRequestObject) (gen.GetLastSyncResponseObject, error) {
 	o, err := h.svc.LastSync(ctx)
 	if err != nil {
 		return nil, err
 	}
+	return gen.GetLastSync200JSONResponse(syncOverview(o)), nil
+}
+
+func syncOverview(o app.SyncOverview) gen.SyncOverview {
 	out := gen.SyncOverview{AsOf: o.AsOf, Watermark: o.Watermark, IsStale: o.Stale}
 	if o.LastRun != nil {
 		r := syncRun(*o.LastRun)
@@ -171,7 +183,7 @@ func (h *Handler) GetLastSync(ctx context.Context, _ gen.GetLastSyncRequestObjec
 		r := syncRun(*o.LastSuccess)
 		out.LastSuccess = &r
 	}
-	return gen.GetLastSync200JSONResponse(out), nil
+	return out
 }
 
 // ListSyncRuns — GET /sync/runs.

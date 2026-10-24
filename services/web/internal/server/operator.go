@@ -149,6 +149,9 @@ func (s *Server) screenPage(r *http.Request, title string) ui.Page {
 	if s.auditReader != nil && auth.Allowed(auth.OpReadAudit, p.Roles) {
 		page.Nav = append(page.Nav, ui.NavItem{Label: "Журнал аудита", URL: "/audit", Active: strings.HasPrefix(r.URL.Path, "/audit")})
 	}
+	if s.inventory != nil && s.logistics != nil && s.notification != nil && auth.Allowed(auth.OpReadAudit, p.Roles) {
+		page.Nav = append(page.Nav, ui.NavItem{Label: "Состояние интеграций", URL: "/integrations", Active: r.URL.Path == "/integrations"})
+	}
 	return page
 }
 

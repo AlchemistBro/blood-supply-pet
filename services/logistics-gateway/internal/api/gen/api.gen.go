@@ -6,13 +6,32 @@
 package gen
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
+
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
+
+// TransportStatus defines model for TransportStatus.
+type TransportStatus struct {
+	DeliveryReported bool               `json:"delivery_reported"`
+	DispatchReported bool               `json:"dispatch_reported"`
+	LastError        string             `json:"last_error"`
+	ObligationId     openapi_types.UUID `json:"obligation_id"`
+	ShipmentRef      string             `json:"shipment_ref"`
+	Status           string             `json:"status"`
+	UpdatedAt        time.Time          `json:"updated_at"`
+}
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// TransportStatus Последние заказы и ошибки шлюза для дежурного и ИТ-службы
+	// (GET /internal/transport-status)
+	TransportStatus(w http.ResponseWriter, r *http.Request)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -23,6 +42,20 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// TransportStatus operation middleware
+func (siw *ServerInterfaceWrapper) TransportStatus(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TransportStatus(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 type UnescapedCookieParamError struct {
 	ParamName string
@@ -138,11 +171,43 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		}
 	}
 
+	wrapper := ServerInterfaceWrapper{
+		Handler:            si,
+		HandlerMiddlewares: options.Middlewares,
+		ErrorHandlerFunc:   options.ErrorHandlerFunc,
+	}
+
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/internal/transport-status", wrapper.TransportStatus)
+
 	return m
+}
+
+type TransportStatusRequestObject struct {
+}
+
+type TransportStatusResponseObject interface {
+	VisitTransportStatusResponse(w http.ResponseWriter) error
+}
+
+type TransportStatus200JSONResponse []TransportStatus
+
+func (response TransportStatus200JSONResponse) VisitTransportStatusResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
 }
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// TransportStatus Последние заказы и ошибки шлюза для дежурного и ИТ-службы
+	// (GET /internal/transport-status)
+	TransportStatus(ctx context.Context, request TransportStatusRequestObject) (TransportStatusResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -182,4 +247,28 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// TransportStatus operation middleware
+func (sh *strictHandler) TransportStatus(w http.ResponseWriter, r *http.Request) {
+	var request TransportStatusRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.TransportStatus(ctx, request.(TransportStatusRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "TransportStatus")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(TransportStatusResponseObject); ok {
+		if err := validResponse.VisitTransportStatusResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }

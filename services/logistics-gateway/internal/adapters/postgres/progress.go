@@ -25,6 +25,15 @@ type ProgressStore struct {
 
 var progressCourierPattern = regexp.MustCompile(logistics.CourierRefPattern)
 
+func (s ProgressStore) Status(ctx context.Context) ([]app.TransportStatus, error) {
+	rows, err := s.Pool.Query(ctx, `SELECT obligation_id,status,coalesce(shipment_ref,''),coalesce(last_error,''),updated_at,dispatch_reported,delivery_reported FROM transport_request ORDER BY updated_at DESC,obligation_id LIMIT 100`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return pgx.CollectRows(rows, pgx.RowToStructByPos[app.TransportStatus])
+}
+
 func (s ProgressStore) ProgressDue(ctx context.Context, now time.Time, limit int) ([]app.ProgressOrder, error) {
 	rows, err := s.Pool.Query(ctx, `UPDATE transport_request SET progress_checked_at=$1 WHERE obligation_id IN
  (SELECT obligation_id FROM transport_request WHERE status='ACCEPTED' AND NOT cancel_requested AND NOT delivery_reported AND (progress_checked_at IS NULL OR progress_checked_at <= $1 - interval '5 seconds') ORDER BY progress_checked_at NULLS FIRST,obligation_id LIMIT $2 FOR UPDATE SKIP LOCKED) RETURNING obligation_id,shipment_ref`, now, limit)

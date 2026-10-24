@@ -476,6 +476,9 @@ type ServerInterface interface {
 	// PublishProtectedVolume ДЕМО: опубликовать защищённый объём источника (только BS_ENV=local, иначе 404)
 	// (POST /dev/protected-volume)
 	PublishProtectedVolume(w http.ResponseWriter, r *http.Request)
+	// GetIntegrationSync Техническое состояние обмена без сведений о единицах
+	// (GET /internal/sync-status)
+	GetIntegrationSync(w http.ResponseWriter, r *http.Request)
 	// GetUnitStatuses Статус единиц для подтверждения обязательства (служебный токен, роль SERVICE)
 	// (GET /internal/units/status)
 	GetUnitStatuses(w http.ResponseWriter, r *http.Request, params GetUnitStatusesParams)
@@ -705,6 +708,20 @@ func (siw *ServerInterfaceWrapper) PublishProtectedVolume(w http.ResponseWriter,
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PublishProtectedVolume(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetIntegrationSync operation middleware
+func (siw *ServerInterfaceWrapper) GetIntegrationSync(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetIntegrationSync(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -992,6 +1009,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/internal/sync-status", wrapper.GetIntegrationSync)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/clinics/{id}/annual-consumption", wrapper.SetAnnualConsumption)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/clinics/{id}/norms", wrapper.GetClinicNorms)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/clinics/{id}/sync", wrapper.SyncClinic)
@@ -1394,6 +1412,59 @@ func (response PublishProtectedVolume404ApplicationProblemPlusJSONResponse) Visi
 	return err
 }
 
+type GetIntegrationSyncRequestObject struct {
+}
+
+type GetIntegrationSyncResponseObject interface {
+	VisitGetIntegrationSyncResponse(w http.ResponseWriter) error
+}
+
+type GetIntegrationSync200JSONResponse SyncOverview
+
+func (response GetIntegrationSync200JSONResponse) VisitGetIntegrationSyncResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetIntegrationSync401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response GetIntegrationSync401ApplicationProblemPlusJSONResponse) VisitGetIntegrationSyncResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetIntegrationSync403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetIntegrationSync403ApplicationProblemPlusJSONResponse) VisitGetIntegrationSyncResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetUnitStatusesRequestObject struct {
 	Params GetUnitStatusesParams
 }
@@ -1747,6 +1818,9 @@ type StrictServerInterface interface {
 	// PublishProtectedVolume ДЕМО: опубликовать защищённый объём источника (только BS_ENV=local, иначе 404)
 	// (POST /dev/protected-volume)
 	PublishProtectedVolume(ctx context.Context, request PublishProtectedVolumeRequestObject) (PublishProtectedVolumeResponseObject, error)
+	// GetIntegrationSync Техническое состояние обмена без сведений о единицах
+	// (GET /internal/sync-status)
+	GetIntegrationSync(ctx context.Context, request GetIntegrationSyncRequestObject) (GetIntegrationSyncResponseObject, error)
 	// GetUnitStatuses Статус единиц для подтверждения обязательства (служебный токен, роль SERVICE)
 	// (GET /internal/units/status)
 	GetUnitStatuses(ctx context.Context, request GetUnitStatusesRequestObject) (GetUnitStatusesResponseObject, error)
@@ -1965,6 +2039,30 @@ func (sh *strictHandler) PublishProtectedVolume(w http.ResponseWriter, r *http.R
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PublishProtectedVolumeResponseObject); ok {
 		if err := validResponse.VisitPublishProtectedVolumeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetIntegrationSync operation middleware
+func (sh *strictHandler) GetIntegrationSync(w http.ResponseWriter, r *http.Request) {
+	var request GetIntegrationSyncRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetIntegrationSync(ctx, request.(GetIntegrationSyncRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetIntegrationSync")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetIntegrationSyncResponseObject); ok {
+		if err := validResponse.VisitGetIntegrationSyncResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

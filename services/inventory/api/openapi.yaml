@@ -11,6 +11,15 @@ servers:
 # x-bs-operation у каждой операции — операция матрицы прав (libs/httpx/auth/policy.go), которую проверяет сервер.
 # Служебные маршруты (/healthz, /readyz, /metrics, /openapi.yaml) здесь не описаны: их отдаёт libs/runtime без токена.
 paths:
+  /internal/sync-status:
+    get:
+      operationId: getIntegrationSync
+      x-bs-operation: READ_AUDIT
+      summary: Техническое состояние обмена без сведений о единицах
+      responses:
+        "200": { description: Состояние обмена, content: { application/json: { schema: { $ref: "#/components/schemas/SyncOverview" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /clinics/{id}/annual-consumption:
     parameters:
       - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }

@@ -40,11 +40,18 @@
 | `POST /clinics/{id}/sync` | SYNC_ON_DEMAND | 2xx | 403 | 403 | 403 | 403 | 403 |
 | `GET /clinics/{id}/units` | VIEW_STOCK | 2xx | 2xx | 2xx | 2xx | 403 | 403 |
 | `POST /dev/protected-volume` | DEV_PANEL | 2xx | 2xx | 2xx | 2xx | 403 | 2xx |
+| `GET /internal/sync-status` | READ_AUDIT | 403 | 2xx | 2xx | 403 | 403 | 403 |
 | `GET /internal/units/status` | INTERNAL_UNIT_STATUS | 403 | 403 | 403 | 403 | 2xx | 403 |
 | `GET /sync/last` | VIEW_STOCK | 2xx | 2xx | 2xx | 2xx | 403 | 403 |
 | `GET /sync/runs` | VIEW_STOCK | 2xx | 2xx | 2xx | 2xx | 403 | 403 |
 | `GET /units/{id}` | VIEW_STOCK | 2xx | 2xx | 2xx | 2xx | 403 | 403 |
 | `GET /units/{id}/history` | VIEW_STOCK | 2xx | 2xx | 2xx | 2xx | 403 | 403 |
+
+## logistics-gateway
+
+| Метод и путь | Операция | CLINIC_OPERATOR | DUTY_OFFICER | IT_SERVICE | PHYSICIAN | SERVICE | TERRITORIAL_ANALYST |
+| --- | --- | :---: | :---: | :---: | :---: | :---: | :---: |
+| `GET /internal/transport-status` | READ_AUDIT | 403 | 2xx | 2xx | 403 | 403 | 403 |
 
 ## matching
 
@@ -122,6 +129,7 @@
 | `GET /events/obligations` | VIEW_OBLIGATION | 2xx | 2xx | 2xx | 2xx | 2xx | 403 |
 | `GET /forecasts/{id}` | VIEW_PLAN | 2xx | 2xx | 403 | 403 | 403 | 2xx |
 | `POST /forecasts/{id}/lines/{lineId}` | ADJUST_FORECAST | 2xx | 403 | 403 | 403 | 403 | 403 |
+| `GET /integrations` | READ_AUDIT | 403 | 2xx | 2xx | 403 | 403 | 403 |
 | `GET /plans` | VIEW_PLAN | 2xx | 2xx | 403 | 403 | 403 | 2xx |
 | `POST /plans` | BUILD_PLAN | 403 | 2xx | 403 | 403 | 403 | 2xx |
 | `GET /plans/{id}` | VIEW_PLAN | 2xx | 2xx | 403 | 403 | 403 | 2xx |

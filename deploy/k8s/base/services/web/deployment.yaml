@@ -36,6 +36,16 @@ spec:
             - configMapRef:
                 name: web-config
           env:
+            - name: BS_LOGISTICS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: service-endpoints
+                  key: BS_LOGISTICS_URL
+            - name: BS_NOTIFICATION_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: service-endpoints
+                  key: BS_NOTIFICATION_URL
             - name: BS_MATCHING_URL
               valueFrom:
                 configMapKeyRef:
