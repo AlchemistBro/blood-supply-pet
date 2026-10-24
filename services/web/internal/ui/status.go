@@ -113,3 +113,26 @@ func RoleLabel(r auth.Role) string {
 	}
 	return "Роль не определена"
 }
+
+// requestBadges — статусы клинической заявки O09 (request_status_dict) и отмены.
+var requestBadges = map[string]Badge{
+	"OFFERS_READY":           {Label: "Варианты готовы", Tone: ToneInfo},
+	"DEFICIT":                {Label: "Дефицит: вариантов нет", Tone: ToneDanger},
+	"LOCAL_SELECTED":         {Label: "Выбран местный запас", Tone: ToneSuccess},
+	"TASK_OPENED":            {Label: "Задание открыто", Tone: ToneInfo},
+	"CONFIRMED":              {Label: "Подтверждено", Tone: ToneSuccess},
+	"TRANSPORT_REQUESTED":    {Label: "Перевозка запрошена", Tone: ToneInfo},
+	"DISPATCHED":             {Label: "Отправлено", Tone: ToneSuccess},
+	"DELIVERED":              {Label: "Доставлено", Tone: ToneSuccessMuted},
+	"CANCELLED":              {Label: "Отменена", Tone: ToneNeutral},
+	"CANCELLATION_REQUESTED": {Label: "Отмена запрошена", Tone: ToneWarning},
+	"CANCELLATION_REJECTED":  {Label: "Отмена не завершена", Tone: ToneDanger},
+}
+
+// RequestBadge — бейдж статуса заявки; неизвестный код показывается нейтрально вместе с кодом.
+func RequestBadge(code string) Badge {
+	if b, ok := requestBadges[code]; ok {
+		return b
+	}
+	return Badge{Label: "Неизвестный статус (" + code + ")", Tone: ToneNeutral}
+}

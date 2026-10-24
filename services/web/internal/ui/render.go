@@ -178,19 +178,20 @@ func (r *Renderer) AssetVersion() string { return r.version }
 // экранирует html/template.
 func (r *Renderer) funcs() template.FuncMap {
 	return template.FuncMap{
-		"asset":       r.Asset,
-		"datetime":    FormatDateTime,
-		"date":        FormatDate,
-		"hm":          FormatTime,
-		"iso":         isoTime,
-		"ml":          FormatML,
-		"duration":    FormatDuration,
-		"statusBadge": statusBadgeAny,
-		"statusLabel": func(s any) string { return statusBadgeAny(s).Label },
-		"roleLabel":   RoleLabel,
-		"csrfHeaders": csrfHeaders,
-		"inDialog":    func(c Confirm) confirmView { return confirmView{Confirm: c, InDialog: true} },
-		"onPage":      func(c Confirm) confirmView { return confirmView{Confirm: c} },
+		"asset":        r.Asset,
+		"datetime":     FormatDateTime,
+		"date":         FormatDate,
+		"hm":           FormatTime,
+		"iso":          isoTime,
+		"ml":           FormatML,
+		"duration":     FormatDuration,
+		"statusBadge":  statusBadgeAny,
+		"requestBadge": func(s any) Badge { return RequestBadge(fmt.Sprint(s)) },
+		"statusLabel":  func(s any) string { return statusBadgeAny(s).Label },
+		"roleLabel":    RoleLabel,
+		"csrfHeaders":  csrfHeaders,
+		"inDialog":     func(c Confirm) confirmView { return confirmView{Confirm: c, InDialog: true} },
+		"onPage":       func(c Confirm) confirmView { return confirmView{Confirm: c} },
 	}
 }
 
