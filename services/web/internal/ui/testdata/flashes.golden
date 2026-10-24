@@ -1,0 +1,3 @@
+<div class="flashes" id="flashes" aria-live="polite">
+<div class="flash flash--success" role="status">Закреплено 2 единицы. Готовьте к отправке.</div>
+<div class="flash flash--danger" role="alert">Единицы U-000124 уже закреплены за другим заданием. Выберите другие.</div></div>
