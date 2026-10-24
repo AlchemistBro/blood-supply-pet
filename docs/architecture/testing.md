@@ -47,6 +47,9 @@ go run ./tools/authmatrix -out docs/architecture/auth-matrix.md    # после 
 `matrix.CasesFromSpec` по встроенному `apispec.Spec`) возвращает `[]Case{Method, Path, Role, WantForbidden}`
 для всех ролей и всех защищённых операций; путь заполняется `matrix.FillPath`, токен роли выпускает
 `libs/httpx/auth/authtest`. `WantForbidden` → ожидается 403, иначе ответ не 401 и не 403.
+Текущий набор `TestOpenAPIRejectsEveryUnauthorizedRole` использует `tools/authmatrix/matrixtest`
+в восьми backend API и сессии web: проверяет отказы с аудитом; положительные случаи проверяются
+сценариями сервисов с бизнес-данными. [Фактическое покрытие](security-local-2026-10-24.md).
 
 ## Проверки без Docker
 
@@ -90,7 +93,7 @@ powershell -NoProfile -File tools/test-postgres.ps1 -EnvFile .env
 | `docs.yml` | PR | markdownlint, проверка Mermaid (`mmdc` рендер), проверка ссылок, BPMN XML валидация |
 | `dependabot.yml` | еженедельно | Go modules, GitHub Actions, Docker base images |
 
-Ветки: `main` защищена, PR с зелёным `ci.yml` обязателен. Релиз: тег `vX.Y.Z` → `images.yml` + GitHub Release с changelog (git-cliff).
+Планируемый процесс: защита `main` и PR с зелёным `ci.yml`; настройка защиты в GitHub остаётся владельцу. Релиз: тег `vX.Y.Z` → `images.yml` + GitHub Release с changelog (git-cliff).
 
 ## Определение готовности (Definition of Done) для пункта чеклиста
 
