@@ -77,7 +77,7 @@ func run() error {
 	if err := s.json(http.MethodPost, s.inventory+"/dev/seed-norms", it, map[string]any{"consumption_year": year - 1}, nil); err != nil {
 		return fmt.Errorf("демо-нормативы: %w", err)
 	}
-	if err := s.json(http.MethodPost, s.inventory+"/clinics/1/sync", operator, struct{}{}, nil); err != nil {
+	if err := s.waitSync(operator); err != nil {
 		return fmt.Errorf("синхронизация АИСТ-М: %w", err)
 	}
 	csv := testdata.CSVConfig{Seed: 20261020, Year: year}

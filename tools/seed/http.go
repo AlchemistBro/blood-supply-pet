@@ -148,3 +148,32 @@ func (s seeder) waitPlan(token string, id, forecast, estimate uuid.UUID) (uuid.U
 	}
 	return uuid.Nil, errors.New("проекции planning не подготовились за отведённое время")
 }
+
+// waitSync не принимает пропущенный из-за фонового опроса сеанс за готовность данных.
+func (s seeder) waitSync(token string) error {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for attempts := 0; attempts < 120; attempts++ {
+		var result struct {
+			Result  string `json:"result"`
+			Skipped bool   `json:"skipped"`
+		}
+		err := s.json(http.MethodPost, s.inventory+"/clinics/1/sync", token, struct{}{}, &result)
+		if err == nil && !result.Skipped {
+			if result.Result != "SUCCESS" {
+				return errors.New("АИСТ-М не синхронизирован целиком")
+			}
+			return nil
+		}
+		var status statusError
+		if err != nil && (!errors.As(err, &status) || (status.Code != 409 && status.Code != 503)) {
+			return err
+		}
+		select {
+		case <-s.ctx.Done():
+			return s.ctx.Err()
+		case <-ticker.C:
+		}
+	}
+	return errors.New("синхронизация занята другим сеансом дольше двух минут")
+}
