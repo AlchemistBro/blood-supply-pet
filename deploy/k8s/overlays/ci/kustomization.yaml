@@ -1,0 +1,42 @@
+# kind в GitHub Actions: то же, что local, с урезанными ресурсами и томами (раннер — 2 vCPU, 7 ГБ).
+# Два экземпляра PostgreSQL сохранены: на CI проверяется то же переключение и архив WAL, что локально.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+labels:
+  - pairs:
+      blood-supply.io/env: ci
+    includeSelectors: false
+
+resources:
+  - ../../base
+
+components:
+  - ../../components/demo-secrets
+  - ../../components/sims
+
+patches:
+  - path: patch-resources.yaml
+  - target:
+      group: postgresql.cnpg.io
+      kind: Cluster
+      name: pg
+    patch: |-
+      - op: replace
+        path: /spec/resources
+        value:
+          requests: { cpu: 100m, memory: 256Mi }
+          limits: { memory: 512Mi }
+      - op: replace
+        path: /spec/storage/size
+        value: 1Gi
+      - op: replace
+        path: /spec/walStorage/size
+        value: 1Gi
+  - target:
+      kind: StatefulSet
+      name: kafka
+    patch: |-
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: 1Gi

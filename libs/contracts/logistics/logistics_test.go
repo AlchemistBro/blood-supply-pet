@@ -12,7 +12,7 @@ import (
 )
 
 // Для каждого вида компонента из справочника известен температурный режим перевозки:
-// без него команду перевозчику не собрать (ПП РФ № 641, условия транспортировки).
+// без него команду перевозчику не собрать (ПП РФ № 641, п. 68 в — перевозка раздельно по температурным режимам).
 func TestEveryComponentKindHasTemperatureRegime(t *testing.T) {
 	allowed := map[string]bool{
 		logistics.RegimeCold2to6: true, logistics.RegimeFrozenMinus25: true, logistics.RegimeRoom20to24: true,

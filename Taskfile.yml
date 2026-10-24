@@ -4,7 +4,7 @@ version: "3"
 
 vars:
   COMPOSE: docker compose -f deploy/compose/compose.yaml --env-file deploy/compose/.env
-  SERVICES: audit transfer
+  SERVICES: audit inventory logistics-gateway transfer
   VERSION:
     sh: git describe --tags --always --dirty 2>/dev/null || echo dev
 
@@ -20,9 +20,10 @@ tasks:
   gen:
     desc: Сгенерировать код из OpenAPI (oapi-codegen) и SQL (sqlc)
     cmds:
+      # Сервис без генерируемого сервера (web, имитаторы) не имеет api/oapi-codegen.yaml, сервис без базы
+      # (scaffold --no-db) — каталога sqlc: такие шаги пропускаются, а не валят генерацию.
       - for: { var: SERVICES, split: " " }
-        cmd: cd services/{{.ITEM}}/api && go tool oapi-codegen -config oapi-codegen.yaml openapi.yaml
-      # Сервис без базы (scaffold --no-db) не имеет каталога sqlc: пропускаем его, а не падаем.
+        cmd: if [ -f services/{{.ITEM}}/api/oapi-codegen.yaml ]; then cd services/{{.ITEM}}/api && go tool oapi-codegen -config oapi-codegen.yaml openapi.yaml; fi
       - for: { var: SERVICES, split: " " }
         cmd: if [ -d services/{{.ITEM}}/sqlc ]; then cd services/{{.ITEM}}/sqlc && sqlc generate; fi
 
@@ -42,7 +43,8 @@ tasks:
   lint:
     desc: Линтеры и архитектурные проверки
     cmds:
-      - go vet ./...
+      # Каталоги testdata Go исключает из шаблона ./..., поэтому libs/testdata указан явно.
+      - go vet ./... ./libs/testdata
       - golangci-lint run ./...
       - go test ./tools/archtest/...
 
@@ -50,7 +52,7 @@ tasks:
   test:
     desc: Юнит-тесты (с -race, если доступен cgo)
     cmds:
-      - go test -count=1 ./...
+      - go test -count=1 ./... ./libs/testdata
       - task: test:race
 
   test:race:
@@ -58,7 +60,7 @@ tasks:
     cmds:
       - cmd: |
           if command -v gcc >/dev/null 2>&1; then
-            CGO_ENABLED=1 go test -race -count=1 ./libs/... ./services/...
+            CGO_ENABLED=1 go test -race -count=1 ./libs/... ./libs/testdata ./services/...
           else
             echo "gcc не найден: детектор гонок пропущен (в CI он включён)"
           fi
@@ -149,11 +151,22 @@ tasks:
     cmds:
       - go run ./tools/auditverify
 
+  authmatrix:
+    desc: Проверить x-bs-operation в контрактах и актуальность docs/architecture/auth-matrix.md (NFR011)
+    cmds:
+      - go run ./tools/authmatrix -check
+
+  authmatrix:gen:
+    desc: Перегенерировать таблицу прав docs/architecture/auth-matrix.md
+    cmds:
+      - go run ./tools/authmatrix -out docs/architecture/auth-matrix.md
+
   ci:
     desc: Всё, что делает GitHub Actions, локально
     cmds:
       - task: gen:check
       - task: lint
+      - task: authmatrix
       - task: test
       - task: test:integration
       - task: contracts:check

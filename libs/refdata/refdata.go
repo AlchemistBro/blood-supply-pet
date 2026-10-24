@@ -75,8 +75,9 @@ type Urgency struct {
 	ConfirmWindowMinutes int    `json:"confirm_window_minutes"`
 }
 
-// UnitStatus — статус единицы компонента крови. IsAvailable — единицу можно закрепить и передать;
-// карантин недоступен (ПП РФ № 641, п. 62).
+// UnitStatus — статус единицы компонента крови. IsAvailable — единицу можно закрепить и передать.
+// Статусы единицы в базе, в том числе «на карантине» (ПП РФ № 641, п. 62 а);
+// закрепляется только IN_STOCK — решение проекта (ADR-0027).
 type UnitStatus struct {
 	Code        string `json:"unit_status_code"`
 	Name        string `json:"unit_status_name"`
