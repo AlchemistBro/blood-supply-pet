@@ -29,3 +29,4 @@ Thumbs.db
 # Local data
 deploy/compose/.data/
 k6/results/
+tests/load/results/

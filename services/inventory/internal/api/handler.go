@@ -24,6 +24,7 @@ const (
 // operations — операция матрицы прав для каждого маршрута; совпадает с x-bs-operation в openapi.yaml
 // (проверяет TestEveryOperationHasPolicy).
 var operations = map[string]auth.Operation{
+	"POST /dev/seed-norms":                 auth.OpSeedDemo,
 	"GET /internal/sync-status":            auth.OpReadAudit,
 	"PUT /clinics/{id}/annual-consumption": auth.OpEnterConsumption,
 	"GET /clinics/{id}/norms":              auth.OpViewStock,
@@ -40,6 +41,7 @@ var operations = map[string]auth.Operation{
 
 // Options — что включено.
 type Options struct {
+	SeedEnabled bool
 	// DevEnabled — демо-маршруты /dev/* (только BS_ENV=local); иначе они отвечают 404.
 	DevEnabled bool
 }
@@ -79,6 +81,10 @@ func authorize(onDenied auth.Denied, o Options) gen.MiddlewareFunc {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Pattern == routeProtectedVolume && !o.DevEnabled {
 				httpx.WriteProblem(w, r, http.StatusNotFound, "Не найдено", "Демо-маршрут доступен только на локальном стенде.")
+				return
+			}
+			if r.Pattern == "POST /dev/seed-norms" && !o.SeedEnabled {
+				http.NotFound(w, r)
 				return
 			}
 			op, ok := operations[r.Pattern]

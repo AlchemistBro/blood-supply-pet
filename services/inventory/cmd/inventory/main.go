@@ -47,7 +47,7 @@ func main() {
 					StaleAfter: cfg.StaleAfter,
 				},
 			})
-			api.Mount(rt.Mux, svc, rt.Deny(), api.Options{DevEnabled: rt.Cfg.Environment == "local"})
+			api.Mount(rt.Mux, svc, rt.Deny(), api.Options{DevEnabled: rt.Cfg.Environment == "local", SeedEnabled: rt.Cfg.Environment == "local" || rt.Cfg.Environment == "ci" || rt.Cfg.Environment == "demo"})
 			workers := []runtime.Worker{svc.RunSync, svc.RunSnapshots, patient.Run}
 			if len(rt.Cfg.KafkaBrokers) > 0 {
 				if err := messaging.EnsureTopics(ctx, rt.Cfg.KafkaBrokers, 1, messaging.WithDLT(contracts.TopicPlanningEvents)...); err != nil {

@@ -9,7 +9,7 @@
 | --- | --- | --- | --- |
 | C4, уровень 1 | Контекст системы, смежные системы и имитаторы | [c4-context.md](../c4-context.md) | Mermaid `C4Context` |
 | C4, уровень 2 | Контейнеры: сервисы, базы, Kafka, платформа | [c4-containers.md](../c4-containers.md) | Mermaid `C4Container` |
-| C4, уровень 3 | Компоненты `transfer` и `logistics-gateway` | [c4-components.md](../c4-components.md) | Mermaid `C4Component` |
+| C4, уровень 3 | Компоненты `transfer`, `logistics-gateway`, `planning`, `matching` | [c4-components.md](../c4-components.md) | Mermaid `C4Component` / `flowchart` |
 | Карта контекстов | Ограниченные контексты DDD и отношения | [context-map.md](../../domain/context-map.md) | Mermaid `flowchart` |
 | UML, состояния | Обязательство O07 | [uml.md](../uml.md#состояния-обязательства-o07), [obligation-states.md](../../domain/obligation-states.md) | Mermaid `stateDiagram-v2` |
 | UML, состояния | Заказ перевозки `transport_request` | [uml.md](../uml.md#состояния-заказа-перевозки-transport_request) | Mermaid `stateDiagram-v2` |

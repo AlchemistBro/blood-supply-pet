@@ -1,0 +1,46 @@
+name: Нагрузка
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "13 4 * * 0"
+
+permissions:
+  contents: read
+
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27.2"
+          cache: true
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: grafana/setup-k6-action@v1
+      - name: Поднять синтетический стенд
+        run: task up
+      - name: Наполнить синтетическими данными
+        run: task seed
+      - name: Измерить NFR002
+        run: |
+          mkdir -p artifacts
+          go test ./services/planning/internal/domain -run '^$' -bench '^BenchmarkBuildPlanNFR002$' -benchmem -count=1 | tee artifacts/plan-benchmark.txt
+      - name: Измерить NFR003
+        run: task load
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: performance
+          path: |
+            artifacts/
+            tests/load/results/
+          if-no-files-found: ignore
+      - name: Остановить стенд
+        if: always()
+        run: task down

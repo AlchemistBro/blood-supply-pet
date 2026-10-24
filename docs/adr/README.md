@@ -27,9 +27,18 @@
 | [0019](0019-protected-volume-planning-transfer.md) | Защищённый объём: planning → inventory → transfer, единицы против мл | принят |
 | [0020](0020-k1-patient-case-encryption.md) | Шифрование номера случая пациента на уровне приложения (`libs/k1seal`, AES-256-GCM, ключ только у matching и inventory) | принят |
 | [0021](0021-notification-recipients.md) | Адресаты уведомлений — статический справочник | принят |
-| [0022](0022-transport-carrier-and-conditions.md) | Перевозка: кто перевозит и что фиксируется | предложен (реализация — этап 7) |
-| 0023 | Эскалации и ручная перевозка | запланирован (этап 7) |
+| [0022](0022-transport-carrier-and-conditions.md) | Перевозка: кто перевозит и что фиксируется | принят |
+| [0023](0023-escalations-in-transfer.md) | Эскалации и ручная перевозка | принят |
 | [0024](0024-regulatory-boundaries.md) | Границы регулирования | принят |
 | [0025](0025-pd-incident-detection.md) | Обнаружение инцидентов с ПДн (24 ч / 72 ч) | принят (детектор — этап 7) |
 | 0026 | Демо-стенд на Railway | запланирован (этап 10) |
 | [0027](0027-stage1-deviations.md) | Отступления этапа 1 от канона и прототипа | принят |
+| [0028](0028-protected-floor-in-command.md) | Защищённые пороги в команде открытия | принят |
+| [0029](0029-background-forecast-period.md) | Приведение фонового расхода к периоду прогноза | принят |
+| [0030](0030-cancel-request-tombstone.md) | Отмена запроса и надгробие для запоздалых заданий | принят |
+| [0031](0031-patient-allocation-delivery.md) | Доставка закрепления в АИСТ-М и компенсация | принят |
+| [0032](0032-confirmation-specification.md) | Проверка спецификации при подтверждении | принят |
+| [0033](0033-transit-and-transport-block.md) | Копия в пути и запрет использования при нарушениях | принят |
+| [0034](0034-planning-projection-rebuild.md) | Восстановление проекций planning | принят |
+| [0035](0035-kubernetes-bootstrap-and-recovery-drill.md) | Запуск kind по фазам и отдельное учение PITR | принят |
+| [0036](0036-demo-seed-through-service-api.md) | Наполнение синтетического стенда через API | принят |

@@ -57,6 +57,59 @@ C4Component
 | inventoryclient | `internal/adapters/inventoryclient` | Единственный синхронный межсервисный вызов; `SourceSystemUnavailable` при сбое | ADR-0004, ADR-0027 |
 | Journal, ретранслятор | `libs/messaging` | Transactional outbox, порядок по ключу `obligation_id` | ADR-0003 |
 
+## planning
+
+```mermaid
+flowchart LR
+    WEB[web BFF] --> API[OpenAPI и проверка роли]
+    C02[C02: агрегированный прогноз] --> API
+    API --> APP[app.Service: прогноз, коррекция, план, дефицит]
+    KIN[Kafka: inventory, demand, logistics, transfer, matching] --> PROJ[Handle: inbox и версии проекций]
+    PROJ --> DB[(planning: проекции и журнал снимков)]
+    APP --> INPUT[Снимок версий входов]
+    INPUT --> DB
+    APP --> DOMAIN[Чистый domain: распределение ЧС, защищённый объём, источники]
+    DOMAIN --> APP
+    APP --> DB
+    APP --> JOURNAL[Journal: команды, события и аудит в outbox]
+    JOURNAL --> DB
+    DB --> RELAY[Outbox relay]
+    RELAY --> KOUT[Kafka: OpenObligation, защищённый объём, дефицит]
+    CLI[planning-rebuild] --> APP
+```
+
+Расчёт сохраняет входы и результат одной транзакцией. Фон приводится к периоду прогноза (ADR-0029),
+защищённые пороги включаются в команду (ADR-0028). Пересчёт отменяет только прежние PENDING через
+надгробие запроса (ADR-0030). Восстановление проекций использует локальные снимки и не повторяет задания (ADR-0034).
+
+## matching
+
+```mermaid
+flowchart LR
+    WEB[web BFF и JWT пользователя] --> API[OpenAPI: роль, клиника, автор заявки]
+    API --> APP[app.Service: заявка, варианты, выбор, отмена]
+    APP --> DOMAIN[Чистый domain.Match: правила O15 и ранжирование]
+    APP --> K1[k1seal: номер случая и AAD заявки]
+    K1 --> DB[(matching: заявка, шифротекст, варианты и выбор)]
+    APP --> DB
+    KIN[Kafka: запас, нормы, логистика и O07] --> PROJ[inbox и собственные проекции]
+    PROJ --> DB
+    PROJ --> FOLLOW[Повтор по непокрытому остатку]
+    FOLLOW --> APP
+    API --> READ[PatientCase: проверка области доступа]
+    READ --> AUDIT[Аудит чтения до выдачи номера]
+    AUDIT --> DB
+    READ --> K1
+    APP --> JOURNAL[Journal и outbox]
+    JOURNAL --> DB
+    DB --> RELAY[Outbox relay]
+    RELAY --> KOUT[Kafka: OpenObligation, отмена, дефицит и аудит]
+```
+
+Варианты не содержат номера случая или фенотипа. Номер открывается отдельной операцией только автору-врачу
+или оператору источника активной подтверждённой передачи; отказ аудита закрывает выдачу (ADR-0020).
+ИНТ-05 выполняет inventory через постоянную очередь; matching читает квитанции, не вызывает его HTTP (ADR-0031).
+
 ## logistics-gateway
 
 ```mermaid

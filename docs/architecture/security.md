@@ -2,10 +2,10 @@
 
 ## Идентификация (Keycloak, OIDC)
 
-- Realm `blood-supply`, клиент `web` (confidential, Authorization Code + PKCE), клиент `services` (bearer-only) для проверки.
+- Realm `blood-supply`, клиент `web` (confidential, Authorization Code + PKCE), клиент `services` (client credentials, роль SERVICE). `blood-supply-cli` с password grant используется только для демо и проверок.
 - Роли realm: `PHYSICIAN`, `CLINIC_OPERATOR`, `TERRITORIAL_ANALYST`, `DUTY_OFFICER`, `IT_SERVICE`.
 - Атрибут пользователя `clinic_id` → claim `clinic_id`; роли → claim `realm_access.roles`; `preferred_username` используется как `user_id` в аудите.
-- 2FA (OTP) для роли `PHYSICIAN` включается флагом realm `physician_mfa_required` (по умолчанию выключен в демо; ADR-0006).
+- Дополнительная проверка OTP настраивается политикой входа Keycloak; в демонстрационном realm она не включена.
 - `web` хранит сессию в зашифрованной cookie (`SameSite=Lax`, `Secure`, `HttpOnly`), обновляет access token по refresh token, при выходе вызывает end-session Keycloak.
 - Сервисы проверяют JWT (подпись по JWKS с кэшем, `iss`, `aud`, `exp`) в middleware `libs/httpx/auth`; внутренние вызовы (`transfer → inventory`) идут с сервисным токеном (client credentials) и помечены `X-Internal-Call`.
 
@@ -46,7 +46,7 @@
 
 ## NFR010: белый список полей прогноза ЧС
 
-Входной адаптер `planning/internal/adapters/forecastin` оставляет из тела ИНТ-02 только поля белого списка и отбрасывает
+Входной обработчик `planning/internal/api` оставляет из тела ИНТ-02 только поля белого списка и отбрасывает
 всё остальное, затем проверяет результат по схеме `libs/contracts/schemas/int02/EmergencyForecast.v1.json`
 (`additionalProperties: false` на каждом уровне; тип `int02.EmergencyForecast`, реестр `contracts.Inbound`). Белый список
 (все поля без ПДн):
@@ -62,8 +62,8 @@
 ## Платформа
 
 - TLS на входе (nginx / ingress), внутри кластера plain HTTP с NetworkPolicy; mTLS для ИНТ-05 в проде (в демо отключено, флаг).
-- Kafka: в compose без аутентификации; в `prod-example` SASL/SCRAM и ACL на топики по владельцу.
-- PostgreSQL: роль на сервис, `audit_writer` только INSERT, `REVOKE CONNECT FROM PUBLIC`.
+- Kafka: демонстрационный брокер без аутентификации; SASL/SCRAM и ACL для рабочего окружения требуют отдельной настройки брокера и клиентов.
+- PostgreSQL: роль на сервис, запрет чужого подключения; `audit_record` защищён триггером от UPDATE/DELETE, целостность проверяется цепочкой. Администратор БД может обойти триггер; такой сценарий проверяется детектором разрыва.
 - Образы distroless без shell, non-root, read-only FS; `govulncheck`, `trivy`, `gosec` в CI; dependabot.
 - Секреты: `.env.example` и kustomize `secretGenerator` с демо-значениями; настоящие секреты никогда в git (gitleaks в CI).
 - Лимиты частоты на ingress для `/auth` и `/api/int/forecast`.
