@@ -34,6 +34,7 @@ type IdP struct {
 	mu      sync.Mutex
 	clients map[string]*serviceClient
 	failing bool
+	hold    chan struct{}
 }
 
 type serviceClient struct {
@@ -101,7 +102,38 @@ func (i *IdP) FailTokenRequests(fail bool) {
 	i.failing = fail
 }
 
+// HoldTokenRequests имитирует зависший Keycloak: запросы токенов ждут, пока не вызвана release
+// (или пока клиент не оборвёт запрос). release идемпотентна; тест обязан её вызвать, иначе сервер
+// не закроется — удобно отложить её в t.Cleanup.
+func (i *IdP) HoldTokenRequests() (release func()) {
+	ch := make(chan struct{})
+	i.mu.Lock()
+	i.hold = ch
+	i.mu.Unlock()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			i.mu.Lock()
+			if i.hold == ch {
+				i.hold = nil
+			}
+			i.mu.Unlock()
+			close(ch)
+		})
+	}
+}
+
 func (i *IdP) serveToken(w http.ResponseWriter, r *http.Request) {
+	i.mu.Lock()
+	hold := i.hold
+	i.mu.Unlock()
+	if hold != nil {
+		select {
+		case <-hold:
+		case <-r.Context().Done():
+			return
+		}
+	}
 	if err := r.ParseForm(); err != nil {
 		tokenError(w, http.StatusBadRequest, "invalid_request")
 		return

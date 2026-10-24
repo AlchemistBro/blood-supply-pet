@@ -1,0 +1,14 @@
+# Kafka (bs-app): брокер KRaft и Job создания топиков.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - statefulset.yaml
+  - topics-job.yaml
+
+configMapGenerator:
+  - name: kafka-topics
+    namespace: bs-app
+    files:
+      - topics.txt
+      - create-topics.sh

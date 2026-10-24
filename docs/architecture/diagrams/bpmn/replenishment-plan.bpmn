@@ -1,0 +1,662 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_Process_ReplenishmentPlan" targetNamespace="https://github.com/AlchemistBro/blood-supply-pet/bpmn">
+  <bpmn:message id="Msg_Forecast" name="Агрегированный прогноз ЧС (ИНТ-02)" />
+  <bpmn:message id="Msg_LineAdjusted" name="Коррекция строки прогноза" />
+  <bpmn:message id="Msg_EstimatePublished" name="DemandEstimatePublished" />
+  <bpmn:collaboration id="Collaboration_Process_ReplenishmentPlan">
+    <bpmn:participant id="Participant_Process_ReplenishmentPlan" name="Планирование пополнения: прогноз ЧС → план → предложения → обязательства" processRef="Process_ReplenishmentPlan" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_ReplenishmentPlan" name="Планирование пополнения по прогнозу ЧС" isExecutable="false">
+    <bpmn:documentation>ФП3: FR021–FR028, FR035; NFR002, NFR009, NFR010, NFR013, NFR014. Источники: docs/tasks/05-planning.md, docs/architecture/events.md, docs/architecture/security.md (NFR010). Нормативы и правила демонстрационные (ADR-0010). Модель описательная (isExecutable=false).</bpmn:documentation>
+    <bpmn:laneSet id="LaneSet_Process_ReplenishmentPlan">
+      <bpmn:lane id="L_c02" name="C02 Моделирование ЧС (имитатор sim-emergency)">
+        <bpmn:flowNodeRef>S</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>C1</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="L_pl" name="planning">
+        <bpmn:flowNodeRef>P1</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>G1</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>E_dup</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>P2</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>G2</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>P3a</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>P3b</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gm</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>P4</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>P5</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>P6</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>P7</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>G3</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>P8</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gm2</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>P9</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>G4</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>P10</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gm3</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>P11</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>P12</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>G5</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>E_ok</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>P13</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>E_def</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>ESP1</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>ESP2</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="L_tr" name="transfer">
+        <bpmn:flowNodeRef>T1</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="L_op" name="Оператор клиники-источника">
+        <bpmn:flowNodeRef>CA</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="S" name="Сценарий ЧС смоделирован">
+      <bpmn:outgoing>Flow_S_C1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:sendTask id="C1" name="Отправить агрегированный прогноз без ПДн: POST /int/forecast через nginx (ИНТ-02)">
+      <bpmn:incoming>Flow_S_C1</bpmn:incoming>
+      <bpmn:outgoing>Flow_C1_P1</bpmn:outgoing>
+    </bpmn:sendTask>
+    <bpmn:serviceTask id="P1" name="Принять прогноз: строгий разбор и белый список полей (NFR010)">
+      <bpmn:incoming>Flow_C1_P1</bpmn:incoming>
+      <bpmn:outgoing>Flow_P1_G1</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="G1" name="scenario_version новая?">
+      <bpmn:incoming>Flow_P1_G1</bpmn:incoming>
+      <bpmn:outgoing>Flow_G1_P2</bpmn:outgoing>
+      <bpmn:outgoing>Flow_G1_E_dup</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:endEvent id="E_dup" name="Повтор версии не принят, квитанция с отказом">
+      <bpmn:incoming>Flow_G1_E_dup</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:task id="P2" name="Сохранить emergency_forecast и forecast_line; EmergencyForecastAccepted; квитанция C02">
+      <bpmn:incoming>Flow_G1_P2</bpmn:incoming>
+      <bpmn:outgoing>Flow_P2_G2</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="G2" name="Принимающие клиники указаны?">
+      <bpmn:incoming>Flow_P2_G2</bpmn:incoming>
+      <bpmn:outgoing>Flow_G2_P3a</bpmn:outgoing>
+      <bpmn:outgoing>Flow_G2_P3b</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="P3a" name="Распределить по принимающим клиникам и долям прогноза (FR024)">
+      <bpmn:incoming>Flow_G2_P3a</bpmn:incoming>
+      <bpmn:outgoing>Flow_P3a_Gm</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="P3b" name="Распределить по долям «район → клиника» (FR046), is_rough_estimate = true">
+      <bpmn:incoming>Flow_G2_P3b</bpmn:incoming>
+      <bpmn:outgoing>Flow_P3b_Gm</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="Gm">
+      <bpmn:incoming>Flow_P3a_Gm</bpmn:incoming>
+      <bpmn:incoming>Flow_P3b_Gm</bpmn:incoming>
+      <bpmn:outgoing>Flow_Gm_P4</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="P4" name="Собрать входы из проекций с водяным знаком: оценка, запас и норматив, время доставки, обязательства">
+      <bpmn:incoming>Flow_Gm_P4</bpmn:incoming>
+      <bpmn:outgoing>Flow_P4_P5</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:businessRuleTask id="P5" name="Целевой запас: target = norm + background + emergency (FR021, FR023)">
+      <bpmn:incoming>Flow_P4_P5</bpmn:incoming>
+      <bpmn:outgoing>Flow_P5_P6</bpmn:outgoing>
+    </bpmn:businessRuleTask>
+    <bpmn:businessRuleTask id="P6" name="Защищённый объём источника: норматив + фон за период + подтверждённые обязательства (FR025)">
+      <bpmn:incoming>Flow_P5_P6</bpmn:incoming>
+      <bpmn:outgoing>Flow_P6_P7</bpmn:outgoing>
+    </bpmn:businessRuleTask>
+    <bpmn:businessRuleTask id="P7" name="Подбор источников: избыток над защищённым объёмом, запас, время доставки; fallback_sources; объяснение">
+      <bpmn:incoming>Flow_P6_P7</bpmn:incoming>
+      <bpmn:outgoing>Flow_P7_G3</bpmn:outgoing>
+    </bpmn:businessRuleTask>
+    <bpmn:exclusiveGateway id="G3" name="Целевой объём покрыт?">
+      <bpmn:incoming>Flow_P7_G3</bpmn:incoming>
+      <bpmn:outgoing>Flow_G3_Gm2</bpmn:outgoing>
+      <bpmn:outgoing>Flow_G3_P8</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="P8" name="PlanDeficitRecorded: непокрытое в реестр дефицита O11 (NFR014)">
+      <bpmn:incoming>Flow_G3_P8</bpmn:incoming>
+      <bpmn:outgoing>Flow_P8_Gm2</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="Gm2">
+      <bpmn:incoming>Flow_G3_Gm2</bpmn:incoming>
+      <bpmn:incoming>Flow_P8_Gm2</bpmn:incoming>
+      <bpmn:outgoing>Flow_Gm2_P9</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="P9" name="Сохранить план: ReplenishmentPlanBuilt (coverage_ratio, elapsed_ms ≤ 30 с, NFR002)">
+      <bpmn:incoming>Flow_Gm2_P9</bpmn:incoming>
+      <bpmn:outgoing>Flow_P9_G4</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="G4" name="Есть PENDING-предложения прежнего плана?">
+      <bpmn:incoming>Flow_P9_G4</bpmn:incoming>
+      <bpmn:outgoing>Flow_G4_P10</bpmn:outgoing>
+      <bpmn:outgoing>Flow_G4_Gm3</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sendTask id="P10" name="CancelObligation(PLAN_RECALCULATED) по каждому">
+      <bpmn:incoming>Flow_G4_P10</bpmn:incoming>
+      <bpmn:outgoing>Flow_P10_Gm3</bpmn:outgoing>
+    </bpmn:sendTask>
+    <bpmn:exclusiveGateway id="Gm3">
+      <bpmn:incoming>Flow_G4_Gm3</bpmn:incoming>
+      <bpmn:incoming>Flow_P10_Gm3</bpmn:incoming>
+      <bpmn:outgoing>Flow_Gm3_P11</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sendTask id="P11" name="По каждому предложению: TransferProposed и OpenObligation (choice_id = proposal_id)">
+      <bpmn:incoming>Flow_Gm3_P11</bpmn:incoming>
+      <bpmn:outgoing>Flow_P11_T1</bpmn:outgoing>
+      <bpmn:multiInstanceLoopCharacteristics />
+    </bpmn:sendTask>
+    <bpmn:task id="T1" name="Открыть O07 PENDING у источника (идемпотентно по choice_id), ObligationOpened">
+      <bpmn:incoming>Flow_P11_T1</bpmn:incoming>
+      <bpmn:outgoing>Flow_T1_CA</bpmn:outgoing>
+      <bpmn:multiInstanceLoopCharacteristics />
+    </bpmn:task>
+    <bpmn:callActivity id="CA" name="Подтверждение передачи (confirm-transfer.bpmn)" calledElement="Process_ConfirmTransfer">
+      <bpmn:incoming>Flow_T1_CA</bpmn:incoming>
+      <bpmn:outgoing>Flow_CA_P12</bpmn:outgoing>
+      <bpmn:multiInstanceLoopCharacteristics />
+    </bpmn:callActivity>
+    <bpmn:task id="P12" name="Проекция transfer.events: статус предложения, пересчёт покрытия">
+      <bpmn:incoming>Flow_CA_P12</bpmn:incoming>
+      <bpmn:outgoing>Flow_P12_G5</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="G5" name="Исход обязательства?">
+      <bpmn:incoming>Flow_P12_G5</bpmn:incoming>
+      <bpmn:outgoing>Flow_G5_E_ok</bpmn:outgoing>
+      <bpmn:outgoing>Flow_G5_P13</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:endEvent id="E_ok" name="Пополнение выполнено">
+      <bpmn:incoming>Flow_G5_E_ok</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:task id="P13" name="PlanDeficitRecorded: SOURCE_REJECTED, NOT_CONFIRMED_IN_TIME или UNIT_WITHDRAWN">
+      <bpmn:incoming>Flow_G5_P13</bpmn:incoming>
+      <bpmn:outgoing>Flow_P13_E_def</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:endEvent id="E_def" name="Непокрытое в реестре дефицита">
+      <bpmn:incoming>Flow_P13_E_def</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:subProcess id="ESP1" name="Коррекция распределения оператором клиники (FR024)" triggeredByEvent="true">
+      <bpmn:startEvent id="E1s" name="Оператор изменил строку прогноза: PATCH /forecasts/{id}/lines/{lineId}" isInterrupting="false">
+        <bpmn:outgoing>Flow_E1s_E1t</bpmn:outgoing>
+        <bpmn:messageEventDefinition id="E1s_ed" messageRef="Msg_LineAdjusted" />
+      </bpmn:startEvent>
+      <bpmn:task id="E1t" name="Сохранить коррекцию: adjusted_by, adjust_reason; аудит">
+        <bpmn:incoming>Flow_E1s_E1t</bpmn:incoming>
+        <bpmn:outgoing>Flow_E1t_E1t2</bpmn:outgoing>
+      </bpmn:task>
+      <bpmn:task id="E1t2" name="Перестроить план с коррекцией">
+        <bpmn:incoming>Flow_E1t_E1t2</bpmn:incoming>
+        <bpmn:outgoing>Flow_E1t2_E1e</bpmn:outgoing>
+      </bpmn:task>
+      <bpmn:endEvent id="E1e" name="План перестроен">
+        <bpmn:incoming>Flow_E1t2_E1e</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_E1s_E1t" sourceRef="E1s" targetRef="E1t" />
+      <bpmn:sequenceFlow id="Flow_E1t_E1t2" sourceRef="E1t" targetRef="E1t2" />
+      <bpmn:sequenceFlow id="Flow_E1t2_E1e" sourceRef="E1t2" targetRef="E1e" />
+    </bpmn:subProcess>
+    <bpmn:subProcess id="ESP2" name="Новая опубликованная версия оценки потребности" triggeredByEvent="true">
+      <bpmn:startEvent id="E2s" name="DemandEstimatePublished (demand)" isInterrupting="false">
+        <bpmn:outgoing>Flow_E2s_E2t</bpmn:outgoing>
+        <bpmn:messageEventDefinition id="E2s_ed" messageRef="Msg_EstimatePublished" />
+      </bpmn:startEvent>
+      <bpmn:task id="E2t" name="Обновить demand_projection по опубликованной версии">
+        <bpmn:incoming>Flow_E2s_E2t</bpmn:incoming>
+        <bpmn:outgoing>Flow_E2t_E2t2</bpmn:outgoing>
+      </bpmn:task>
+      <bpmn:task id="E2t2" name="Перестроить план по новой версии">
+        <bpmn:incoming>Flow_E2t_E2t2</bpmn:incoming>
+        <bpmn:outgoing>Flow_E2t2_E2e</bpmn:outgoing>
+      </bpmn:task>
+      <bpmn:endEvent id="E2e" name="План перестроен">
+        <bpmn:incoming>Flow_E2t2_E2e</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_E2s_E2t" sourceRef="E2s" targetRef="E2t" />
+      <bpmn:sequenceFlow id="Flow_E2t_E2t2" sourceRef="E2t" targetRef="E2t2" />
+      <bpmn:sequenceFlow id="Flow_E2t2_E2e" sourceRef="E2t2" targetRef="E2e" />
+    </bpmn:subProcess>
+    <bpmn:sequenceFlow id="Flow_S_C1" sourceRef="S" targetRef="C1" />
+    <bpmn:sequenceFlow id="Flow_C1_P1" sourceRef="C1" targetRef="P1" />
+    <bpmn:sequenceFlow id="Flow_P1_G1" sourceRef="P1" targetRef="G1" />
+    <bpmn:sequenceFlow id="Flow_G1_P2" sourceRef="G1" targetRef="P2" name="да" />
+    <bpmn:sequenceFlow id="Flow_G1_E_dup" sourceRef="G1" targetRef="E_dup" name="нет" />
+    <bpmn:sequenceFlow id="Flow_P2_G2" sourceRef="P2" targetRef="G2" />
+    <bpmn:sequenceFlow id="Flow_G2_P3a" sourceRef="G2" targetRef="P3a" name="да" />
+    <bpmn:sequenceFlow id="Flow_G2_P3b" sourceRef="G2" targetRef="P3b" name="нет: грубая оценка" />
+    <bpmn:sequenceFlow id="Flow_P3a_Gm" sourceRef="P3a" targetRef="Gm" />
+    <bpmn:sequenceFlow id="Flow_P3b_Gm" sourceRef="P3b" targetRef="Gm" />
+    <bpmn:sequenceFlow id="Flow_Gm_P4" sourceRef="Gm" targetRef="P4" />
+    <bpmn:sequenceFlow id="Flow_P4_P5" sourceRef="P4" targetRef="P5" />
+    <bpmn:sequenceFlow id="Flow_P5_P6" sourceRef="P5" targetRef="P6" />
+    <bpmn:sequenceFlow id="Flow_P6_P7" sourceRef="P6" targetRef="P7" />
+    <bpmn:sequenceFlow id="Flow_P7_G3" sourceRef="P7" targetRef="G3" />
+    <bpmn:sequenceFlow id="Flow_G3_Gm2" sourceRef="G3" targetRef="Gm2" name="полностью" />
+    <bpmn:sequenceFlow id="Flow_G3_P8" sourceRef="G3" targetRef="P8" name="есть непокрытое" />
+    <bpmn:sequenceFlow id="Flow_P8_Gm2" sourceRef="P8" targetRef="Gm2" />
+    <bpmn:sequenceFlow id="Flow_Gm2_P9" sourceRef="Gm2" targetRef="P9" />
+    <bpmn:sequenceFlow id="Flow_P9_G4" sourceRef="P9" targetRef="G4" />
+    <bpmn:sequenceFlow id="Flow_G4_P10" sourceRef="G4" targetRef="P10" name="да: план пересчитан" />
+    <bpmn:sequenceFlow id="Flow_G4_Gm3" sourceRef="G4" targetRef="Gm3" name="нет" />
+    <bpmn:sequenceFlow id="Flow_P10_Gm3" sourceRef="P10" targetRef="Gm3" />
+    <bpmn:sequenceFlow id="Flow_Gm3_P11" sourceRef="Gm3" targetRef="P11" />
+    <bpmn:sequenceFlow id="Flow_P11_T1" sourceRef="P11" targetRef="T1" />
+    <bpmn:sequenceFlow id="Flow_T1_CA" sourceRef="T1" targetRef="CA" />
+    <bpmn:sequenceFlow id="Flow_CA_P12" sourceRef="CA" targetRef="P12" />
+    <bpmn:sequenceFlow id="Flow_P12_G5" sourceRef="P12" targetRef="G5" />
+    <bpmn:sequenceFlow id="Flow_G5_E_ok" sourceRef="G5" targetRef="E_ok" name="TRANSPORT_REQUESTED → DELIVERED" />
+    <bpmn:sequenceFlow id="Flow_G5_P13" sourceRef="G5" targetRef="P13" name="REJECTED, EXPIRED без запасного, BROKEN" />
+    <bpmn:sequenceFlow id="Flow_P13_E_def" sourceRef="P13" targetRef="E_def" />
+    <bpmn:textAnnotation id="A_nfr10">
+      <bpmn:text>Лишние поля (snils, full_name, patients[]) отбрасываются: DisallowUnknownFields и явный белый список; в БД, логах и трассах их нет.</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Assoc_A_nfr10" sourceRef="P1" targetRef="A_nfr10" />
+    <bpmn:textAnnotation id="A_pv">
+      <bpmn:text>Защищённый объём публикуется: planning → ProtectedVolumeCalculated → inventory → ProtectedVolumePublished → Остаток источника в transfer (допущение этапа 5, ADR-0019 запланирован).</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Assoc_A_pv" sourceRef="P6" targetRef="A_pv" />
+    <bpmn:textAnnotation id="A_local">
+      <bpmn:text>Расчёт без сетевых вызовов: только проекции demand_projection, stock_projection, delivery_estimate_projection, obligation_projection (ADR-0005, ADR-0014). Версии входов — в плане (FR035, NFR009).</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Assoc_A_local" sourceRef="P4" targetRef="A_local" />
+    <bpmn:textAnnotation id="A_ca">
+      <bpmn:text>Срок, эскалация к запасному источнику, выбытие, перевозка — внутри саги подтверждения.</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Assoc_A_ca" sourceRef="CA" targetRef="A_ca" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="Diagram_Process_ReplenishmentPlan">
+    <bpmndi:BPMNPlane id="Plane_Process_ReplenishmentPlan" bpmnElement="Collaboration_Process_ReplenishmentPlan">
+      <bpmndi:BPMNShape id="Participant_Process_ReplenishmentPlan_di" bpmnElement="Participant_Process_ReplenishmentPlan" isHorizontal="true">
+        <dc:Bounds x="150" y="60" width="4698" height="1060" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="L_c02_di" bpmnElement="L_c02" isHorizontal="true">
+        <dc:Bounds x="180" y="60" width="4668" height="160" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="L_pl_di" bpmnElement="L_pl" isHorizontal="true">
+        <dc:Bounds x="180" y="220" width="4668" height="560" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="L_tr_di" bpmnElement="L_tr" isHorizontal="true">
+        <dc:Bounds x="180" y="780" width="4668" height="170" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="L_op_di" bpmnElement="L_op" isHorizontal="true">
+        <dc:Bounds x="180" y="950" width="4668" height="170" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ESP1_di" bpmnElement="ESP1" isExpanded="true">
+        <dc:Bounds x="558" y="615" width="1116" height="150" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ESP2_di" bpmnElement="ESP2" isExpanded="true">
+        <dc:Bounds x="1818" y="615" width="1080" height="150" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="S_di" bpmnElement="S">
+        <dc:Bounds x="252" y="122" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="232" y="162" width="76" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="C1_di" bpmnElement="C1">
+        <dc:Bounds x="375" y="100" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="P1_di" bpmnElement="P1">
+        <dc:Bounds x="565" y="370" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="G1_di" bpmnElement="G1" isMarkerVisible="true">
+        <dc:Bounds x="785" y="385" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="790" y="436" width="100" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="E_dup_di" bpmnElement="E_dup">
+        <dc:Bounds x="972" y="262" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1012" y="259" width="118" height="42" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="P2_di" bpmnElement="P2">
+        <dc:Bounds x="920" y="370" width="140" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="G2_di" bpmnElement="G2" isMarkerVisible="true">
+        <dc:Bounds x="1145" y="385" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1178" y="436" width="118" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="P3a_di" bpmnElement="P3a">
+        <dc:Bounds x="1285" y="240" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="P3b_di" bpmnElement="P3b">
+        <dc:Bounds x="1285" y="490" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gm_di" bpmnElement="Gm" isMarkerVisible="true">
+        <dc:Bounds x="1505" y="385" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="P4_di" bpmnElement="P4">
+        <dc:Bounds x="1635" y="370" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="P5_di" bpmnElement="P5">
+        <dc:Bounds x="1825" y="370" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="P6_di" bpmnElement="P6">
+        <dc:Bounds x="2000" y="370" width="140" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="P7_di" bpmnElement="P7">
+        <dc:Bounds x="2175" y="370" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="G3_di" bpmnElement="G3" isMarkerVisible="true">
+        <dc:Bounds x="2405" y="385" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2389" y="353" width="82" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="P8_di" bpmnElement="P8">
+        <dc:Bounds x="2545" y="490" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gm2_di" bpmnElement="Gm2" isMarkerVisible="true">
+        <dc:Bounds x="2765" y="385" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="P9_di" bpmnElement="P9">
+        <dc:Bounds x="2900" y="370" width="140" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="G4_di" bpmnElement="G4" isMarkerVisible="true">
+        <dc:Bounds x="3125" y="385" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="3088" y="339" width="124" height="42" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="P10_di" bpmnElement="P10">
+        <dc:Bounds x="3265" y="490" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gm3_di" bpmnElement="Gm3" isMarkerVisible="true">
+        <dc:Bounds x="3485" y="385" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="P11_di" bpmnElement="P11">
+        <dc:Bounds x="3620" y="370" width="140" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T1_di" bpmnElement="T1">
+        <dc:Bounds x="3800" y="825" width="140" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CA_di" bpmnElement="CA">
+        <dc:Bounds x="3980" y="995" width="140" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="P12_di" bpmnElement="P12">
+        <dc:Bounds x="4165" y="370" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="G5_di" bpmnElement="G5" isMarkerVisible="true">
+        <dc:Bounds x="4385" y="385" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="4340" y="352" width="124" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="E_ok_di" bpmnElement="E_ok">
+        <dc:Bounds x="4662" y="392" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="4618" y="432" width="124" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="P13_di" bpmnElement="P13">
+        <dc:Bounds x="4520" y="490" width="140" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="E_def_di" bpmnElement="E_def">
+        <dc:Bounds x="4752" y="512" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="4708" y="552" width="124" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="E1s_di" bpmnElement="E1s">
+        <dc:Bounds x="590" y="677" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="546" y="717" width="124" height="56" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="E1t_di" bpmnElement="E1t">
+        <dc:Bounds x="713" y="655" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="E1t2_di" bpmnElement="E1t2">
+        <dc:Bounds x="913" y="655" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="E1e_di" bpmnElement="E1e">
+        <dc:Bounds x="1110" y="677" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1081" y="717" width="94" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="E2s_di" bpmnElement="E2s">
+        <dc:Bounds x="1850" y="677" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1806" y="717" width="124" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="E2t_di" bpmnElement="E2t">
+        <dc:Bounds x="1973" y="655" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="E2t2_di" bpmnElement="E2t2">
+        <dc:Bounds x="2173" y="655" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="E2e_di" bpmnElement="E2e">
+        <dc:Bounds x="2370" y="677" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2341" y="717" width="94" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_S_C1_di" bpmnElement="Flow_S_C1">
+        <di:waypoint x="288" y="140" />
+        <di:waypoint x="375" y="140" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_C1_P1_di" bpmnElement="Flow_C1_P1">
+        <di:waypoint x="525" y="140" />
+        <di:waypoint x="545" y="140" />
+        <di:waypoint x="545" y="410" />
+        <di:waypoint x="565" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_P1_G1_di" bpmnElement="Flow_P1_G1">
+        <di:waypoint x="695" y="410" />
+        <di:waypoint x="785" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G1_P2_di" bpmnElement="Flow_G1_P2">
+        <di:waypoint x="835" y="410" />
+        <di:waypoint x="920" y="410" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="843" y="394" width="16" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G1_E_dup_di" bpmnElement="Flow_G1_E_dup">
+        <di:waypoint x="810" y="385" />
+        <di:waypoint x="810" y="280" />
+        <di:waypoint x="972" y="280" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="815" y="326" width="22" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_P2_G2_di" bpmnElement="Flow_P2_G2">
+        <di:waypoint x="1060" y="410" />
+        <di:waypoint x="1145" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G2_P3a_di" bpmnElement="Flow_G2_P3a">
+        <di:waypoint x="1170" y="385" />
+        <di:waypoint x="1170" y="280" />
+        <di:waypoint x="1285" y="280" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1175" y="326" width="16" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G2_P3b_di" bpmnElement="Flow_G2_P3b">
+        <di:waypoint x="1170" y="435" />
+        <di:waypoint x="1170" y="530" />
+        <di:waypoint x="1285" y="530" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1175" y="476" width="112" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_P3a_Gm_di" bpmnElement="Flow_P3a_Gm">
+        <di:waypoint x="1415" y="280" />
+        <di:waypoint x="1530" y="280" />
+        <di:waypoint x="1530" y="385" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_P3b_Gm_di" bpmnElement="Flow_P3b_Gm">
+        <di:waypoint x="1415" y="530" />
+        <di:waypoint x="1530" y="530" />
+        <di:waypoint x="1530" y="435" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Gm_P4_di" bpmnElement="Flow_Gm_P4">
+        <di:waypoint x="1555" y="410" />
+        <di:waypoint x="1635" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_P4_P5_di" bpmnElement="Flow_P4_P5">
+        <di:waypoint x="1785" y="410" />
+        <di:waypoint x="1825" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_P5_P6_di" bpmnElement="Flow_P5_P6">
+        <di:waypoint x="1955" y="410" />
+        <di:waypoint x="2000" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_P6_P7_di" bpmnElement="Flow_P6_P7">
+        <di:waypoint x="2140" y="410" />
+        <di:waypoint x="2175" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_P7_G3_di" bpmnElement="Flow_P7_G3">
+        <di:waypoint x="2325" y="410" />
+        <di:waypoint x="2405" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G3_Gm2_di" bpmnElement="Flow_G3_Gm2">
+        <di:waypoint x="2455" y="410" />
+        <di:waypoint x="2765" y="410" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2463" y="394" width="58" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G3_P8_di" bpmnElement="Flow_G3_P8">
+        <di:waypoint x="2430" y="435" />
+        <di:waypoint x="2430" y="530" />
+        <di:waypoint x="2545" y="530" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2435" y="476" width="94" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_P8_Gm2_di" bpmnElement="Flow_P8_Gm2">
+        <di:waypoint x="2675" y="530" />
+        <di:waypoint x="2790" y="530" />
+        <di:waypoint x="2790" y="435" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Gm2_P9_di" bpmnElement="Flow_Gm2_P9">
+        <di:waypoint x="2815" y="410" />
+        <di:waypoint x="2900" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_P9_G4_di" bpmnElement="Flow_P9_G4">
+        <di:waypoint x="3040" y="410" />
+        <di:waypoint x="3125" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G4_P10_di" bpmnElement="Flow_G4_P10">
+        <di:waypoint x="3150" y="435" />
+        <di:waypoint x="3150" y="530" />
+        <di:waypoint x="3265" y="530" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="3155" y="476" width="118" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G4_Gm3_di" bpmnElement="Flow_G4_Gm3">
+        <di:waypoint x="3175" y="410" />
+        <di:waypoint x="3485" y="410" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="3183" y="394" width="22" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_P10_Gm3_di" bpmnElement="Flow_P10_Gm3">
+        <di:waypoint x="3395" y="530" />
+        <di:waypoint x="3510" y="530" />
+        <di:waypoint x="3510" y="435" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Gm3_P11_di" bpmnElement="Flow_Gm3_P11">
+        <di:waypoint x="3535" y="410" />
+        <di:waypoint x="3620" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_P11_T1_di" bpmnElement="Flow_P11_T1">
+        <di:waypoint x="3760" y="410" />
+        <di:waypoint x="3780" y="410" />
+        <di:waypoint x="3780" y="865" />
+        <di:waypoint x="3800" y="865" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_T1_CA_di" bpmnElement="Flow_T1_CA">
+        <di:waypoint x="3940" y="865" />
+        <di:waypoint x="3960" y="865" />
+        <di:waypoint x="3960" y="1035" />
+        <di:waypoint x="3980" y="1035" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CA_P12_di" bpmnElement="Flow_CA_P12">
+        <di:waypoint x="4120" y="1035" />
+        <di:waypoint x="4142" y="1035" />
+        <di:waypoint x="4142" y="410" />
+        <di:waypoint x="4165" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_P12_G5_di" bpmnElement="Flow_P12_G5">
+        <di:waypoint x="4295" y="410" />
+        <di:waypoint x="4385" y="410" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G5_E_ok_di" bpmnElement="Flow_G5_E_ok">
+        <di:waypoint x="4435" y="410" />
+        <di:waypoint x="4662" y="410" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="4438" y="378" width="130" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G5_P13_di" bpmnElement="Flow_G5_P13">
+        <di:waypoint x="4410" y="435" />
+        <di:waypoint x="4410" y="530" />
+        <di:waypoint x="4520" y="530" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="4415" y="450" width="130" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_P13_E_def_di" bpmnElement="Flow_P13_E_def">
+        <di:waypoint x="4660" y="530" />
+        <di:waypoint x="4752" y="530" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_E1s_E1t_di" bpmnElement="Flow_E1s_E1t">
+        <di:waypoint x="626" y="695" />
+        <di:waypoint x="713" y="695" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_E1t_E1t2_di" bpmnElement="Flow_E1t_E1t2">
+        <di:waypoint x="863" y="695" />
+        <di:waypoint x="913" y="695" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_E1t2_E1e_di" bpmnElement="Flow_E1t2_E1e">
+        <di:waypoint x="1043" y="695" />
+        <di:waypoint x="1110" y="695" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_E2s_E2t_di" bpmnElement="Flow_E2s_E2t">
+        <di:waypoint x="1886" y="695" />
+        <di:waypoint x="1973" y="695" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_E2t_E2t2_di" bpmnElement="Flow_E2t_E2t2">
+        <di:waypoint x="2123" y="695" />
+        <di:waypoint x="2173" y="695" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_E2t2_E2e_di" bpmnElement="Flow_E2t2_E2e">
+        <di:waypoint x="2303" y="695" />
+        <di:waypoint x="2370" y="695" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="A_nfr10_di" bpmnElement="A_nfr10">
+        <dc:Bounds x="540" y="240" width="250" height="60" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="A_pv_di" bpmnElement="A_pv">
+        <dc:Bounds x="1998" y="475" width="300" height="75" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="A_local_di" bpmnElement="A_local">
+        <dc:Bounds x="1638" y="230" width="330" height="75" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="A_ca_di" bpmnElement="A_ca">
+        <dc:Bounds x="4158" y="980" width="260" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Assoc_A_nfr10_di" bpmnElement="Assoc_A_nfr10">
+        <di:waypoint x="630" y="370" />
+        <di:waypoint x="630" y="300" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Assoc_A_pv_di" bpmnElement="Assoc_A_pv">
+        <di:waypoint x="2070" y="450" />
+        <di:waypoint x="2070" y="475" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Assoc_A_local_di" bpmnElement="Assoc_A_local">
+        <di:waypoint x="1710" y="370" />
+        <di:waypoint x="1710" y="305" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Assoc_A_ca_di" bpmnElement="Assoc_A_ca">
+        <di:waypoint x="4120" y="1035" />
+        <di:waypoint x="4158" y="1005" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

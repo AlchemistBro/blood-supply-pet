@@ -1,0 +1,1576 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_Process_ConfirmTransfer" targetNamespace="https://github.com/AlchemistBro/blood-supply-pet/bpmn">
+  <bpmn:message id="Msg_OpenObligation" name="OpenObligation" />
+  <bpmn:message id="Msg_CancelObligation" name="CancelObligation" />
+  <bpmn:message id="Msg_UnitWithdrawn" name="UnitWithdrawn / UnitUpdated(QUARANTINE)" />
+  <bpmn:message id="Msg_TransportRejected" name="TransportRejected" />
+  <bpmn:message id="Msg_CancelTransport" name="CancelTransport" />
+  <bpmn:error id="Err_CarrierUnavailable" name="C03 недоступна или исход вызова неизвестен" errorCode="CARRIER_UNAVAILABLE" />
+  <bpmn:escalation id="Esc_Duty" name="Эскалация дежурному смены" escalationCode="DUTY_OFFICER" />
+  <bpmn:collaboration id="Collaboration_Process_ConfirmTransfer">
+    <bpmn:participant id="Participant_Process_ConfirmTransfer" name="Подтверждение передачи: обязательство O07 от задания до доставки" processRef="Process_ConfirmTransfer" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_ConfirmTransfer" name="Подтверждение передачи (O07)" isExecutable="false">
+    <bpmn:documentation>Сага подтверждения передачи. Источники: docs/domain/obligation-states.md, docs/architecture/saga-confirmation.md, ADR-0004, ADR-0011, ADR-0022, ADR-0027. Модель описательная (isExecutable=false): исполняет её код сервисов transfer и logistics-gateway.</bpmn:documentation>
+    <bpmn:laneSet id="LaneSet_Process_ConfirmTransfer">
+      <bpmn:lane id="L_op" name="Оператор клиники-источника">
+        <bpmn:flowNodeRef>Gm</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>U1</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>B1</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>B2</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gr</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>U_retry</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>U2</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>E_prep</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>U3</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="L_tr" name="transfer — оркестратор саги">
+        <bpmn:flowNodeRef>S1</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>T1</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>T2</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>G1</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>E_wd1</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>T_idem</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>E_idem</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>T3</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>G2</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>G3a</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>G3b</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>G_urg</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>T_escSrc</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>T_rej</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>E_rej</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>T_TX</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>G4</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>E_wd2</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>P1</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>T_out</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>G_cf</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>T_TR</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>T_ign</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>E_ign</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>T_disp</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>T_deliv</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>E_done</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>T_exp</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>G_fb</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>T_next</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>E_next</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>T_nofb</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>E_nofb</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>T_cancel</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>E_canc</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>ESP1</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>ESP2</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>ESP3</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="L_inv" name="inventory → C01 АИСТ-М">
+        <bpmn:flowNodeRef>I1</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="L_gw" name="logistics-gateway (ACL к C03)">
+        <bpmn:flowNodeRef>W1</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gx</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>W2</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gf</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>G_unk</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>T_failed</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>E_failed</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>G_res</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>T_acc</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>T_ref</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>E_ref</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>W_fail</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>G_max</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>T_back</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>T_unk</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>T_rech</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gy</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>W_del</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>ESP4</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="L_car" name="Перевозчик — служба перевозки (C03, ADR-0022)">
+        <bpmn:flowNodeRef>K1</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>E1</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>K2</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>E2</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>K3</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="S1" name="OpenObligation: выбор врача или предложение плана">
+      <bpmn:outgoing>Flow_S1_T1</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="S1_ed" messageRef="Msg_OpenObligation" />
+    </bpmn:startEvent>
+    <bpmn:task id="T1" name="Открыть O07 PENDING: срок по срочности, ObligationOpened, аудит">
+      <bpmn:incoming>Flow_S1_T1</bpmn:incoming>
+      <bpmn:outgoing>Flow_T1_Gm</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="Gm">
+      <bpmn:incoming>Flow_T1_Gm</bpmn:incoming>
+      <bpmn:incoming>Flow_U_retry_Gm</bpmn:incoming>
+      <bpmn:outgoing>Flow_Gm_U1</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:userTask id="U1" name="Проверить единицы и подтвердить: список, «частично», ключ идемпотентности">
+      <bpmn:incoming>Flow_Gm_U1</bpmn:incoming>
+      <bpmn:outgoing>Flow_U1_T2</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:boundaryEvent id="B1" name="Срок подтверждения истёк (опрос 5 с)" attachedToRef="U1">
+      <bpmn:outgoing>Flow_B1_T_exp</bpmn:outgoing>
+      <bpmn:timerEventDefinition id="B1_ed" />
+    </bpmn:boundaryEvent>
+    <bpmn:boundaryEvent id="B2" name="CancelObligation" attachedToRef="U1">
+      <bpmn:outgoing>Flow_B2_T_cancel</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="B2_ed" messageRef="Msg_CancelObligation" />
+    </bpmn:boundaryEvent>
+    <bpmn:task id="T2" name="Найти O07, сверить статус и ключ">
+      <bpmn:incoming>Flow_U1_T2</bpmn:incoming>
+      <bpmn:outgoing>Flow_T2_G1</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="G1" name="Статус O07?">
+      <bpmn:incoming>Flow_T2_G1</bpmn:incoming>
+      <bpmn:outgoing>Flow_G1_T3</bpmn:outgoing>
+      <bpmn:outgoing>Flow_G1_E_wd1</bpmn:outgoing>
+      <bpmn:outgoing>Flow_G1_T_idem</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:endEvent id="E_wd1" name="Задание снято: TaskWithdrawn(status), «не отправляйте»">
+      <bpmn:incoming>Flow_G1_E_wd1</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:task id="T_idem" name="Вернуть прежний результат Confirmed">
+      <bpmn:incoming>Flow_G1_T_idem</bpmn:incoming>
+      <bpmn:outgoing>Flow_T_idem_E_idem</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:endEvent id="E_idem" name="Повтор: Confirmed">
+      <bpmn:incoming>Flow_T_idem_E_idem</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:task id="T3" name="Проверить состав: разные единицы, не больше requested_qty, источник и вид">
+      <bpmn:incoming>Flow_G1_T3</bpmn:incoming>
+      <bpmn:outgoing>Flow_T3_G2</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="G2" name="Состав верен?">
+      <bpmn:incoming>Flow_T3_G2</bpmn:incoming>
+      <bpmn:outgoing>Flow_G2_Gr</bpmn:outgoing>
+      <bpmn:outgoing>Flow_G2_I1</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="I1" name="Точечный статус единиц: GET /internal/units/status, 3 с, предохранитель, вне блокировок">
+      <bpmn:incoming>Flow_G2_I1</bpmn:incoming>
+      <bpmn:outgoing>Flow_I1_G3a</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="G3a" name="АИСТ-М ответила?">
+      <bpmn:incoming>Flow_I1_G3a</bpmn:incoming>
+      <bpmn:outgoing>Flow_G3a_G3b</bpmn:outgoing>
+      <bpmn:outgoing>Flow_G3a_G_urg</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:exclusiveGateway id="G3b" name="Сколько единиц IN_STOCK?">
+      <bpmn:incoming>Flow_G3a_G3b</bpmn:incoming>
+      <bpmn:outgoing>Flow_G3b_Gr</bpmn:outgoing>
+      <bpmn:outgoing>Flow_G3b_T_rej</bpmn:outgoing>
+      <bpmn:outgoing>Flow_G3b_T_TX</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:exclusiveGateway id="G_urg" name="Срочность экстренная?">
+      <bpmn:incoming>Flow_G3a_G_urg</bpmn:incoming>
+      <bpmn:outgoing>Flow_G_urg_T_escSrc</bpmn:outgoing>
+      <bpmn:outgoing>Flow_G_urg_Gr</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="T_escSrc" name="TX: EscalationRaised(SOURCE_SYSTEM_UNAVAILABLE), аудит">
+      <bpmn:incoming>Flow_G_urg_T_escSrc</bpmn:incoming>
+      <bpmn:outgoing>Flow_T_escSrc_Gr</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="T_rej" name="TX: CAS PENDING→REJECTED, TransferRejected(UNITS_WITHDRAWN), аудит">
+      <bpmn:incoming>Flow_G3b_T_rej</bpmn:incoming>
+      <bpmn:outgoing>Flow_T_rej_E_rej</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:endEvent id="E_rej" name="Отклонено (Rejected)">
+      <bpmn:incoming>Flow_T_rej_E_rej</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:task id="T_TX" name="Транзакция подтверждения">
+      <bpmn:incoming>Flow_G3b_T_TX</bpmn:incoming>
+      <bpmn:outgoing>Flow_T_TX_G4</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="G4" name="Итог транзакции?">
+      <bpmn:incoming>Flow_T_TX_G4</bpmn:incoming>
+      <bpmn:outgoing>Flow_G4_Gr</bpmn:outgoing>
+      <bpmn:outgoing>Flow_G4_E_wd2</bpmn:outgoing>
+      <bpmn:outgoing>Flow_G4_P1</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:endEvent id="E_wd2" name="Задание снято (TaskWithdrawn)">
+      <bpmn:incoming>Flow_G4_E_wd2</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:exclusiveGateway id="Gr">
+      <bpmn:incoming>Flow_G2_Gr</bpmn:incoming>
+      <bpmn:incoming>Flow_G_urg_Gr</bpmn:incoming>
+      <bpmn:incoming>Flow_T_escSrc_Gr</bpmn:incoming>
+      <bpmn:incoming>Flow_G3b_Gr</bpmn:incoming>
+      <bpmn:incoming>Flow_G4_Gr</bpmn:incoming>
+      <bpmn:outgoing>Flow_Gr_U_retry</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:userTask id="U_retry" name="Получить причину отказа; исправить выбор или повторить">
+      <bpmn:incoming>Flow_Gr_U_retry</bpmn:incoming>
+      <bpmn:outgoing>Flow_U_retry_Gm</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:parallelGateway id="P1">
+      <bpmn:incoming>Flow_G4_P1</bpmn:incoming>
+      <bpmn:outgoing>Flow_P1_U2</bpmn:outgoing>
+      <bpmn:outgoing>Flow_P1_T_out</bpmn:outgoing>
+    </bpmn:parallelGateway>
+    <bpmn:userTask id="U2" name="Получить «Закреплено, готовьте» в том же запросе; подготовить единицы">
+      <bpmn:incoming>Flow_P1_U2</bpmn:incoming>
+      <bpmn:outgoing>Flow_U2_E_prep</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:endEvent id="E_prep" name="Единицы готовы к передаче">
+      <bpmn:incoming>Flow_U2_E_prep</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sendTask id="T_out" name="Ретранслятор outbox: RequestTransport → logistics.commands (ключ = O07)">
+      <bpmn:incoming>Flow_P1_T_out</bpmn:incoming>
+      <bpmn:outgoing>Flow_T_out_W1</bpmn:outgoing>
+    </bpmn:sendTask>
+    <bpmn:task id="W1" name="Принять команду: inbox и строка REQUESTING одной TX">
+      <bpmn:incoming>Flow_T_out_W1</bpmn:incoming>
+      <bpmn:outgoing>Flow_W1_Gx</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="Gx">
+      <bpmn:incoming>Flow_W1_Gx</bpmn:incoming>
+      <bpmn:incoming>Flow_Gy_Gx</bpmn:incoming>
+      <bpmn:outgoing>Flow_Gx_W2</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="W2" name="Взять аренду строки: lease_owner, lease_until (30 с)">
+      <bpmn:incoming>Flow_Gx_W2</bpmn:incoming>
+      <bpmn:outgoing>Flow_W2_K1</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:serviceTask id="K1" name="Найти активный заказ по clientRef = o07-…">
+      <bpmn:incoming>Flow_W2_K1</bpmn:incoming>
+      <bpmn:outgoing>Flow_K1_Gf</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:boundaryEvent id="E1" name="Нет ответа" attachedToRef="K1">
+      <bpmn:outgoing>Flow_E1_W_fail</bpmn:outgoing>
+      <bpmn:errorEventDefinition id="E1_ed" errorRef="Err_CarrierUnavailable" />
+    </bpmn:boundaryEvent>
+    <bpmn:exclusiveGateway id="Gf" name="Заказ у перевозчика есть?">
+      <bpmn:incoming>Flow_K1_Gf</bpmn:incoming>
+      <bpmn:outgoing>Flow_Gf_G_unk</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Gf_T_acc</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:exclusiveGateway id="G_unk" name="Строка уже UNKNOWN?">
+      <bpmn:incoming>Flow_Gf_G_unk</bpmn:incoming>
+      <bpmn:outgoing>Flow_G_unk_T_failed</bpmn:outgoing>
+      <bpmn:outgoing>Flow_G_unk_K2</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="T_failed" name="FAILED: второй заказ вслепую не шлём">
+      <bpmn:incoming>Flow_G_unk_T_failed</bpmn:incoming>
+      <bpmn:outgoing>Flow_T_failed_E_failed</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:endEvent id="E_failed" name="Заказа нет (FAILED)">
+      <bpmn:incoming>Flow_T_failed_E_failed</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:serviceTask id="K2" name="Создать заказ: POST /shipments, clientRef, режим">
+      <bpmn:incoming>Flow_G_unk_K2</bpmn:incoming>
+      <bpmn:outgoing>Flow_K2_G_res</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:boundaryEvent id="E2" name="Нет ответа" attachedToRef="K2">
+      <bpmn:outgoing>Flow_E2_W_fail</bpmn:outgoing>
+      <bpmn:errorEventDefinition id="E2_ed" errorRef="Err_CarrierUnavailable" />
+    </bpmn:boundaryEvent>
+    <bpmn:exclusiveGateway id="G_res" name="Ответ перевозчика?">
+      <bpmn:incoming>Flow_K2_G_res</bpmn:incoming>
+      <bpmn:outgoing>Flow_G_res_T_acc</bpmn:outgoing>
+      <bpmn:outgoing>Flow_G_res_T_ref</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="T_acc" name="ACCEPTED; outbox TransportAccepted, пока аренда наша">
+      <bpmn:incoming>Flow_Gf_T_acc</bpmn:incoming>
+      <bpmn:incoming>Flow_G_res_T_acc</bpmn:incoming>
+      <bpmn:outgoing>Flow_T_acc_G_cf</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="T_ref" name="REJECTED; outbox TransportRejected(REFUSED)">
+      <bpmn:incoming>Flow_G_res_T_ref</bpmn:incoming>
+      <bpmn:outgoing>Flow_T_ref_E_ref</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:endEvent id="E_ref" name="Отказ передан transfer">
+      <bpmn:incoming>Flow_T_ref_E_ref</bpmn:incoming>
+      <bpmn:messageEventDefinition id="E_ref_ed" messageRef="Msg_TransportRejected" />
+    </bpmn:endEvent>
+    <bpmn:task id="W_fail" name="Засчитать попытку: attempts + 1, пауза 1 с × 2^n">
+      <bpmn:incoming>Flow_E1_W_fail</bpmn:incoming>
+      <bpmn:incoming>Flow_E2_W_fail</bpmn:incoming>
+      <bpmn:outgoing>Flow_W_fail_G_max</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="G_max" name="REQUESTING и попытки исчерпаны (5)?">
+      <bpmn:incoming>Flow_W_fail_G_max</bpmn:incoming>
+      <bpmn:outgoing>Flow_G_max_T_back</bpmn:outgoing>
+      <bpmn:outgoing>Flow_G_max_T_unk</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:intermediateCatchEvent id="T_back" name="Ждать next_attempt_at: сверщик подберёт строку">
+      <bpmn:incoming>Flow_G_max_T_back</bpmn:incoming>
+      <bpmn:outgoing>Flow_T_back_Gy</bpmn:outgoing>
+      <bpmn:timerEventDefinition id="T_back_ed" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:task id="T_unk" name="UNKNOWN; outbox TransportRejected(OUTCOME_UNKNOWN)">
+      <bpmn:incoming>Flow_G_max_T_unk</bpmn:incoming>
+      <bpmn:outgoing>Flow_T_unk_T_rech</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:intermediateCatchEvent id="T_rech" name="Перепроверка UNKNOWN (1 мин)">
+      <bpmn:incoming>Flow_T_unk_T_rech</bpmn:incoming>
+      <bpmn:outgoing>Flow_T_rech_Gy</bpmn:outgoing>
+      <bpmn:timerEventDefinition id="T_rech_ed" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:exclusiveGateway id="Gy">
+      <bpmn:incoming>Flow_T_back_Gy</bpmn:incoming>
+      <bpmn:incoming>Flow_T_rech_Gy</bpmn:incoming>
+      <bpmn:outgoing>Flow_Gy_Gx</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:exclusiveGateway id="G_cf" name="O07 ещё CONFIRMED?">
+      <bpmn:incoming>Flow_T_acc_G_cf</bpmn:incoming>
+      <bpmn:outgoing>Flow_G_cf_T_TR</bpmn:outgoing>
+      <bpmn:outgoing>Flow_G_cf_T_ign</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="T_TR" name="inbox; CAS CONFIRMED→TRANSPORT_REQUESTED, transport_ref, TransportRequested">
+      <bpmn:incoming>Flow_G_cf_T_TR</bpmn:incoming>
+      <bpmn:outgoing>Flow_T_TR_U3</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="T_ign" name="Не применять, запись в аудит: CancelTransport уже ушла">
+      <bpmn:incoming>Flow_G_cf_T_ign</bpmn:incoming>
+      <bpmn:outgoing>Flow_T_ign_E_ign</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:endEvent id="E_ign" name="Поздний ответ не применён">
+      <bpmn:incoming>Flow_T_ign_E_ign</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:userTask id="U3" name="Передать единицы работнику службы перевозки: проверка перед отправкой">
+      <bpmn:incoming>Flow_T_TR_U3</bpmn:incoming>
+      <bpmn:outgoing>Flow_U3_T_disp</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:task id="T_disp" name="TRANSPORT_REQUESTED→DISPATCHED, закрепления CONSUMED">
+      <bpmn:incoming>Flow_U3_T_disp</bpmn:incoming>
+      <bpmn:outgoing>Flow_T_disp_K3</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:manualTask id="K3" name="Перевезти: режим, длительность, целостность контейнера, температура">
+      <bpmn:incoming>Flow_T_disp_K3</bpmn:incoming>
+      <bpmn:outgoing>Flow_K3_W_del</bpmn:outgoing>
+    </bpmn:manualTask>
+    <bpmn:task id="W_del" name="TransportDelivered: температура при отправке и прибытии → logistics.replies">
+      <bpmn:incoming>Flow_K3_W_del</bpmn:incoming>
+      <bpmn:outgoing>Flow_W_del_T_deliv</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="T_deliv" name="Приёмка получателем: DISPATCHED→DELIVERED">
+      <bpmn:incoming>Flow_W_del_T_deliv</bpmn:incoming>
+      <bpmn:outgoing>Flow_T_deliv_E_done</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:endEvent id="E_done" name="Доставлено (DELIVERED)">
+      <bpmn:incoming>Flow_T_deliv_E_done</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:task id="T_exp" name="ExpireOverdue, TX: CAS PENDING→EXPIRED, аудит">
+      <bpmn:incoming>Flow_B1_T_exp</bpmn:incoming>
+      <bpmn:outgoing>Flow_T_exp_G_fb</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:exclusiveGateway id="G_fb" name="Есть запасной источник?">
+      <bpmn:incoming>Flow_T_exp_G_fb</bpmn:incoming>
+      <bpmn:outgoing>Flow_G_fb_T_next</bpmn:outgoing>
+      <bpmn:outgoing>Flow_G_fb_T_nofb</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:task id="T_next" name="Новое O07 PENDING у следующего источника (choice_id = uuid v5), TransferExpired(next_obligation_id)">
+      <bpmn:incoming>Flow_G_fb_T_next</bpmn:incoming>
+      <bpmn:outgoing>Flow_T_next_E_next</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:endEvent id="E_next" name="Эскалация к следующему источнику">
+      <bpmn:incoming>Flow_T_next_E_next</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:task id="T_nofb" name="TransferExpired, EscalationRaised(EXPIRED_NO_FALLBACK)">
+      <bpmn:incoming>Flow_G_fb_T_nofb</bpmn:incoming>
+      <bpmn:outgoing>Flow_T_nofb_E_nofb</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:endEvent id="E_nofb" name="Эскалация дежурному">
+      <bpmn:incoming>Flow_T_nofb_E_nofb</bpmn:incoming>
+      <bpmn:escalationEventDefinition id="E_nofb_ed" escalationRef="Esc_Duty" />
+    </bpmn:endEvent>
+    <bpmn:task id="T_cancel" name="TX: CAS PENDING→CANCELLED, TransferCancelled, аудит">
+      <bpmn:incoming>Flow_B2_T_cancel</bpmn:incoming>
+      <bpmn:outgoing>Flow_T_cancel_E_canc</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:endEvent id="E_canc" name="Отменено (CANCELLED)">
+      <bpmn:incoming>Flow_T_cancel_E_canc</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:subProcess id="ESP1" name="Выбытие или карантин закреплённой единицы (компенсация)" triggeredByEvent="true">
+      <bpmn:startEvent id="ESP1_s" name="UnitWithdrawn или UnitUpdated(QUARANTINE) по закреплённой единице" isInterrupting="false">
+        <bpmn:outgoing>Flow_ESP1_s_ESP1_t1</bpmn:outgoing>
+        <bpmn:messageEventDefinition id="ESP1_s_ed" messageRef="Msg_UnitWithdrawn" />
+      </bpmn:startEvent>
+      <bpmn:task id="ESP1_t1" name="TX: lock Остаток → CAS CONFIRMED | TRANSPORT_REQUESTED → BROKEN">
+        <bpmn:incoming>Flow_ESP1_s_ESP1_t1</bpmn:incoming>
+        <bpmn:outgoing>Flow_ESP1_t1_ESP1_t2</bpmn:outgoing>
+      </bpmn:task>
+      <bpmn:task id="ESP1_t2" name="Закрепления RELEASED, reserved − k; outbox TransferBroken(reason), CancelTransport; аудит">
+        <bpmn:incoming>Flow_ESP1_t1_ESP1_t2</bpmn:incoming>
+        <bpmn:outgoing>Flow_ESP1_t2_ESP1_e</bpmn:outgoing>
+      </bpmn:task>
+      <bpmn:endEvent id="ESP1_e" name="BROKEN; CancelTransport ушла шлюзу">
+        <bpmn:incoming>Flow_ESP1_t2_ESP1_e</bpmn:incoming>
+        <bpmn:messageEventDefinition id="ESP1_e_ed" messageRef="Msg_CancelTransport" />
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_ESP1_s_ESP1_t1" sourceRef="ESP1_s" targetRef="ESP1_t1" />
+      <bpmn:sequenceFlow id="Flow_ESP1_t1_ESP1_t2" sourceRef="ESP1_t1" targetRef="ESP1_t2" />
+      <bpmn:sequenceFlow id="Flow_ESP1_t2_ESP1_e" sourceRef="ESP1_t2" targetRef="ESP1_e" />
+    </bpmn:subProcess>
+    <bpmn:subProcess id="ESP2" name="Отмена после подтверждения" triggeredByEvent="true">
+      <bpmn:startEvent id="ESP2_s" name="CancelObligation или отмена через API: O07 CONFIRMED или TRANSPORT_REQUESTED" isInterrupting="false">
+        <bpmn:outgoing>Flow_ESP2_s_ESP2_t</bpmn:outgoing>
+        <bpmn:messageEventDefinition id="ESP2_s_ed" messageRef="Msg_CancelObligation" />
+      </bpmn:startEvent>
+      <bpmn:task id="ESP2_t" name="TX: CAS → CANCELLED, закрепления RELEASED, резерв снят, TransferCancelled, аудит">
+        <bpmn:incoming>Flow_ESP2_s_ESP2_t</bpmn:incoming>
+        <bpmn:outgoing>Flow_ESP2_t_ESP2_e</bpmn:outgoing>
+      </bpmn:task>
+      <bpmn:endEvent id="ESP2_e" name="CancelTransport(OBLIGATION_CANCELLED)">
+        <bpmn:incoming>Flow_ESP2_t_ESP2_e</bpmn:incoming>
+        <bpmn:messageEventDefinition id="ESP2_e_ed" messageRef="Msg_CancelTransport" />
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_ESP2_s_ESP2_t" sourceRef="ESP2_s" targetRef="ESP2_t" />
+      <bpmn:sequenceFlow id="Flow_ESP2_t_ESP2_e" sourceRef="ESP2_t" targetRef="ESP2_e" />
+    </bpmn:subProcess>
+    <bpmn:subProcess id="ESP3" name="Перевозка не подтверждена" triggeredByEvent="true">
+      <bpmn:startEvent id="ESP3_s" name="TransportRejected: REFUSED или OUTCOME_UNKNOWN" isInterrupting="false">
+        <bpmn:outgoing>Flow_ESP3_s_ESP3_t</bpmn:outgoing>
+        <bpmn:messageEventDefinition id="ESP3_s_ed" messageRef="Msg_TransportRejected" />
+      </bpmn:startEvent>
+      <bpmn:task id="ESP3_t" name="O07 остаётся CONFIRMED: TransportRequestFailed, EscalationRaised(TRANSPORT_REFUSED | TRANSPORT_OUTCOME_UNKNOWN)">
+        <bpmn:incoming>Flow_ESP3_s_ESP3_t</bpmn:incoming>
+        <bpmn:outgoing>Flow_ESP3_t_ESP3_e</bpmn:outgoing>
+      </bpmn:task>
+      <bpmn:endEvent id="ESP3_e" name="Дежурный организует перевозку вручную">
+        <bpmn:incoming>Flow_ESP3_t_ESP3_e</bpmn:incoming>
+        <bpmn:escalationEventDefinition id="ESP3_e_ed" escalationRef="Esc_Duty" />
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_ESP3_s_ESP3_t" sourceRef="ESP3_s" targetRef="ESP3_t" />
+      <bpmn:sequenceFlow id="Flow_ESP3_t_ESP3_e" sourceRef="ESP3_t" targetRef="ESP3_e" />
+    </bpmn:subProcess>
+    <bpmn:subProcess id="ESP4" name="Отмена перевозки (CancelTransport)" triggeredByEvent="true">
+      <bpmn:startEvent id="ESP4_s" name="CancelTransport" isInterrupting="false">
+        <bpmn:outgoing>Flow_ESP4_s_ESP4_g1</bpmn:outgoing>
+        <bpmn:messageEventDefinition id="ESP4_s_ed" messageRef="Msg_CancelTransport" />
+      </bpmn:startEvent>
+      <bpmn:exclusiveGateway id="ESP4_g1" name="Строка есть?">
+        <bpmn:incoming>Flow_ESP4_s_ESP4_g1</bpmn:incoming>
+        <bpmn:outgoing>Flow_ESP4_g1_ESP4_g2</bpmn:outgoing>
+        <bpmn:outgoing>Flow_ESP4_g1_ESP4_w4</bpmn:outgoing>
+      </bpmn:exclusiveGateway>
+      <bpmn:exclusiveGateway id="ESP4_g2" name="Заказ мог быть создан?">
+        <bpmn:incoming>Flow_ESP4_g1_ESP4_g2</bpmn:incoming>
+        <bpmn:outgoing>Flow_ESP4_g2_ESP4_w1</bpmn:outgoing>
+        <bpmn:outgoing>Flow_ESP4_g2_ESP4_m</bpmn:outgoing>
+      </bpmn:exclusiveGateway>
+      <bpmn:task id="ESP4_w1" name="REQUESTING, UNKNOWN, ACCEPTED: флаг cancel_requested; drive под арендой: сверка, снять заказ у перевозчика">
+        <bpmn:incoming>Flow_ESP4_g2_ESP4_w1</bpmn:incoming>
+        <bpmn:outgoing>Flow_ESP4_w1_ESP4_w2</bpmn:outgoing>
+      </bpmn:task>
+      <bpmn:task id="ESP4_w2" name="CANCELLED; outbox TransportCancelled">
+        <bpmn:incoming>Flow_ESP4_w1_ESP4_w2</bpmn:incoming>
+        <bpmn:outgoing>Flow_ESP4_w2_ESP4_e1</bpmn:outgoing>
+      </bpmn:task>
+      <bpmn:endEvent id="ESP4_e1" name="Заказ снят">
+        <bpmn:incoming>Flow_ESP4_w2_ESP4_e1</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:exclusiveGateway id="ESP4_m">
+        <bpmn:incoming>Flow_ESP4_g2_ESP4_m</bpmn:incoming>
+        <bpmn:incoming>Flow_ESP4_w4_ESP4_m</bpmn:incoming>
+        <bpmn:outgoing>Flow_ESP4_m_ESP4_w3</bpmn:outgoing>
+      </bpmn:exclusiveGateway>
+      <bpmn:task id="ESP4_w3" name="outbox TransportCancelled">
+        <bpmn:incoming>Flow_ESP4_m_ESP4_w3</bpmn:incoming>
+        <bpmn:outgoing>Flow_ESP4_w3_ESP4_e2</bpmn:outgoing>
+      </bpmn:task>
+      <bpmn:endEvent id="ESP4_e2" name="Снимать нечего">
+        <bpmn:incoming>Flow_ESP4_w3_ESP4_e2</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:task id="ESP4_w4" name="Отмена обогнала заказ. Надгробие: строка CANCELLED, поздний RequestTransport упрётся в первичный ключ">
+        <bpmn:incoming>Flow_ESP4_g1_ESP4_w4</bpmn:incoming>
+        <bpmn:outgoing>Flow_ESP4_w4_ESP4_m</bpmn:outgoing>
+      </bpmn:task>
+      <bpmn:sequenceFlow id="Flow_ESP4_s_ESP4_g1" sourceRef="ESP4_s" targetRef="ESP4_g1" />
+      <bpmn:sequenceFlow id="Flow_ESP4_g1_ESP4_g2" sourceRef="ESP4_g1" targetRef="ESP4_g2" name="да" />
+      <bpmn:sequenceFlow id="Flow_ESP4_g1_ESP4_w4" sourceRef="ESP4_g1" targetRef="ESP4_w4" name="нет" />
+      <bpmn:sequenceFlow id="Flow_ESP4_g2_ESP4_w1" sourceRef="ESP4_g2" targetRef="ESP4_w1" name="да" />
+      <bpmn:sequenceFlow id="Flow_ESP4_g2_ESP4_m" sourceRef="ESP4_g2" targetRef="ESP4_m" name="нет: REJECTED или FAILED" />
+      <bpmn:sequenceFlow id="Flow_ESP4_w1_ESP4_w2" sourceRef="ESP4_w1" targetRef="ESP4_w2" />
+      <bpmn:sequenceFlow id="Flow_ESP4_w2_ESP4_e1" sourceRef="ESP4_w2" targetRef="ESP4_e1" />
+      <bpmn:sequenceFlow id="Flow_ESP4_w4_ESP4_m" sourceRef="ESP4_w4" targetRef="ESP4_m" />
+      <bpmn:sequenceFlow id="Flow_ESP4_m_ESP4_w3" sourceRef="ESP4_m" targetRef="ESP4_w3" />
+      <bpmn:sequenceFlow id="Flow_ESP4_w3_ESP4_e2" sourceRef="ESP4_w3" targetRef="ESP4_e2" />
+    </bpmn:subProcess>
+    <bpmn:sequenceFlow id="Flow_S1_T1" sourceRef="S1" targetRef="T1" />
+    <bpmn:sequenceFlow id="Flow_T1_Gm" sourceRef="T1" targetRef="Gm" />
+    <bpmn:sequenceFlow id="Flow_Gm_U1" sourceRef="Gm" targetRef="U1" />
+    <bpmn:sequenceFlow id="Flow_U1_T2" sourceRef="U1" targetRef="T2" />
+    <bpmn:sequenceFlow id="Flow_T2_G1" sourceRef="T2" targetRef="G1" />
+    <bpmn:sequenceFlow id="Flow_G1_T3" sourceRef="G1" targetRef="T3" name="PENDING" />
+    <bpmn:sequenceFlow id="Flow_G1_E_wd1" sourceRef="G1" targetRef="E_wd1" name="иначе" />
+    <bpmn:sequenceFlow id="Flow_G1_T_idem" sourceRef="G1" targetRef="T_idem" name="CONFIRMED / TRANSPORT_REQUESTED с тем же ключом" />
+    <bpmn:sequenceFlow id="Flow_T_idem_E_idem" sourceRef="T_idem" targetRef="E_idem" />
+    <bpmn:sequenceFlow id="Flow_T3_G2" sourceRef="T3" targetRef="G2" />
+    <bpmn:sequenceFlow id="Flow_G2_Gr" sourceRef="G2" targetRef="Gr" name="нет: InvalidRequest" />
+    <bpmn:sequenceFlow id="Flow_G2_I1" sourceRef="G2" targetRef="I1" name="да" />
+    <bpmn:sequenceFlow id="Flow_I1_G3a" sourceRef="I1" targetRef="G3a" />
+    <bpmn:sequenceFlow id="Flow_G3a_G3b" sourceRef="G3a" targetRef="G3b" name="да" />
+    <bpmn:sequenceFlow id="Flow_G3a_G_urg" sourceRef="G3a" targetRef="G_urg" name="нет ответа за 3 с или ответ из копии" />
+    <bpmn:sequenceFlow id="Flow_G_urg_T_escSrc" sourceRef="G_urg" targetRef="T_escSrc" name="да" />
+    <bpmn:sequenceFlow id="Flow_G_urg_Gr" sourceRef="G_urg" targetRef="Gr" name="нет" />
+    <bpmn:sequenceFlow id="Flow_T_escSrc_Gr" sourceRef="T_escSrc" targetRef="Gr" />
+    <bpmn:sequenceFlow id="Flow_G3b_Gr" sourceRef="G3b" targetRef="Gr" name="часть, без «частично»: UnitsUnavailable" />
+    <bpmn:sequenceFlow id="Flow_G3b_T_rej" sourceRef="G3b" targetRef="T_rej" name="ни одной" />
+    <bpmn:sequenceFlow id="Flow_T_rej_E_rej" sourceRef="T_rej" targetRef="E_rej" />
+    <bpmn:sequenceFlow id="Flow_G3b_T_TX" sourceRef="G3b" targetRef="T_TX" name="все или часть с «частично»" />
+    <bpmn:sequenceFlow id="Flow_T_TX_G4" sourceRef="T_TX" targetRef="G4" />
+    <bpmn:sequenceFlow id="Flow_G4_Gr" sourceRef="G4" targetRef="Gr" name="откат: UnitsUnavailable, ProtectedVolumeExceeded, UnitsTaken" />
+    <bpmn:sequenceFlow id="Flow_G4_E_wd2" sourceRef="G4" targetRef="E_wd2" name="CAS не прошёл" />
+    <bpmn:sequenceFlow id="Flow_G4_P1" sourceRef="G4" targetRef="P1" name="закреплено" />
+    <bpmn:sequenceFlow id="Flow_Gr_U_retry" sourceRef="Gr" targetRef="U_retry" />
+    <bpmn:sequenceFlow id="Flow_U_retry_Gm" sourceRef="U_retry" targetRef="Gm" />
+    <bpmn:sequenceFlow id="Flow_P1_U2" sourceRef="P1" targetRef="U2" />
+    <bpmn:sequenceFlow id="Flow_P1_T_out" sourceRef="P1" targetRef="T_out" />
+    <bpmn:sequenceFlow id="Flow_U2_E_prep" sourceRef="U2" targetRef="E_prep" />
+    <bpmn:sequenceFlow id="Flow_T_out_W1" sourceRef="T_out" targetRef="W1" />
+    <bpmn:sequenceFlow id="Flow_W1_Gx" sourceRef="W1" targetRef="Gx" />
+    <bpmn:sequenceFlow id="Flow_Gx_W2" sourceRef="Gx" targetRef="W2" />
+    <bpmn:sequenceFlow id="Flow_W2_K1" sourceRef="W2" targetRef="K1" />
+    <bpmn:sequenceFlow id="Flow_K1_Gf" sourceRef="K1" targetRef="Gf" />
+    <bpmn:sequenceFlow id="Flow_Gf_G_unk" sourceRef="Gf" targetRef="G_unk" name="нет" />
+    <bpmn:sequenceFlow id="Flow_Gf_T_acc" sourceRef="Gf" targetRef="T_acc" name="есть: сверка вместо повтора" />
+    <bpmn:sequenceFlow id="Flow_G_unk_T_failed" sourceRef="G_unk" targetRef="T_failed" name="да" />
+    <bpmn:sequenceFlow id="Flow_T_failed_E_failed" sourceRef="T_failed" targetRef="E_failed" />
+    <bpmn:sequenceFlow id="Flow_G_unk_K2" sourceRef="G_unk" targetRef="K2" name="нет" />
+    <bpmn:sequenceFlow id="Flow_K2_G_res" sourceRef="K2" targetRef="G_res" />
+    <bpmn:sequenceFlow id="Flow_G_res_T_acc" sourceRef="G_res" targetRef="T_acc" name="принят" />
+    <bpmn:sequenceFlow id="Flow_G_res_T_ref" sourceRef="G_res" targetRef="T_ref" name="отказ" />
+    <bpmn:sequenceFlow id="Flow_T_ref_E_ref" sourceRef="T_ref" targetRef="E_ref" />
+    <bpmn:sequenceFlow id="Flow_E1_W_fail" sourceRef="E1" targetRef="W_fail" />
+    <bpmn:sequenceFlow id="Flow_E2_W_fail" sourceRef="E2" targetRef="W_fail" />
+    <bpmn:sequenceFlow id="Flow_W_fail_G_max" sourceRef="W_fail" targetRef="G_max" />
+    <bpmn:sequenceFlow id="Flow_G_max_T_back" sourceRef="G_max" targetRef="T_back" name="нет" />
+    <bpmn:sequenceFlow id="Flow_G_max_T_unk" sourceRef="G_max" targetRef="T_unk" name="да" />
+    <bpmn:sequenceFlow id="Flow_T_back_Gy" sourceRef="T_back" targetRef="Gy" />
+    <bpmn:sequenceFlow id="Flow_T_unk_T_rech" sourceRef="T_unk" targetRef="T_rech" />
+    <bpmn:sequenceFlow id="Flow_T_rech_Gy" sourceRef="T_rech" targetRef="Gy" />
+    <bpmn:sequenceFlow id="Flow_Gy_Gx" sourceRef="Gy" targetRef="Gx" />
+    <bpmn:sequenceFlow id="Flow_T_acc_G_cf" sourceRef="T_acc" targetRef="G_cf" />
+    <bpmn:sequenceFlow id="Flow_G_cf_T_TR" sourceRef="G_cf" targetRef="T_TR" name="да" />
+    <bpmn:sequenceFlow id="Flow_G_cf_T_ign" sourceRef="G_cf" targetRef="T_ign" name="нет: BROKEN или CANCELLED" />
+    <bpmn:sequenceFlow id="Flow_T_ign_E_ign" sourceRef="T_ign" targetRef="E_ign" />
+    <bpmn:sequenceFlow id="Flow_T_TR_U3" sourceRef="T_TR" targetRef="U3" />
+    <bpmn:sequenceFlow id="Flow_U3_T_disp" sourceRef="U3" targetRef="T_disp" />
+    <bpmn:sequenceFlow id="Flow_T_disp_K3" sourceRef="T_disp" targetRef="K3" />
+    <bpmn:sequenceFlow id="Flow_K3_W_del" sourceRef="K3" targetRef="W_del" />
+    <bpmn:sequenceFlow id="Flow_W_del_T_deliv" sourceRef="W_del" targetRef="T_deliv" />
+    <bpmn:sequenceFlow id="Flow_T_deliv_E_done" sourceRef="T_deliv" targetRef="E_done" />
+    <bpmn:sequenceFlow id="Flow_B1_T_exp" sourceRef="B1" targetRef="T_exp" />
+    <bpmn:sequenceFlow id="Flow_T_exp_G_fb" sourceRef="T_exp" targetRef="G_fb" />
+    <bpmn:sequenceFlow id="Flow_G_fb_T_next" sourceRef="G_fb" targetRef="T_next" name="да" />
+    <bpmn:sequenceFlow id="Flow_T_next_E_next" sourceRef="T_next" targetRef="E_next" />
+    <bpmn:sequenceFlow id="Flow_G_fb_T_nofb" sourceRef="G_fb" targetRef="T_nofb" name="нет" />
+    <bpmn:sequenceFlow id="Flow_T_nofb_E_nofb" sourceRef="T_nofb" targetRef="E_nofb" />
+    <bpmn:sequenceFlow id="Flow_B2_T_cancel" sourceRef="B2" targetRef="T_cancel" />
+    <bpmn:sequenceFlow id="Flow_T_cancel_E_canc" sourceRef="T_cancel" targetRef="E_canc" />
+    <bpmn:textAnnotation id="A_esp1">
+      <bpmn:text>Дефицит заявки пишет matching по TransferBroken(request_id, reason). Возврат единицы из карантина BROKEN не отменяет (ADR-0027). Замена равноценной — только до выбытия, ReplaceUnit (ADR-0011).</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Assoc_A_esp1" sourceRef="ESP1_e" targetRef="A_esp1" />
+    <bpmn:textAnnotation id="A_esp2">
+      <bpmn:text>Из PENDING отмена — граничное событие на задании оператора. Из конечных статусов и после DISPATCHED отмены нет. Повтор отмены идемпотентен (ADR-0027).</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Assoc_A_esp2" sourceRef="ESP2_e" targetRef="A_esp2" />
+    <bpmn:textAnnotation id="A_esp3">
+      <bpmn:text>OUTCOME_UNKNOWN: сверка шлюза продолжается; если заказ найдётся, придёт запоздалый TransportAccepted и O07 перейдёт в TRANSPORT_REQUESTED.</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Assoc_A_esp3" sourceRef="ESP3_e" targetRef="A_esp3" />
+    <bpmn:textAnnotation id="A_tx">
+      <bpmn:text>lock source_stock (клиника × вид) → перепроверка копии под блокировкой → защищённый объём (NFR013) → CAS PENDING→CONFIRMED → INSERT allocation, UNIQUE (unit_id) WHERE CONFIRMED (NFR004) → reserved += k → outbox: TransferConfirmed, [TransferShortfallRecorded], RequestTransport → аудит</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Assoc_A_tx" sourceRef="T_TX" targetRef="A_tx" />
+    <bpmn:textAnnotation id="A_inv">
+      <bpmn:text>Единственный синхронный вызов между сервисами (ADR-0004). Ответ из копии (source: copy) не принимается: BS_ALLOW_COPY_CONFIRM_EMERGENCY = false (ADR-0027).</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Assoc_A_inv" sourceRef="I1" targetRef="A_inv" />
+    <bpmn:textAnnotation id="A_lease">
+      <bpmn:text>kill -9 после REQUESTING: аренда истекает, сверщик продолжает тот же drive. Несколько экземпляров — один заказ: с C03 говорит владелец аренды.</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Assoc_A_lease" sourceRef="W2" targetRef="A_lease" />
+    <bpmn:textAnnotation id="A_st7">
+      <bpmn:text>Этап 7, ADR-0022 (предложен): C03 — служба перевозки субъекта обращения крови; ПП РФ № 641, п. 67–69, 73–75, 97–98. При нарушении условий перевозки единицы к клиническому использованию не допускаются, EscalationRaised дежурному.</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Assoc_A_st7" sourceRef="T_disp" targetRef="A_st7" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="Diagram_Process_ConfirmTransfer">
+    <bpmndi:BPMNPlane id="Plane_Process_ConfirmTransfer" bpmnElement="Collaboration_Process_ConfirmTransfer">
+      <bpmndi:BPMNShape id="Participant_Process_ConfirmTransfer_di" bpmnElement="Participant_Process_ConfirmTransfer" isHorizontal="true">
+        <dc:Bounds x="150" y="60" width="5958" height="1690" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="L_op_di" bpmnElement="L_op" isHorizontal="true">
+        <dc:Bounds x="180" y="60" width="5928" height="250" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="L_tr_di" bpmnElement="L_tr" isHorizontal="true">
+        <dc:Bounds x="180" y="310" width="5928" height="640" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="L_inv_di" bpmnElement="L_inv" isHorizontal="true">
+        <dc:Bounds x="180" y="950" width="5928" height="150" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="L_gw_di" bpmnElement="L_gw" isHorizontal="true">
+        <dc:Bounds x="180" y="1100" width="5928" height="480" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="L_car_di" bpmnElement="L_car" isHorizontal="true">
+        <dc:Bounds x="180" y="1580" width="5928" height="170" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ESP1_di" bpmnElement="ESP1" isExpanded="true">
+        <dc:Bounds x="2925" y="590" width="855" height="150" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ESP2_di" bpmnElement="ESP2" isExpanded="true">
+        <dc:Bounds x="3825" y="590" width="819" height="150" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ESP3_di" bpmnElement="ESP3" isExpanded="true">
+        <dc:Bounds x="2925" y="760" width="855" height="165" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ESP4_di" bpmnElement="ESP4" isExpanded="true">
+        <dc:Bounds x="4734" y="1115" width="639" height="380" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="S1_di" bpmnElement="S1">
+        <dc:Bounds x="252" y="502" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="217" y="542" width="106" height="42" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T1_di" bpmnElement="T1">
+        <dc:Bounds x="385" y="480" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gm_di" bpmnElement="Gm" isMarkerVisible="true">
+        <dc:Bounds x="605" y="120" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="U1_di" bpmnElement="U1">
+        <dc:Bounds x="735" y="105" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="B1_di" bpmnElement="B1">
+        <dc:Bounds x="747" y="167" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="631" y="171" width="112" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="B2_di" bpmnElement="B2">
+        <dc:Bounds x="837" y="167" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="877" y="178" width="100" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T2_di" bpmnElement="T2">
+        <dc:Bounds x="925" y="480" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="G1_di" bpmnElement="G1" isMarkerVisible="true">
+        <dc:Bounds x="1145" y="495" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1070" y="544" width="70" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="E_wd1_di" bpmnElement="E_wd1">
+        <dc:Bounds x="1332" y="347" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1372" y="344" width="124" height="42" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T_idem_di" bpmnElement="T_idem">
+        <dc:Bounds x="1285" y="600" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="E_idem_di" bpmnElement="E_idem">
+        <dc:Bounds x="1476" y="622" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1441" y="662" width="106" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T3_di" bpmnElement="T3">
+        <dc:Bounds x="1285" y="480" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="G2_di" bpmnElement="G2" isMarkerVisible="true">
+        <dc:Bounds x="1505" y="495" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1489" y="549" width="82" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="I1_di" bpmnElement="I1">
+        <dc:Bounds x="1635" y="985" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="G3a_di" bpmnElement="G3a" isMarkerVisible="true">
+        <dc:Bounds x="1865" y="495" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1840" y="549" width="100" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="G3b_di" bpmnElement="G3b" isMarkerVisible="true">
+        <dc:Bounds x="2045" y="495" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1952" y="546" width="88" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="G_urg_di" bpmnElement="G_urg" isMarkerVisible="true">
+        <dc:Bounds x="2045" y="340" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1971" y="351" width="70" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T_escSrc_di" bpmnElement="T_escSrc">
+        <dc:Bounds x="2185" y="325" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T_rej_di" bpmnElement="T_rej">
+        <dc:Bounds x="2185" y="720" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="E_rej_di" bpmnElement="E_rej">
+        <dc:Bounds x="2367" y="742" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2323" y="782" width="124" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T_TX_di" bpmnElement="T_TX">
+        <dc:Bounds x="2175" y="480" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="G4_di" bpmnElement="G4" isMarkerVisible="true">
+        <dc:Bounds x="2405" y="495" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2302" y="458" width="100" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="E_wd2_di" bpmnElement="E_wd2">
+        <dc:Bounds x="2538" y="622" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2509" y="662" width="94" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gr_di" bpmnElement="Gr" isMarkerVisible="true">
+        <dc:Bounds x="2513" y="230" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="U_retry_di" bpmnElement="U_retry">
+        <dc:Bounds x="2635" y="215" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="P1_di" bpmnElement="P1">
+        <dc:Bounds x="2585" y="495" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="U2_di" bpmnElement="U2">
+        <dc:Bounds x="2725" y="105" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="E_prep_di" bpmnElement="E_prep">
+        <dc:Bounds x="2952" y="127" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2920" y="167" width="100" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T_out_di" bpmnElement="T_out">
+        <dc:Bounds x="2725" y="480" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="W1_di" bpmnElement="W1">
+        <dc:Bounds x="2905" y="1230" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gx_di" bpmnElement="Gx" isMarkerVisible="true">
+        <dc:Bounds x="3125" y="1245" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="W2_di" bpmnElement="W2">
+        <dc:Bounds x="3265" y="1230" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="K1_di" bpmnElement="K1">
+        <dc:Bounds x="3445" y="1625" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="E1_di" bpmnElement="E1">
+        <dc:Bounds x="3510" y="1607" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="3550" y="1618" width="64" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gf_di" bpmnElement="Gf" isMarkerVisible="true">
+        <dc:Bounds x="3665" y="1245" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="3631" y="1299" width="118" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="G_unk_di" bpmnElement="G_unk" isMarkerVisible="true">
+        <dc:Bounds x="3845" y="1245" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="3811" y="1299" width="118" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T_failed_di" bpmnElement="T_failed">
+        <dc:Bounds x="3985" y="1350" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="E_failed_di" bpmnElement="E_failed">
+        <dc:Bounds x="4142" y="1372" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="4101" y="1412" width="118" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="K2_di" bpmnElement="K2">
+        <dc:Bounds x="3985" y="1625" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="E2_di" bpmnElement="E2">
+        <dc:Bounds x="3986" y="1607" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="4026" y="1618" width="64" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="G_res_di" bpmnElement="G_res" isMarkerVisible="true">
+        <dc:Bounds x="4385" y="1245" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="4354" y="1227" width="112" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T_acc_di" bpmnElement="T_acc">
+        <dc:Bounds x="4525" y="1230" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T_ref_di" bpmnElement="T_ref">
+        <dc:Bounds x="4525" y="1350" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="E_ref_di" bpmnElement="E_ref">
+        <dc:Bounds x="4572" y="1492" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="4612" y="1496" width="82" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="W_fail_di" bpmnElement="W_fail">
+        <dc:Bounds x="3463" y="1470" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="G_max_di" bpmnElement="G_max" isMarkerVisible="true">
+        <dc:Bounds x="3305" y="1485" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="3268" y="1539" width="124" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T_back_di" bpmnElement="T_back">
+        <dc:Bounds x="3132" y="1492" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="3028" y="1482" width="100" height="56" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T_unk_di" bpmnElement="T_unk">
+        <dc:Bounds x="3265" y="1350" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T_rech_di" bpmnElement="T_rech">
+        <dc:Bounds x="3202" y="1372" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="3162" y="1434" width="124" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gy_di" bpmnElement="Gy" isMarkerVisible="true">
+        <dc:Bounds x="3125" y="1365" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="G_cf_di" bpmnElement="G_cf" isMarkerVisible="true">
+        <dc:Bounds x="4745" y="495" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="4714" y="477" width="112" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T_TR_di" bpmnElement="T_TR">
+        <dc:Bounds x="4885" y="480" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T_ign_di" bpmnElement="T_ign">
+        <dc:Bounds x="4885" y="600" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="E_ign_di" bpmnElement="E_ign">
+        <dc:Bounds x="5067" y="622" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="5035" y="662" width="100" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="U3_di" bpmnElement="U3">
+        <dc:Bounds x="5065" y="105" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T_disp_di" bpmnElement="T_disp">
+        <dc:Bounds x="5245" y="480" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="K3_di" bpmnElement="K3">
+        <dc:Bounds x="5415" y="1625" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="W_del_di" bpmnElement="W_del">
+        <dc:Bounds x="5605" y="1230" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T_deliv_di" bpmnElement="T_deliv">
+        <dc:Bounds x="5785" y="480" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="E_done_di" bpmnElement="E_done">
+        <dc:Bounds x="6012" y="502" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="5995" y="542" width="70" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T_exp_di" bpmnElement="T_exp">
+        <dc:Bounds x="925" y="720" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="G_fb_di" bpmnElement="G_fb" isMarkerVisible="true">
+        <dc:Bounds x="1145" y="735" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1129" y="703" width="82" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T_next_di" bpmnElement="T_next">
+        <dc:Bounds x="1275" y="720" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="E_next_di" bpmnElement="E_next">
+        <dc:Bounds x="1512" y="742" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1552" y="746" width="124" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T_nofb_di" bpmnElement="T_nofb">
+        <dc:Bounds x="1285" y="840" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="E_nofb_di" bpmnElement="E_nofb">
+        <dc:Bounds x="1476" y="862" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1435" y="902" width="118" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T_cancel_di" bpmnElement="T_cancel">
+        <dc:Bounds x="925" y="840" width="130" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="E_canc_di" bpmnElement="E_canc">
+        <dc:Bounds x="1089" y="862" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1045" y="902" width="124" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ESP1_s_di" bpmnElement="ESP1_s">
+        <dc:Bounds x="2952" y="647" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2908" y="687" width="124" height="56" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ESP1_t1_di" bpmnElement="ESP1_t1">
+        <dc:Bounds x="3040" y="625" width="140" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ESP1_t2_di" bpmnElement="ESP1_t2">
+        <dc:Bounds x="3210" y="625" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ESP1_e_di" bpmnElement="ESP1_e">
+        <dc:Bounds x="3407" y="647" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="3363" y="687" width="124" height="42" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ESP2_s_di" bpmnElement="ESP2_s">
+        <dc:Bounds x="3852" y="647" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="3808" y="687" width="124" height="56" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ESP2_t_di" bpmnElement="ESP2_t">
+        <dc:Bounds x="3970" y="625" width="170" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ESP2_e_di" bpmnElement="ESP2_e">
+        <dc:Bounds x="4217" y="647" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="4173" y="687" width="124" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ESP3_s_di" bpmnElement="ESP3_s">
+        <dc:Bounds x="2952" y="822" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2914" y="862" width="112" height="42" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ESP3_t_di" bpmnElement="ESP3_t">
+        <dc:Bounds x="3060" y="795" width="190" height="90" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ESP3_e_di" bpmnElement="ESP3_e">
+        <dc:Bounds x="3327" y="822" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="3286" y="862" width="118" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ESP4_s_di" bpmnElement="ESP4_s">
+        <dc:Bounds x="4756" y="1192" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="4727" y="1232" width="94" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ESP4_g1_di" bpmnElement="ESP4_g1" isMarkerVisible="true">
+        <dc:Bounds x="4824" y="1185" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="4811" y="1167" width="76" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ESP4_g2_di" bpmnElement="ESP4_g2" isMarkerVisible="true">
+        <dc:Bounds x="4934" y="1185" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="4915" y="1153" width="88" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ESP4_w1_di" bpmnElement="ESP4_w1">
+        <dc:Bounds x="5014" y="1160" width="130" height="100" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ESP4_w2_di" bpmnElement="ESP4_w2">
+        <dc:Bounds x="5159" y="1170" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ESP4_e1_di" bpmnElement="ESP4_e1">
+        <dc:Bounds x="5306" y="1192" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="5292" y="1232" width="64" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ESP4_m_di" bpmnElement="ESP4_m" isMarkerVisible="true">
+        <dc:Bounds x="5054" y="1300" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ESP4_w3_di" bpmnElement="ESP4_w3">
+        <dc:Bounds x="5159" y="1285" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ESP4_e2_di" bpmnElement="ESP4_e2">
+        <dc:Bounds x="5306" y="1307" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="5280" y="1347" width="88" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ESP4_w4_di" bpmnElement="ESP4_w4">
+        <dc:Bounds x="4884" y="1390" width="150" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_S1_T1_di" bpmnElement="Flow_S1_T1">
+        <di:waypoint x="288" y="520" />
+        <di:waypoint x="385" y="520" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_T1_Gm_di" bpmnElement="Flow_T1_Gm">
+        <di:waypoint x="515" y="520" />
+        <di:waypoint x="560" y="520" />
+        <di:waypoint x="560" y="145" />
+        <di:waypoint x="605" y="145" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Gm_U1_di" bpmnElement="Flow_Gm_U1">
+        <di:waypoint x="655" y="145" />
+        <di:waypoint x="735" y="145" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_U1_T2_di" bpmnElement="Flow_U1_T2">
+        <di:waypoint x="885" y="145" />
+        <di:waypoint x="905" y="145" />
+        <di:waypoint x="905" y="520" />
+        <di:waypoint x="925" y="520" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_T2_G1_di" bpmnElement="Flow_T2_G1">
+        <di:waypoint x="1055" y="520" />
+        <di:waypoint x="1145" y="520" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G1_T3_di" bpmnElement="Flow_G1_T3">
+        <di:waypoint x="1195" y="520" />
+        <di:waypoint x="1285" y="520" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1203" y="504" width="46" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G1_E_wd1_di" bpmnElement="Flow_G1_E_wd1">
+        <di:waypoint x="1170" y="495" />
+        <di:waypoint x="1170" y="365" />
+        <di:waypoint x="1332" y="365" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1175" y="423" width="34" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G1_T_idem_di" bpmnElement="Flow_G1_T_idem">
+        <di:waypoint x="1170" y="545" />
+        <di:waypoint x="1170" y="640" />
+        <di:waypoint x="1285" y="640" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1042" y="590" width="154" height="42" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_T_idem_E_idem_di" bpmnElement="Flow_T_idem_E_idem">
+        <di:waypoint x="1415" y="640" />
+        <di:waypoint x="1476" y="640" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_T3_G2_di" bpmnElement="Flow_T3_G2">
+        <di:waypoint x="1415" y="520" />
+        <di:waypoint x="1505" y="520" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G2_Gr_di" bpmnElement="Flow_G2_Gr">
+        <di:waypoint x="1530" y="495" />
+        <di:waypoint x="1530" y="445" />
+        <di:waypoint x="2538" y="445" />
+        <di:waypoint x="2538" y="280" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1535" y="463" width="118" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G2_I1_di" bpmnElement="Flow_G2_I1">
+        <di:waypoint x="1555" y="520" />
+        <di:waypoint x="1595" y="520" />
+        <di:waypoint x="1595" y="1025" />
+        <di:waypoint x="1635" y="1025" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1563" y="504" width="16" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_I1_G3a_di" bpmnElement="Flow_I1_G3a">
+        <di:waypoint x="1785" y="1025" />
+        <di:waypoint x="1825" y="1025" />
+        <di:waypoint x="1825" y="520" />
+        <di:waypoint x="1865" y="520" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G3a_G3b_di" bpmnElement="Flow_G3a_G3b">
+        <di:waypoint x="1915" y="520" />
+        <di:waypoint x="2045" y="520" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1923" y="504" width="16" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G3a_G_urg_di" bpmnElement="Flow_G3a_G_urg">
+        <di:waypoint x="1890" y="495" />
+        <di:waypoint x="1890" y="365" />
+        <di:waypoint x="2045" y="365" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1895" y="395" width="130" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G_urg_T_escSrc_di" bpmnElement="Flow_G_urg_T_escSrc">
+        <di:waypoint x="2095" y="365" />
+        <di:waypoint x="2185" y="365" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2103" y="349" width="16" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G_urg_Gr_di" bpmnElement="Flow_G_urg_Gr">
+        <di:waypoint x="2070" y="340" />
+        <di:waypoint x="2070" y="255" />
+        <di:waypoint x="2513" y="255" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2075" y="290" width="22" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_T_escSrc_Gr_di" bpmnElement="Flow_T_escSrc_Gr">
+        <di:waypoint x="2315" y="365" />
+        <di:waypoint x="2414" y="365" />
+        <di:waypoint x="2414" y="255" />
+        <di:waypoint x="2513" y="255" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G3b_Gr_di" bpmnElement="Flow_G3b_Gr">
+        <di:waypoint x="2070" y="495" />
+        <di:waypoint x="2070" y="445" />
+        <di:waypoint x="2538" y="445" />
+        <di:waypoint x="2538" y="280" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2100" y="449" width="136" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G3b_T_rej_di" bpmnElement="Flow_G3b_T_rej">
+        <di:waypoint x="2070" y="545" />
+        <di:waypoint x="2070" y="760" />
+        <di:waypoint x="2185" y="760" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2075" y="646" width="52" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_T_rej_E_rej_di" bpmnElement="Flow_T_rej_E_rej">
+        <di:waypoint x="2315" y="760" />
+        <di:waypoint x="2367" y="760" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G3b_T_TX_di" bpmnElement="Flow_G3b_T_TX">
+        <di:waypoint x="2095" y="520" />
+        <di:waypoint x="2175" y="520" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2092" y="524" width="94" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_T_TX_G4_di" bpmnElement="Flow_T_TX_G4">
+        <di:waypoint x="2325" y="520" />
+        <di:waypoint x="2405" y="520" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G4_Gr_di" bpmnElement="Flow_G4_Gr">
+        <di:waypoint x="2430" y="495" />
+        <di:waypoint x="2430" y="445" />
+        <di:waypoint x="2538" y="445" />
+        <di:waypoint x="2538" y="280" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2460" y="449" width="148" height="42" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G4_E_wd2_di" bpmnElement="Flow_G4_E_wd2">
+        <di:waypoint x="2430" y="545" />
+        <di:waypoint x="2430" y="640" />
+        <di:waypoint x="2538" y="640" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2435" y="586" width="82" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G4_P1_di" bpmnElement="Flow_G4_P1">
+        <di:waypoint x="2455" y="520" />
+        <di:waypoint x="2585" y="520" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2460" y="524" width="64" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Gr_U_retry_di" bpmnElement="Flow_Gr_U_retry">
+        <di:waypoint x="2563" y="255" />
+        <di:waypoint x="2635" y="255" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_U_retry_Gm_di" bpmnElement="Flow_U_retry_Gm">
+        <di:waypoint x="2700" y="215" />
+        <di:waypoint x="2700" y="74" />
+        <di:waypoint x="630" y="74" />
+        <di:waypoint x="630" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_P1_U2_di" bpmnElement="Flow_P1_U2">
+        <di:waypoint x="2610" y="495" />
+        <di:waypoint x="2610" y="145" />
+        <di:waypoint x="2725" y="145" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_P1_T_out_di" bpmnElement="Flow_P1_T_out">
+        <di:waypoint x="2635" y="520" />
+        <di:waypoint x="2725" y="520" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_U2_E_prep_di" bpmnElement="Flow_U2_E_prep">
+        <di:waypoint x="2855" y="145" />
+        <di:waypoint x="2952" y="145" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_T_out_W1_di" bpmnElement="Flow_T_out_W1">
+        <di:waypoint x="2855" y="520" />
+        <di:waypoint x="2880" y="520" />
+        <di:waypoint x="2880" y="1270" />
+        <di:waypoint x="2905" y="1270" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_W1_Gx_di" bpmnElement="Flow_W1_Gx">
+        <di:waypoint x="3035" y="1270" />
+        <di:waypoint x="3125" y="1270" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Gx_W2_di" bpmnElement="Flow_Gx_W2">
+        <di:waypoint x="3175" y="1270" />
+        <di:waypoint x="3265" y="1270" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_W2_K1_di" bpmnElement="Flow_W2_K1">
+        <di:waypoint x="3395" y="1270" />
+        <di:waypoint x="3420" y="1270" />
+        <di:waypoint x="3420" y="1665" />
+        <di:waypoint x="3445" y="1665" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_K1_Gf_di" bpmnElement="Flow_K1_Gf">
+        <di:waypoint x="3575" y="1665" />
+        <di:waypoint x="3620" y="1665" />
+        <di:waypoint x="3620" y="1270" />
+        <di:waypoint x="3665" y="1270" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Gf_G_unk_di" bpmnElement="Flow_Gf_G_unk">
+        <di:waypoint x="3715" y="1270" />
+        <di:waypoint x="3845" y="1270" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="3723" y="1254" width="22" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Gf_T_acc_di" bpmnElement="Flow_Gf_T_acc">
+        <di:waypoint x="3690" y="1245" />
+        <di:waypoint x="3690" y="1155" />
+        <di:waypoint x="4590" y="1155" />
+        <di:waypoint x="4590" y="1230" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="3698" y="1125" width="118" height="28" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G_unk_T_failed_di" bpmnElement="Flow_G_unk_T_failed">
+        <di:waypoint x="3870" y="1295" />
+        <di:waypoint x="3870" y="1390" />
+        <di:waypoint x="3985" y="1390" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="3875" y="1336" width="16" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_T_failed_E_failed_di" bpmnElement="Flow_T_failed_E_failed">
+        <di:waypoint x="4115" y="1390" />
+        <di:waypoint x="4142" y="1390" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G_unk_K2_di" bpmnElement="Flow_G_unk_K2">
+        <di:waypoint x="3895" y="1270" />
+        <di:waypoint x="3940" y="1270" />
+        <di:waypoint x="3940" y="1665" />
+        <di:waypoint x="3985" y="1665" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="3903" y="1254" width="22" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_K2_G_res_di" bpmnElement="Flow_K2_G_res">
+        <di:waypoint x="4115" y="1665" />
+        <di:waypoint x="4250" y="1665" />
+        <di:waypoint x="4250" y="1270" />
+        <di:waypoint x="4385" y="1270" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G_res_T_acc_di" bpmnElement="Flow_G_res_T_acc">
+        <di:waypoint x="4435" y="1270" />
+        <di:waypoint x="4525" y="1270" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="4443" y="1254" width="40" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G_res_T_ref_di" bpmnElement="Flow_G_res_T_ref">
+        <di:waypoint x="4410" y="1295" />
+        <di:waypoint x="4410" y="1390" />
+        <di:waypoint x="4525" y="1390" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="4415" y="1336" width="34" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_T_ref_E_ref_di" bpmnElement="Flow_T_ref_E_ref">
+        <di:waypoint x="4590" y="1430" />
+        <di:waypoint x="4590" y="1492" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_E1_W_fail_di" bpmnElement="Flow_E1_W_fail">
+        <di:waypoint x="3528" y="1607" />
+        <di:waypoint x="3528" y="1550" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_E2_W_fail_di" bpmnElement="Flow_E2_W_fail">
+        <di:waypoint x="4004" y="1607" />
+        <di:waypoint x="4004" y="1510" />
+        <di:waypoint x="3593" y="1510" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_W_fail_G_max_di" bpmnElement="Flow_W_fail_G_max">
+        <di:waypoint x="3463" y="1510" />
+        <di:waypoint x="3355" y="1510" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G_max_T_back_di" bpmnElement="Flow_G_max_T_back">
+        <di:waypoint x="3305" y="1510" />
+        <di:waypoint x="3168" y="1510" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="3176" y="1494" width="22" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G_max_T_unk_di" bpmnElement="Flow_G_max_T_unk">
+        <di:waypoint x="3330" y="1485" />
+        <di:waypoint x="3330" y="1430" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="3335" y="1450" width="16" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_T_back_Gy_di" bpmnElement="Flow_T_back_Gy">
+        <di:waypoint x="3150" y="1492" />
+        <di:waypoint x="3150" y="1415" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_T_unk_T_rech_di" bpmnElement="Flow_T_unk_T_rech">
+        <di:waypoint x="3265" y="1390" />
+        <di:waypoint x="3238" y="1390" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_T_rech_Gy_di" bpmnElement="Flow_T_rech_Gy">
+        <di:waypoint x="3202" y="1390" />
+        <di:waypoint x="3175" y="1390" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Gy_Gx_di" bpmnElement="Flow_Gy_Gx">
+        <di:waypoint x="3150" y="1365" />
+        <di:waypoint x="3150" y="1295" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_T_acc_G_cf_di" bpmnElement="Flow_T_acc_G_cf">
+        <di:waypoint x="4655" y="1270" />
+        <di:waypoint x="4700" y="1270" />
+        <di:waypoint x="4700" y="520" />
+        <di:waypoint x="4745" y="520" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G_cf_T_TR_di" bpmnElement="Flow_G_cf_T_TR">
+        <di:waypoint x="4795" y="520" />
+        <di:waypoint x="4885" y="520" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="4803" y="504" width="16" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G_cf_T_ign_di" bpmnElement="Flow_G_cf_T_ign">
+        <di:waypoint x="4770" y="545" />
+        <di:waypoint x="4770" y="640" />
+        <di:waypoint x="4885" y="640" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="4775" y="586" width="154" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_T_ign_E_ign_di" bpmnElement="Flow_T_ign_E_ign">
+        <di:waypoint x="5015" y="640" />
+        <di:waypoint x="5067" y="640" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_T_TR_U3_di" bpmnElement="Flow_T_TR_U3">
+        <di:waypoint x="5015" y="520" />
+        <di:waypoint x="5040" y="520" />
+        <di:waypoint x="5040" y="145" />
+        <di:waypoint x="5065" y="145" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_U3_T_disp_di" bpmnElement="Flow_U3_T_disp">
+        <di:waypoint x="5195" y="145" />
+        <di:waypoint x="5220" y="145" />
+        <di:waypoint x="5220" y="520" />
+        <di:waypoint x="5245" y="520" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_T_disp_K3_di" bpmnElement="Flow_T_disp_K3">
+        <di:waypoint x="5375" y="520" />
+        <di:waypoint x="5395" y="520" />
+        <di:waypoint x="5395" y="1665" />
+        <di:waypoint x="5415" y="1665" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_K3_W_del_di" bpmnElement="Flow_K3_W_del">
+        <di:waypoint x="5565" y="1665" />
+        <di:waypoint x="5585" y="1665" />
+        <di:waypoint x="5585" y="1270" />
+        <di:waypoint x="5605" y="1270" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_W_del_T_deliv_di" bpmnElement="Flow_W_del_T_deliv">
+        <di:waypoint x="5735" y="1270" />
+        <di:waypoint x="5760" y="1270" />
+        <di:waypoint x="5760" y="520" />
+        <di:waypoint x="5785" y="520" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_T_deliv_E_done_di" bpmnElement="Flow_T_deliv_E_done">
+        <di:waypoint x="5915" y="520" />
+        <di:waypoint x="6012" y="520" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_B1_T_exp_di" bpmnElement="Flow_B1_T_exp">
+        <di:waypoint x="765" y="203" />
+        <di:waypoint x="765" y="760" />
+        <di:waypoint x="925" y="760" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_T_exp_G_fb_di" bpmnElement="Flow_T_exp_G_fb">
+        <di:waypoint x="1055" y="760" />
+        <di:waypoint x="1145" y="760" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G_fb_T_next_di" bpmnElement="Flow_G_fb_T_next">
+        <di:waypoint x="1195" y="760" />
+        <di:waypoint x="1275" y="760" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1203" y="744" width="16" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_T_next_E_next_di" bpmnElement="Flow_T_next_E_next">
+        <di:waypoint x="1425" y="760" />
+        <di:waypoint x="1512" y="760" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_G_fb_T_nofb_di" bpmnElement="Flow_G_fb_T_nofb">
+        <di:waypoint x="1170" y="785" />
+        <di:waypoint x="1170" y="880" />
+        <di:waypoint x="1285" y="880" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1175" y="826" width="22" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_T_nofb_E_nofb_di" bpmnElement="Flow_T_nofb_E_nofb">
+        <di:waypoint x="1415" y="880" />
+        <di:waypoint x="1476" y="880" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_B2_T_cancel_di" bpmnElement="Flow_B2_T_cancel">
+        <di:waypoint x="855" y="203" />
+        <di:waypoint x="855" y="880" />
+        <di:waypoint x="925" y="880" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_T_cancel_E_canc_di" bpmnElement="Flow_T_cancel_E_canc">
+        <di:waypoint x="1055" y="880" />
+        <di:waypoint x="1089" y="880" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ESP1_s_ESP1_t1_di" bpmnElement="Flow_ESP1_s_ESP1_t1">
+        <di:waypoint x="2988" y="665" />
+        <di:waypoint x="3040" y="665" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ESP1_t1_ESP1_t2_di" bpmnElement="Flow_ESP1_t1_ESP1_t2">
+        <di:waypoint x="3180" y="665" />
+        <di:waypoint x="3210" y="665" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ESP1_t2_ESP1_e_di" bpmnElement="Flow_ESP1_t2_ESP1_e">
+        <di:waypoint x="3360" y="665" />
+        <di:waypoint x="3407" y="665" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ESP2_s_ESP2_t_di" bpmnElement="Flow_ESP2_s_ESP2_t">
+        <di:waypoint x="3888" y="665" />
+        <di:waypoint x="3970" y="665" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ESP2_t_ESP2_e_di" bpmnElement="Flow_ESP2_t_ESP2_e">
+        <di:waypoint x="4140" y="665" />
+        <di:waypoint x="4217" y="665" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ESP3_s_ESP3_t_di" bpmnElement="Flow_ESP3_s_ESP3_t">
+        <di:waypoint x="2988" y="840" />
+        <di:waypoint x="3060" y="840" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ESP3_t_ESP3_e_di" bpmnElement="Flow_ESP3_t_ESP3_e">
+        <di:waypoint x="3250" y="840" />
+        <di:waypoint x="3327" y="840" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ESP4_s_ESP4_g1_di" bpmnElement="Flow_ESP4_s_ESP4_g1">
+        <di:waypoint x="4792" y="1210" />
+        <di:waypoint x="4824" y="1210" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ESP4_g1_ESP4_g2_di" bpmnElement="Flow_ESP4_g1_ESP4_g2">
+        <di:waypoint x="4874" y="1210" />
+        <di:waypoint x="4934" y="1210" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="4882" y="1194" width="16" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ESP4_g1_ESP4_w4_di" bpmnElement="Flow_ESP4_g1_ESP4_w4">
+        <di:waypoint x="4849" y="1235" />
+        <di:waypoint x="4849" y="1430" />
+        <di:waypoint x="4884" y="1430" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="4824" y="1325" width="22" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ESP4_g2_ESP4_w1_di" bpmnElement="Flow_ESP4_g2_ESP4_w1">
+        <di:waypoint x="4984" y="1210" />
+        <di:waypoint x="5014" y="1210" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="4992" y="1194" width="16" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ESP4_g2_ESP4_m_di" bpmnElement="Flow_ESP4_g2_ESP4_m">
+        <di:waypoint x="4959" y="1235" />
+        <di:waypoint x="4959" y="1325" />
+        <di:waypoint x="5054" y="1325" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="4964" y="1272" width="148" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ESP4_w1_ESP4_w2_di" bpmnElement="Flow_ESP4_w1_ESP4_w2">
+        <di:waypoint x="5144" y="1210" />
+        <di:waypoint x="5159" y="1210" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ESP4_w2_ESP4_e1_di" bpmnElement="Flow_ESP4_w2_ESP4_e1">
+        <di:waypoint x="5279" y="1210" />
+        <di:waypoint x="5306" y="1210" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ESP4_w4_ESP4_m_di" bpmnElement="Flow_ESP4_w4_ESP4_m">
+        <di:waypoint x="5034" y="1430" />
+        <di:waypoint x="5079" y="1430" />
+        <di:waypoint x="5079" y="1350" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ESP4_m_ESP4_w3_di" bpmnElement="Flow_ESP4_m_ESP4_w3">
+        <di:waypoint x="5104" y="1325" />
+        <di:waypoint x="5159" y="1325" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ESP4_w3_ESP4_e2_di" bpmnElement="Flow_ESP4_w3_ESP4_e2">
+        <di:waypoint x="5279" y="1325" />
+        <di:waypoint x="5306" y="1325" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="A_esp1_di" bpmnElement="A_esp1">
+        <dc:Bounds x="3495" y="620" width="270" height="100" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="A_esp2_di" bpmnElement="A_esp2">
+        <dc:Bounds x="4305" y="620" width="300" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="A_esp3_di" bpmnElement="A_esp3">
+        <dc:Bounds x="3445" y="795" width="300" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="A_tx_di" bpmnElement="A_tx">
+        <dc:Bounds x="2133" y="595" width="275" height="108" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="A_inv_di" bpmnElement="A_inv">
+        <dc:Bounds x="1872" y="970" width="300" height="70" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="A_lease_di" bpmnElement="A_lease">
+        <dc:Bounds x="2916" y="1108" width="300" height="62" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="A_st7_di" bpmnElement="A_st7">
+        <dc:Bounds x="5382" y="90" width="420" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Assoc_A_esp1_di" bpmnElement="Assoc_A_esp1">
+        <di:waypoint x="3443" y="665" />
+        <di:waypoint x="3495" y="670" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Assoc_A_esp2_di" bpmnElement="Assoc_A_esp2">
+        <di:waypoint x="4253" y="665" />
+        <di:waypoint x="4305" y="660" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Assoc_A_esp3_di" bpmnElement="Assoc_A_esp3">
+        <di:waypoint x="3363" y="840" />
+        <di:waypoint x="3445" y="835" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Assoc_A_tx_di" bpmnElement="Assoc_A_tx">
+        <di:waypoint x="2250" y="560" />
+        <di:waypoint x="2250" y="595" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Assoc_A_inv_di" bpmnElement="Assoc_A_inv">
+        <di:waypoint x="1785" y="1025" />
+        <di:waypoint x="1872" y="1005" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Assoc_A_lease_di" bpmnElement="Assoc_A_lease">
+        <di:waypoint x="3330" y="1230" />
+        <di:waypoint x="2926" y="1170" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Assoc_A_st7_di" bpmnElement="Assoc_A_st7">
+        <di:waypoint x="5310" y="480" />
+        <di:waypoint x="5392" y="170" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

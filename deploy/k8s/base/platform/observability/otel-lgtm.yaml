@@ -1,0 +1,134 @@
+# Зона контроля (bs-observability): grafana/otel-lgtm — OTel Collector, Prometheus, Loki, Tempo, Grafana
+# в одном образе, как в compose. Сервисы шлют OTLP на otel-lgtm.bs-observability.svc:4318.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: otel-lgtm-data
+  namespace: bs-observability
+  labels:
+    app.kubernetes.io/name: otel-lgtm
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-lgtm
+  namespace: bs-observability
+  labels:
+    app.kubernetes.io/name: otel-lgtm
+    app.kubernetes.io/component: observability
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: otel-lgtm
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: otel-lgtm
+        app.kubernetes.io/component: observability
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: otel-lgtm
+          # Тот же тег, что в deploy/compose/compose.yaml.
+          image: grafana/otel-lgtm:0.11.0
+          ports:
+            - name: grafana
+              containerPort: 3000
+            - name: otlp-grpc
+              containerPort: 4317
+            - name: otlp-http
+              containerPort: 4318
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: grafana
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            tcpSocket:
+              port: otlp-http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: grafana
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: 250m
+              memory: 768Mi
+            limits:
+              memory: 2Gi
+          securityContext:
+            # Образ работает от root и пишет в свои каталоги при старте: runAsNonRoot и
+            # read-only FS он не выдерживает. Поэтому namespace — baseline, остальное ужато.
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+              add: ["CHOWN", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            # Дашборды и алерты АС (deploy/observability). Провайдер и правила — отдельными файлами через
+            # subPath, чтобы не закрыть собственный provisioning образа. Путь /otel-lgtm/grafana/conf/provisioning —
+            # по образу 0.11.0 (deploy/observability/README.md).
+            - name: grafana-dashboards
+              mountPath: /var/lib/blood-supply/grafana/dashboards
+              readOnly: true
+            - name: grafana-provisioning
+              mountPath: /otel-lgtm/grafana/conf/provisioning/dashboards/blood-supply.yaml
+              subPath: dashboards-provider.yaml
+              readOnly: true
+            - name: grafana-provisioning
+              mountPath: /otel-lgtm/grafana/conf/provisioning/alerting/blood-supply-rules.yaml
+              subPath: alert-rules.yaml
+              readOnly: true
+            - name: grafana-provisioning
+              mountPath: /otel-lgtm/grafana/conf/provisioning/alerting/blood-supply-contact-points.yaml
+              subPath: contact-points.yaml
+              readOnly: true
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: otel-lgtm-data
+        - name: grafana-dashboards
+          configMap:
+            name: grafana-dashboards
+        - name: grafana-provisioning
+          configMap:
+            name: grafana-provisioning
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-lgtm
+  namespace: bs-observability
+  labels:
+    app.kubernetes.io/name: otel-lgtm
+spec:
+  selector:
+    app.kubernetes.io/name: otel-lgtm
+  ports:
+    - name: grafana
+      port: 3000
+      targetPort: grafana
+    - name: otlp-grpc
+      port: 4317
+      targetPort: otlp-grpc
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http

@@ -8,6 +8,7 @@
   "required": ["obligation_id", "request_id", "reason"],
   "properties": {
     "obligation_id": { "type": "string", "format": "uuid" },
+    "obligation_version": { "type": "integer", "minimum": 0, "description": "Версия O07 после перехода; проекции применяют событие, только если версия выше сохранённой" },
     "request_id": { "type": "string", "format": "uuid" },
     "reason": { "type": "string", "enum": ["REQUEST_CANCELLED", "PLAN_RECALCULATED", "DUTY_OFFICER_DECISION"] }
   }

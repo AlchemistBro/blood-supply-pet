@@ -1,0 +1,106 @@
+# База на сервис (ADR-0005), владелец — одноимённая роль из Cluster.spec.managed.roles.
+# databaseReclaimPolicy: retain — удаление объекта Database из манифестов не удаляет данные.
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: inventory
+  namespace: bs-data
+spec:
+  cluster:
+    name: pg
+  name: inventory
+  owner: inventory
+  ensure: present
+  databaseReclaimPolicy: retain
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: demand
+  namespace: bs-data
+spec:
+  cluster:
+    name: pg
+  name: demand
+  owner: demand
+  ensure: present
+  databaseReclaimPolicy: retain
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: planning
+  namespace: bs-data
+spec:
+  cluster:
+    name: pg
+  name: planning
+  owner: planning
+  ensure: present
+  databaseReclaimPolicy: retain
+---
+# Единственная база с данными класса K1 (clinical_request_patient). Изоляция сверх pg_hba — README.
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: matching
+  namespace: bs-data
+spec:
+  cluster:
+    name: pg
+  name: matching
+  owner: matching
+  ensure: present
+  databaseReclaimPolicy: retain
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: transfer
+  namespace: bs-data
+spec:
+  cluster:
+    name: pg
+  name: transfer
+  owner: transfer
+  ensure: present
+  databaseReclaimPolicy: retain
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: logistics
+  namespace: bs-data
+spec:
+  cluster:
+    name: pg
+  name: logistics
+  owner: logistics
+  ensure: present
+  databaseReclaimPolicy: retain
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: notification
+  namespace: bs-data
+spec:
+  cluster:
+    name: pg
+  name: notification
+  owner: notification
+  ensure: present
+  databaseReclaimPolicy: retain
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: audit
+  namespace: bs-data
+spec:
+  cluster:
+    name: pg
+  name: audit
+  owner: audit
+  ensure: present
+  databaseReclaimPolicy: retain
