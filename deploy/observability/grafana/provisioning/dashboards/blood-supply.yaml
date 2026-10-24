@@ -1,0 +1,16 @@
+# Провайдер дашбордов АС: Grafana читает JSON из каталога, куда смонтированы
+# deploy/observability/grafana/dashboards (compose — том, Kubernetes — ConfigMap grafana-dashboards).
+apiVersion: 1
+
+providers:
+  - name: blood-supply
+    orgId: 1
+    folder: АС распределения компонентов крови
+    folderUid: blood-supply
+    type: file
+    # Дашборды — код в репозитории: правки в интерфейсе не сохраняются, меняется JSON.
+    disableDeletion: true
+    allowUiUpdates: false
+    updateIntervalSeconds: 60
+    options:
+      path: /var/lib/blood-supply/grafana/dashboards

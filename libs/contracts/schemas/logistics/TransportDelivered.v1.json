@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/logistics/TransportDelivered.v1.json",
+  "title": "TransportDelivered",
+  "description": "Ответ logistics.replies: перевозчик доставил груз. Температура при отправке и по прибытии (ПП РФ № 641, п. 69 е: обязательна при перевозке дольше 30 минут) в контракте необязательна: пропуск показывается как нарушение данных (ADR-0022).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["obligation_id", "delivered_at"],
+  "properties": {
+    "obligation_id": { "type": "string", "format": "uuid" },
+    "delivered_at": { "type": "string", "format": "date-time" },
+    "temperature_at_dispatch_c": { "type": "number", "minimum": -80, "maximum": 60 },
+    "temperature_at_arrival_c": { "type": "number", "minimum": -80, "maximum": 60 }
+  }
+}

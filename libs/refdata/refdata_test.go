@@ -26,6 +26,40 @@ func TestLoadIsConsistent(t *testing.T) {
 	}
 }
 
+// Для закрепления доступна только единица в наличии (решение проекта, ADR-0027); статус «на карантине»
+// есть в базе по ПП РФ № 641, п. 62 а.
+func TestUnitStatusesAvailability(t *testing.T) {
+	s := refdata.MustLoad()
+	want := map[string]bool{"IN_STOCK": true, "QUARANTINE": false, "ISSUED": false, "DISCARDED": false, "TRANSFERRED": false}
+	if len(s.UnitStatuses) != len(want) {
+		t.Fatalf("статусов единицы %d, ожидали %d", len(s.UnitStatuses), len(want))
+	}
+	for code, available := range want {
+		st, ok := s.UnitStatus(code)
+		if !ok {
+			t.Errorf("статус %s не найден", code)
+			continue
+		}
+		if st.IsAvailable != available || st.Name == "" {
+			t.Errorf("статус %s: доступна=%v, имя %q; ожидали доступна=%v", code, st.IsAvailable, st.Name, available)
+		}
+		if s.IsUnitAvailable(code) != available {
+			t.Errorf("IsUnitAvailable(%s) != %v", code, available)
+		}
+	}
+	if s.IsUnitAvailable("UNKNOWN") {
+		t.Error("неизвестный статус не должен считаться доступным")
+	}
+}
+
+func TestValidateCatchesDuplicateUnitStatus(t *testing.T) {
+	s := refdata.MustLoad()
+	s.UnitStatuses = append(s.UnitStatuses, s.UnitStatuses[0])
+	if err := s.Validate(); err == nil {
+		t.Fatal("повтор статуса единицы должен быть ошибкой")
+	}
+}
+
 func TestValidateCatchesBrokenReference(t *testing.T) {
 	s := refdata.MustLoad()
 	s.Clinics[0].DistrictID = 999

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/transfer/TransferUnitReplaced.v1.json",
+  "title": "TransferUnitReplaced",
+  "description": "Событие transfer.events: закреплённая единица заменена равноценной до отправки по спецификации замены (ADR-0011).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["obligation_id", "old_unit_id", "new_unit_id", "rule_version"],
+  "properties": {
+    "obligation_id": { "type": "string", "format": "uuid" },
+    "obligation_version": { "type": "integer", "minimum": 0, "description": "Версия O07 после перехода; проекции применяют событие, только если версия выше сохранённой" },
+    "old_unit_id": { "type": "string", "format": "uuid" },
+    "new_unit_id": { "type": "string", "format": "uuid" },
+    "rule_version": { "type": "string", "minLength": 1, "maxLength": 64 }
+  }
+}

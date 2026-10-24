@@ -1,0 +1,7 @@
+{
+  "clinic_id": 1,
+  "component_kind": "RBC",
+  "volume_units": 4,
+  "version": 1,
+  "reason": "DEMO_NORM_PLUS_BACKGROUND"
+}

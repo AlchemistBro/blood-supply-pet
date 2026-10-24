@@ -1,7 +1,9 @@
 // Package runtime — единый запуск сервиса: конфигурация из переменных окружения, наблюдаемость,
-// подключение к PostgreSQL, миграции (платформа + справочники + свои), сид справочников, проверка JWT,
+// подключение к PostgreSQL (кроме сервисов со Spec.NoDB), миграции (платформа + справочники + свои), сид справочников, проверка JWT,
 // служебные маршруты (/healthz, /readyz, /metrics, /openapi.yaml), ретранслятор outbox, фоновые воркеры,
 // мягкая остановка по сигналу. Сервису остаётся собрать зависимости и зарегистрировать маршруты.
+// Сервис со своей проверкой входа (web: сессия в cookie вместо bearer JWT, ADR-0018) объявляет
+// Spec.CustomAuth и ставит цепочку через Runtime.Use.
 package runtime
 
 import (
@@ -35,8 +37,9 @@ var Version = "dev"
 
 // Config — общие переменные окружения всех сервисов (префикс BS_).
 type Config struct {
-	HTTPAddr     string   `env:"BS_HTTP_ADDR" envDefault:":8080"`
-	DBURL        string   `env:"BS_DB_URL,required"`
+	HTTPAddr string `env:"BS_HTTP_ADDR" envDefault:":8080"`
+	// DBURL обязателен для сервиса с базой (проверяет checkConfig); сервису со Spec.NoDB не нужен.
+	DBURL        string   `env:"BS_DB_URL"`
 	KafkaBrokers []string `env:"BS_KAFKA_BROKERS" envSeparator:","`
 	OIDCIssuer   string   `env:"BS_OIDC_ISSUER"`
 	OIDCAudience string   `env:"BS_OIDC_AUDIENCE"`
@@ -59,10 +62,21 @@ type Spec struct {
 	Module string
 	// Migrations — собственные миграции сервиса (00100+).
 	Migrations fs.FS
+	// NoDB — сервис без базы (имитаторы смежных систем): нет подключения к PostgreSQL, миграций,
+	// справочников в базе, outbox и ретранслятора; Runtime.Pool и Runtime.Journal равны nil.
+	NoDB bool
 	// OpenAPI — текст контракта для GET /openapi.yaml (может быть nil).
 	OpenAPI []byte
 	// Setup собирает зависимости, регистрирует маршруты на rt.Mux и возвращает фоновые воркеры.
 	Setup func(ctx context.Context, rt *Runtime) ([]Worker, error)
+	// CustomAuth — сервис сам проверяет вход (web: сессия в cookie, ADR-0018): в Setup вызывает Runtime.Use
+	// со своей цепочкой, она заменяет проверку bearer JWT; проверяющий токены рантайм не создаёт.
+	// Без цепочки запуск останавливается, чтобы маршруты не открылись без проверки по ошибке.
+	CustomAuth bool
+	// OnDeny — запись отказа в доступе для сервиса без базы (NoDB): Runtime.Deny вызывает его вместо
+	// outbox. Если обработчику нужны зависимости из Setup, Setup может задать Runtime.OnDeny сам.
+	// Сервисам с базой не нужен: их отказы идут в outbox, как прежде.
+	OnDeny auth.Denied
 }
 
 // Worker — фоновая работа, живущая до отмены контекста (consumer, таймер).
@@ -81,6 +95,32 @@ type Runtime struct {
 	Obs      *observability.Observability
 	Refdata  *refdata.Set
 	Name     string
+	// OnDeny — запись отказа без базы (из Spec.OnDeny; Setup может заменить). У сервиса с базой не вызывается.
+	OnDeny auth.Denied
+
+	// middleware — своя цепочка проверки входа (Spec.CustomAuth), задаётся через Use.
+	middleware []httpx.Middleware
+}
+
+// Use задаёт цепочку проверки входа вместо bearer JWT. Допустим только при Spec.CustomAuth: иначе запуск
+// останавливается, чтобы проверку токенов нельзя было тихо подменить. Цепочка оборачивает все маршруты,
+// включая служебные (/healthz, /metrics), поэтому её заголовки безопасности есть на всех ответах.
+func (rt *Runtime) Use(mws ...httpx.Middleware) {
+	rt.middleware = append(rt.middleware, mws...)
+}
+
+// authChain — проверка входа для всех маршрутов: своя цепочка сервиса или bearer JWT.
+func authChain(spec Spec, rt *Runtime) ([]httpx.Middleware, error) {
+	switch {
+	case spec.CustomAuth && len(rt.middleware) == 0:
+		return nil, fmt.Errorf("%s: CustomAuth без цепочки проверки входа (Runtime.Use)", spec.Name)
+	case !spec.CustomAuth && len(rt.middleware) > 0:
+		return nil, fmt.Errorf("%s: Runtime.Use допустим только при CustomAuth", spec.Name)
+	case spec.CustomAuth:
+		return rt.middleware, nil
+	default:
+		return []httpx.Middleware{auth.Authenticate(rt.Verifier)}, nil
+	}
 }
 
 // Run запускает сервис и блокируется до SIGINT/SIGTERM. Ошибка инициализации завершает процесс.
@@ -104,6 +144,9 @@ func run(ctx context.Context, spec Spec) error {
 	if err := env.Parse(&cfg); err != nil {
 		return fmt.Errorf("конфигурация: %w", err)
 	}
+	if err := checkConfig(cfg, spec); err != nil {
+		return err
+	}
 	obs, err := observability.Init(ctx, observability.Config{
 		ServiceName: spec.Name, Version: Version, Environment: cfg.Environment,
 		OTLPEndpoint: cfg.OTLPEndpoint, LogLevel: cfg.LogLevel, LogFormat: cfg.LogFormat,
@@ -115,39 +158,29 @@ func run(ctx context.Context, spec Spec) error {
 	log := obs.Logger
 	log.Info("запуск", "env", cfg.Environment, "addr", cfg.HTTPAddr)
 
-	pool, err := bspgx.Connect(ctx, cfg.DBURL)
-	if err != nil {
-		return err
-	}
-	defer pool.Close()
-
-	sources := []fs.FS{messaging.Migrations, refdata.Migrations}
-	if spec.Migrations != nil {
-		sources = append(sources, spec.Migrations)
-	}
-	applied, err := bspgx.Migrate(ctx, pool, sources...)
-	if err != nil {
-		return err
-	}
-	if len(applied) > 0 {
-		log.Info("миграции применены", "files", applied)
-	}
 	ref := refdata.MustLoad()
-	if err := bspgx.WithTx(ctx, pool, func(ctx context.Context, tx pgx.Tx) error { return ref.Seed(ctx, tx) }); err != nil {
-		return err
-	}
-
 	rt := &Runtime{
-		Cfg: cfg, Log: log, Pool: pool, Clock: clock.System{}, Health: httpx.NewHealth(),
-		Mux: http.NewServeMux(), Obs: obs, Refdata: ref, Name: spec.Name,
-		Journal: messaging.NewJournal(spec.Name, spec.Module, clock.System{}),
+		Cfg: cfg, Log: log, Clock: clock.System{}, Health: httpx.NewHealth(),
+		Mux: http.NewServeMux(), Obs: obs, Refdata: ref, Name: spec.Name, OnDeny: spec.OnDeny,
 	}
-	rt.Health.AddReadiness("postgres", func(ctx context.Context) error { return pool.Ping(ctx) })
+	if !spec.NoDB {
+		pool, err := openDatabase(ctx, cfg, spec, ref, log)
+		if err != nil {
+			return err
+		}
+		defer pool.Close()
+		rt.Pool = pool
+		rt.Journal = messaging.NewJournal(spec.Name, spec.Module, clock.System{})
+		rt.Health.AddReadiness("postgres", func(ctx context.Context) error { return pool.Ping(ctx) })
+	}
 	if len(cfg.KafkaBrokers) > 0 {
 		rt.Health.AddReadiness("kafka", func(ctx context.Context) error { return messaging.Ping(ctx, cfg.KafkaBrokers) })
 	}
 
-	if !cfg.AuthDisabled {
+	switch {
+	case spec.CustomAuth:
+		// Проверку входа ставит сервис через Runtime.Use; bearer JWT рантайм не проверяет.
+	case !cfg.AuthDisabled:
 		if cfg.OIDCIssuer == "" {
 			return errors.New("BS_OIDC_ISSUER не задан (или BS_AUTH_DISABLED=true для локальной отладки)")
 		}
@@ -156,7 +189,7 @@ func run(ctx context.Context, spec Spec) error {
 			return err
 		}
 		rt.Verifier = verifier
-	} else {
+	default:
 		log.Warn("проверка JWT отключена (BS_AUTH_DISABLED=true): только для локальной отладки")
 		rt.Verifier = devVerifier{}
 	}
@@ -175,12 +208,20 @@ func run(ctx context.Context, spec Spec) error {
 		return fmt.Errorf("инициализация %s: %w", spec.Name, err)
 	}
 
-	handler := httpx.Chain(rt.Mux, append(httpx.Standard(log), observability.HTTPMiddleware(spec.Name), auth.Authenticate(rt.Verifier))...)
+	authMWs, err := authChain(spec, rt)
+	if err != nil {
+		return fmt.Errorf("инициализация %s: %w", spec.Name, err)
+	}
+	chain := httpx.Standard(log)
+	chain = append(chain, observability.HTTPMiddleware(spec.Name))
+	chain = append(chain, authMWs...)
+	handler := httpx.Chain(rt.Mux, chain...)
 	server := httpx.NewServer(cfg.HTTPAddr, handler, log)
 
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error { return server.Run(gctx) })
-	if len(cfg.KafkaBrokers) > 0 {
+	// Ретранслятор outbox нужен только сервису с базой: без базы нет и outbox.
+	if len(cfg.KafkaBrokers) > 0 && rt.Pool != nil {
 		producer, err := messaging.NewProducerClient(cfg.KafkaBrokers)
 		if err != nil {
 			return err
@@ -188,7 +229,7 @@ func run(ctx context.Context, spec Spec) error {
 		defer producer.Close()
 		relayCfg := messaging.DefaultRelayConfig()
 		relayCfg.Interval = cfg.RelayInterval
-		relay := messaging.NewRelay(pool, messaging.KafkaProducer{Client: producer}, relayCfg, log)
+		relay := messaging.NewRelay(rt.Pool, messaging.KafkaProducer{Client: producer}, relayCfg, log)
 		g.Go(func() error { return relay.Run(gctx) })
 	}
 	for _, w := range workers {
@@ -200,6 +241,46 @@ func run(ctx context.Context, spec Spec) error {
 	}
 	log.Info("сервис остановлен", "service", spec.Name)
 	return nil
+}
+
+// checkConfig проверяет согласованность конфигурации и описания сервиса до любых подключений.
+func checkConfig(cfg Config, spec Spec) error {
+	if spec.NoDB {
+		if spec.Migrations != nil {
+			return fmt.Errorf("%s: сервис без базы (NoDB) не может иметь миграций", spec.Name)
+		}
+		return nil
+	}
+	if cfg.DBURL == "" {
+		return errors.New("BS_DB_URL не задан (сервису без базы нужен Spec.NoDB)")
+	}
+	return nil
+}
+
+// openDatabase подключается к базе сервиса, применяет миграции (платформа, справочники, свои)
+// и сидирует справочники.
+func openDatabase(ctx context.Context, cfg Config, spec Spec, ref *refdata.Set, log *slog.Logger) (*pgxpool.Pool, error) {
+	pool, err := bspgx.Connect(ctx, cfg.DBURL)
+	if err != nil {
+		return nil, err
+	}
+	sources := []fs.FS{messaging.Migrations, refdata.Migrations}
+	if spec.Migrations != nil {
+		sources = append(sources, spec.Migrations)
+	}
+	applied, err := bspgx.Migrate(ctx, pool, sources...)
+	if err != nil {
+		pool.Close()
+		return nil, err
+	}
+	if len(applied) > 0 {
+		log.Info("миграции применены", "files", applied)
+	}
+	if err := bspgx.WithTx(ctx, pool, func(ctx context.Context, tx pgx.Tx) error { return ref.Seed(ctx, tx) }); err != nil {
+		pool.Close()
+		return nil, err
+	}
+	return pool, nil
 }
 
 // newVerifierWithRetry ждёт Keycloak при старте стенда: discovery повторяется до минуты.
@@ -259,8 +340,18 @@ func splitColon(s string) []string {
 }
 
 // Deny — стандартная реакция на отказ в доступе: запись ACCESS_DENIED в аудит через journal.
+// У сервиса без базы outbox нет: отказ уходит в OnDeny (web пишет его в audit по HTTP, ADR-0017),
+// а без OnDeny — только в журнал процесса.
 func (rt *Runtime) Deny() auth.Denied {
 	return func(r *http.Request, p *auth.Principal, op auth.Operation) {
+		if rt.Pool == nil {
+			if rt.OnDeny != nil {
+				rt.OnDeny(r, p, op)
+				return
+			}
+			rt.Log.WarnContext(r.Context(), "доступ запрещён", "operation", string(op))
+			return
+		}
 		entry := messaging.AuditEntry{Action: "ACCESS_DENIED", ObjectType: "operation", ObjectID: string(op), Result: "DENIED"}
 		if p != nil {
 			entry.UserID, entry.Role, entry.ClinicID = p.Username, p.PrimaryRole(), p.ClinicID

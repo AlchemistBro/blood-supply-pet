@@ -1,0 +1,9 @@
+# Имитаторы смежных систем: отдельный сегмент, чтобы NetworkPolicy пускала к ним только bs-app.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bs-sims
+  labels:
+    blood-supply.io/segment: sims
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted

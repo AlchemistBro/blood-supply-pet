@@ -1,0 +1,30 @@
+# Точка контакта и маршрутизация алертов АС.
+# Адрес демонстрационный (домен .invalid не доставляется); на внедрении — адрес ИТ-службы оператора.
+# Для отправки Grafana нужен SMTP (GF_SMTP_*); в демо это Mailpit, настройка описана в README рядом.
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: bs-it-service
+    receivers:
+      - uid: bs-it-service-email
+        type: email
+        settings:
+          addresses: it-service@demo.invalid
+          singleEmail: true
+        disableResolveMessage: false
+
+policies:
+  - orgId: 1
+    receiver: bs-it-service
+    group_by: ["alertname", "area"]
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 4h
+    routes:
+      # Безопасность: без группировки по времени, повтор каждый час, пока не закрыто (сроки 24 ч / 72 ч).
+      - receiver: bs-it-service
+        object_matchers:
+          - ["area", "=", "security"]
+        group_wait: 0s
+        repeat_interval: 1h

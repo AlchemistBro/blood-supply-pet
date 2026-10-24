@@ -10,7 +10,7 @@
 | Фитнес-тесты саги | `services/transfer`, `services/logistics-gateway` | Перенос из Java: четыре гонки, 50 параллельных подтверждений, восемь экземпляров шлюза, kill после REQUESTING, потерянный ответ | `task test:fitness` (каждый PR, обязательные) |
 | Контрактные | `libs/contracts` | JSON Schema валидация примеров, diff схем на совместимость, OpenAPI lint (`vacuum`/`spectral`), `oapi-codegen` diff | `task contracts:check` |
 | Архитектурные | `tools/archtest` | запрет импорта `services/*` из `libs`, запрет прямого `kgo.Produce` вне `libs/messaging`, запрет `database/sql` вне adapters | `task lint` |
-| Авторизация | каждый HTTP-эндпоинт | таблица роль × эндпоинт → 200/403 | `task test:integration` |
+| Авторизация | каждый HTTP-эндпоинт | таблица роль × эндпоинт → 2xx/403 из `tools/authmatrix` (раздел «Матрица прав») | `task authmatrix`, `task test:integration` |
 | E2E smoke | `tests/e2e` | Go-тесты против поднятого compose: сквозной сценарий из защиты, 4 сценария саги, `docker compose kill logistics-gateway` | `task test:e2e` (PR с меткой `e2e`, main, nightly) |
 | Нагрузка | `tests/load` | k6: NFR003 p95 ≤ 2 с на экранах запаса, плана, вариантов; Go-бенчмарк NFR002 | nightly, порог в CI |
 | Хаос | `tests/chaos` | kill pod transfer/gateway в kind, пауза Kafka, недоступность sim-aist и sim-logistics | nightly на kind |
@@ -21,6 +21,32 @@
 Правило «тест действительно проверяет»: перед закрытием этапа разработчик отключает ключевое правило (уникальный индекс,
 сверку, аренду, перепроверку копии, белый список) и фиксирует в задаче этапа, какой тест упал. Так делалось в Java-прототипе
 (без сверки падают три теста, без аренды — тест двух экземпляров).
+
+## Матрица прав
+
+Тест «роль × эндпоинт» строится автоматически (NFR011), чтобы новый эндпоинт не обошёлся без теста прав.
+
+Соглашение для `services/*/api/openapi.yaml`: каждая операция (метод пути) несёт ровно одну метку.
+
+- `x-bs-operation: <Operation>` — имя операции из матрицы `libs/httpx/auth/policy.go`, например `READ_AUDIT`
+  или `INTERNAL_UNIT_STATUS`. Хендлер проверяет права по этой же операции (`auth.Require`).
+- `x-bs-public: true` — эндпоинт без проверки прав: `/healthz`, `/readyz`, `/metrics`, `/openapi.yaml` и dev-маршруты
+  имитаторов, если они описаны в контракте.
+
+`tools/authmatrix` читает контракты всех сервисов и проверяет: у каждой операции есть одна из меток, операция есть в
+матрице, каждая роль из `policy.go` разрешена хотя бы для одной операции. По контрактам и матрице он строит таблицу
+`docs/architecture/auth-matrix.md` (2xx — допуск, 403 — отказ):
+
+```
+go run ./tools/authmatrix -check                                  # task authmatrix, входит в task ci
+go run ./tools/authmatrix -out docs/architecture/auth-matrix.md    # после изменения контракта или матрицы
+```
+
+Таблица — генерируемый файл: устаревшая таблица роняет `-check` и тест `tools/authmatrix/matrix`.
+Сервисные тесты перебирают роли пакетом `tools/authmatrix/matrix`: `matrix.Cases("<service>")` (или
+`matrix.CasesFromSpec` по встроенному `apispec.Spec`) возвращает `[]Case{Method, Path, Role, WantForbidden}`
+для всех ролей и всех защищённых операций; путь заполняется `matrix.FillPath`, токен роли выпускает
+`libs/httpx/auth/authtest`. `WantForbidden` → ожидается 403, иначе ответ не 401 и не 403.
 
 ## Тестовые данные
 
