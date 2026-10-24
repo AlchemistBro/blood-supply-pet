@@ -35,6 +35,8 @@
 | `GET /obligations/{id}` | VIEW_OBLIGATION | 2xx | 2xx | 2xx | 2xx | 2xx | 403 |
 | `POST /obligations/{id}/cancel` | CANCEL_OBLIGATION | 403 | 2xx | 403 | 403 | 2xx | 403 |
 | `POST /obligations/{id}/confirm` | CONFIRM_TRANSFER | 2xx | 2xx | 403 | 403 | 403 | 403 |
+| `GET /obligations/{id}/history` | VIEW_OBLIGATION | 2xx | 2xx | 2xx | 2xx | 2xx | 403 |
+| `POST /obligations/{id}/reject` | REJECT_TRANSFER | 2xx | 2xx | 403 | 403 | 403 | 403 |
 | `POST /obligations/{id}/replace` | REPLACE_UNIT | 2xx | 2xx | 403 | 403 | 403 | 403 |
 
 ## web
@@ -42,5 +44,10 @@
 | Метод и путь | Операция | CLINIC_OPERATOR | DUTY_OFFICER | IT_SERVICE | PHYSICIAN | SERVICE | TERRITORIAL_ANALYST |
 | --- | --- | :---: | :---: | :---: | :---: | :---: | :---: |
 | `GET /events/obligations` | VIEW_OBLIGATION | 2xx | 2xx | 2xx | 2xx | 2xx | 403 |
+| `GET /tasks` | VIEW_TASKS | 2xx | 2xx | 403 | 403 | 403 | 403 |
+| `GET /tasks/{id}` | VIEW_OBLIGATION | 2xx | 2xx | 2xx | 2xx | 2xx | 403 |
+| `POST /tasks/{id}/confirm` | CONFIRM_TRANSFER | 2xx | 2xx | 403 | 403 | 403 | 403 |
+| `POST /tasks/{id}/reject` | REJECT_TRANSFER | 2xx | 2xx | 403 | 403 | 403 | 403 |
+| `POST /tasks/{id}/replace` | REPLACE_UNIT | 2xx | 2xx | 403 | 403 | 403 | 403 |
 
 Публичные, без проверки прав: `GET /`, `GET /auth/callback`, `GET /auth/login`, `GET /login`, `POST /logout`.

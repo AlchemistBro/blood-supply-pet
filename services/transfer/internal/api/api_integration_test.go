@@ -312,3 +312,29 @@ func TestViewIsLimitedToParticipatingClinics(t *testing.T) {
 		t.Fatalf("список без фильтра: %d", w.Code)
 	}
 }
+
+func TestRefusalAndHistoryRespectClinicAndContract(t *testing.T) {
+	s := setupServer(t)
+	opened := decode[obligationJSON](t, s.call(http.MethodPost, "/obligations", s.token(auth.RoleService, nil), openBody(1)))
+	base := "/obligations/" + opened.ObligationID.String()
+	stranger := s.token(auth.RoleOperator, authtest.Clinic(7))
+	if w := s.call(http.MethodGet, base+"/history", stranger, nil); w.Code != 403 {
+		t.Fatalf("история чужой клиники: %d", w.Code)
+	}
+	if w := s.call(http.MethodPost, base+"/reject", stranger, map[string]string{"reason": "SOURCE_REFUSED"}); w.Code != 403 {
+		t.Fatalf("отказ чужой клиники: %d", w.Code)
+	}
+	operator := s.token(auth.RoleOperator, authtest.Clinic(1))
+	for range 2 {
+		if w := s.call(http.MethodPost, base+"/reject", operator, map[string]string{"reason": "SOURCE_REFUSED"}); w.Code != 200 {
+			t.Fatalf("отказ: %d %s", w.Code, w.Body.String())
+		}
+	}
+	w := s.call(http.MethodGet, base+"/history?limit=1&offset=0", operator, nil)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "REJECTED") || strings.Contains(w.Body.String(), "CcDee") {
+		t.Fatalf("история отказа: %d %s", w.Code, w.Body.String())
+	}
+	if w := s.call(http.MethodGet, base+"/history?limit=101", operator, nil); w.Code != 400 {
+		t.Fatalf("неограниченная история: %d", w.Code)
+	}
+}

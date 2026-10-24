@@ -14,7 +14,7 @@ import (
 // Минимальные шаблоны входа, главной и ошибок. Без встроенных скриптов и стилей (CSP, ADR-0018);
 // оформление по docs/ui/style-guide.md подключит UI-кит.
 //
-//go:embed templates/*.html
+//go:embed templates/*.html templates/screens/*.html
 var templateFS embed.FS
 
 type pages struct {

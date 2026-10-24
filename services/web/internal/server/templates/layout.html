@@ -5,6 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{.Title}} — АС распределения компонентов донорской крови</title>
+<link rel="stylesheet" href="/static/css/app.css">
 </head>
 <body>
 <header>
@@ -22,6 +23,7 @@
   {{- end}}
 </header>
 <main>
+{{if .User}}<nav aria-label="Разделы"><a href="/tasks">Задания на передачу</a></nav>{{end}}
 {{template "content" .}}
 </main>
 <footer>

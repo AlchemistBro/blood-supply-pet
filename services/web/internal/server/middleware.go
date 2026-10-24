@@ -136,6 +136,11 @@ func (s *Server) checkCSRF(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+		if err := r.ParseForm(); err != nil {
+			s.renderError(w, r, http.StatusBadRequest, "Неверная форма", "Обновите страницу и заполните форму ещё раз.")
+			return
+		}
 		d, ok := currentSession(r.Context())
 		token := r.Header.Get("X-CSRF-Token")
 		if token == "" {

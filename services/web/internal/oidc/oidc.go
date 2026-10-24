@@ -107,11 +107,13 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 	if meta.JWKS == "" {
 		return nil, errors.New("OIDC discovery: нет jwks_uri")
 	}
+	meta.JWKS = backchannelURL(meta.JWKS, cfg)
 	access, err := auth.NewVerifier(pctx, auth.Config{Issuer: cfg.Issuer, Audience: cfg.Audience, JWKSURL: meta.JWKS})
 	if err != nil {
 		return nil, fmt.Errorf("OIDC: проверка access token: %w", err)
 	}
 	endpoint := provider.Endpoint()
+	endpoint.TokenURL = backchannelURL(endpoint.TokenURL, cfg)
 	origin, err := originOf(endpoint.AuthURL)
 	if err != nil {
 		return nil, fmt.Errorf("OIDC discovery: authorization_endpoint: %w", err)
@@ -125,12 +127,40 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 			// email не запрашиваются — с ними Keycloak положил бы в токен ФИО и email (ADR-0018).
 			Scopes: []string{gooidc.ScopeOpenID},
 		},
-		idVerifier: provider.Verifier(&gooidc.Config{ClientID: cfg.ClientID}),
+		idVerifier: gooidc.NewVerifier(cfg.Issuer, gooidc.NewRemoteKeySet(pctx, meta.JWKS), &gooidc.Config{ClientID: cfg.ClientID}),
 		access:     access,
 		endSession: meta.EndSession,
 		origin:     origin,
 		http:       httpClient,
 	}, nil
+}
+
+// backchannelURL сохраняет публичный issuer, но токены и ключи запрашивает по внутреннему адресу realm.
+// Меняются только URL этого же realm: authorization и end-session остаются адресами для браузера.
+func backchannelURL(raw string, cfg Config) string {
+	if cfg.DiscoveryURL == "" || cfg.DiscoveryURL == cfg.Issuer {
+		return raw
+	}
+	endpoint, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	issuer, err := url.Parse(cfg.Issuer)
+	if err != nil {
+		return raw
+	}
+	internal, err := url.Parse(cfg.DiscoveryURL)
+	if err != nil {
+		return raw
+	}
+	prefix := strings.TrimRight(issuer.Path, "/")
+	if endpoint.Scheme != issuer.Scheme || endpoint.Host != issuer.Host || !strings.HasPrefix(endpoint.Path, prefix+"/") {
+		return raw
+	}
+	endpoint.Scheme, endpoint.Host = internal.Scheme, internal.Host
+	endpoint.Path = strings.TrimRight(internal.Path, "/") + strings.TrimPrefix(endpoint.Path, prefix)
+	endpoint.RawPath = ""
+	return endpoint.String()
 }
 
 // NewLoginState — случайные state, nonce и PKCE verifier для одного входа; next — локальный путь возврата.

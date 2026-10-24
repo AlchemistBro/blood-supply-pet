@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"time"
@@ -17,6 +18,8 @@ import (
 	"github.com/AlchemistBro/blood-supply-pet/services/web/internal/authz"
 	"github.com/AlchemistBro/blood-supply-pet/services/web/internal/oidc"
 	"github.com/AlchemistBro/blood-supply-pet/services/web/internal/session"
+	"github.com/AlchemistBro/blood-supply-pet/services/web/internal/svcclient"
+	"github.com/AlchemistBro/blood-supply-pet/services/web/internal/ui"
 )
 
 // Имена cookie.
@@ -54,25 +57,30 @@ type Config struct {
 
 // Deps — зависимости сервера.
 type Deps struct {
-	OIDC  OIDC
-	Codec *session.Codec
-	Audit auditclient.Recorder
-	Clock clock.Clock
-	Log   *slog.Logger
+	Transfer  *svcclient.Client
+	Inventory *svcclient.Client
+	OIDC      OIDC
+	Codec     *session.Codec
+	Audit     auditclient.Recorder
+	Clock     clock.Clock
+	Log       *slog.Logger
 }
 
 // Server — обработчики и middleware web.
 type Server struct {
-	cfg      Config
-	oidc     OIDC
-	sessions *session.Store
-	login    *session.Store
-	audit    auditclient.Recorder
-	guard    *authz.Guard
-	clock    clock.Clock
-	log      *slog.Logger
-	pages    *pages
-	csp      string
+	transfer  *svcclient.Client
+	inventory *svcclient.Client
+	ui        *ui.Renderer
+	cfg       Config
+	oidc      OIDC
+	sessions  *session.Store
+	login     *session.Store
+	audit     auditclient.Recorder
+	guard     *authz.Guard
+	clock     clock.Clock
+	log       *slog.Logger
+	pages     *pages
+	csp       string
 	// mux — маршруты web: белый список адресов возврата после входа (safeNext).
 	mux *http.ServeMux
 }
@@ -89,7 +97,16 @@ func New(cfg Config, d Deps) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	screens, err := fs.Sub(templateFS, "templates/screens")
+	if err != nil {
+		return nil, fmt.Errorf("шаблоны экранов: %w", err)
+	}
+	renderer, err := ui.New(ui.Options{Pages: screens})
+	if err != nil {
+		return nil, err
+	}
 	s := &Server{
+		transfer: d.Transfer, inventory: d.Inventory, ui: renderer,
 		cfg: cfg, oidc: d.OIDC, audit: d.Audit, clock: d.Clock, log: d.Log, pages: p,
 		sessions: session.NewStore(d.Codec, SessionCookie, cfg.CookieSecure),
 		login:    session.NewStore(d.Codec, LoginCookie, cfg.CookieSecure),
@@ -110,6 +127,10 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /auth/callback", s.callback)
 	mux.HandleFunc("POST /logout", s.logout)
 	mux.HandleFunc("GET /{$}", s.home)
+	mux.Handle("GET /static/", http.StripPrefix("/static/", s.ui.StaticHandler()))
+	if s.transfer != nil && s.inventory != nil {
+		s.registerOperator(mux)
+	}
 }
 
 // Middleware — цепочка web вместо bearer JWT (runtime.Runtime.Use): заголовки безопасности,
