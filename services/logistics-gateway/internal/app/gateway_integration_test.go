@@ -169,7 +169,7 @@ func waitHealthy(u string, timeout time.Duration) error {
 			}
 		}
 		if time.Now().After(deadline) {
-			return fmt.Errorf("нет ответа %s за %v: %v", u, timeout, err)
+			return fmt.Errorf("нет ответа %s за %v: %w", u, timeout, err)
 		}
 		time.Sleep(100 * time.Millisecond)
 	}

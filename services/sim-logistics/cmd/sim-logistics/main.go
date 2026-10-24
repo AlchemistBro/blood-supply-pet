@@ -104,7 +104,7 @@ func run(ctx context.Context) error {
 	}
 	if cfg.PrintAddr {
 		// Строка-протокол для запустившего теста: по ней он узнаёт фактический порт.
-		fmt.Printf("listening on %s\n", ln.Addr().String())
+		fmt.Printf("listening on %s\n", ln.Addr().String()) //nolint:forbidigo // протокол запуска дочернего процесса, не журнал бизнес-операции
 	}
 	if err := httpx.NewServer(cfg.HTTPAddr, handler, log).Serve(ctx, ln); err != nil {
 		return fmt.Errorf("HTTP-сервер: %w", err)

@@ -21,7 +21,17 @@ linters:
     - noctx
     - errorlint
     - misspell
+    - forbidigo
   settings:
+    forbidigo:
+      forbid:
+        # Время только через libs/clock.Clock: сроки, таймеры и водяные знаки проверяются в тестах
+        # подменой часов (CONTRIBUTING.md, правила кода). Область — services/*/internal, см. exclusions.
+        - pattern: ^time\.Now$
+          msg: "время только через libs/clock.Clock (CONTRIBUTING.md)"
+        # Вывод только структурным журналом slog без ПДн; fmt.Print* допустим в tools, тестах и скриптах.
+        - pattern: ^fmt\.Print(f|ln)?$
+          msg: "вывод через slog (libs/observability), не fmt.Print*"
     depguard:
       rules:
         kafka-only-in-messaging:
@@ -49,6 +59,7 @@ linters:
               desc: "домен не зависит от БД"
     gosec:
       excludes:
+        # G104 (непроверенная ошибка) дублирует errcheck, который включён и настроен строже.
         - G104
     revive:
       rules:
@@ -67,7 +78,30 @@ linters:
       - "internal/adapters/postgres/gen"
     rules:
       - path: _test\.go
-        linters: [gosec, errcheck, noctx]
+        linters: [gosec, errcheck, noctx, forbidigo]
+      # Фальшивые серверы тестов выпускают токены и ставят сетевые дедлайны по системным часам.
+      - path: /(?:oidctest|smtptest)/
+        linters: [forbidigo]
+        text: time\.Now
+      # time.Now запрещён только в бизнес-коде сервисов; libs/clock (реализация Clock), измерение длительности
+      # в libs/httpx и libs/messaging, тестовая инфраструктура и точки входа cmd остаются на системных часах.
+      - path-except: ^services/[^/]+/internal/
+        linters: [forbidigo]
+        text: time\.Now
+      # Генератор заготовки сервиса пишет в Taskfile.yml по корню, который разработчик сам передаёт флагом
+      # --root: это инструмент разработчика в его рабочей копии, а не обработка внешнего ввода (ложное G703).
+      - path: (^|/)tools/scaffold/
+        linters: [gosec]
+        text: G703
+      # Генератор синтетических данных обязан быть детерминированным по сиду (ADR-0010): math/rand здесь
+      # не для секретов (ложное G404). Каталог testdata Go не включает в ./..., линтуется явно.
+      - path: (^|/)libs/testdata/
+        linters: [gosec]
+        text: G404
+      # Командные утилиты и скрипты пишут результат в stdout для человека.
+      - path: (^|/)(tools|tests|scripts)/
+        linters: [forbidigo]
+        text: fmt\.Print
 
 formatters:
   enable:
