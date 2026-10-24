@@ -61,6 +61,7 @@ func WithdrawalStatus(reason string) (UnitStatus, error) {
 // Статус — код справочника ref_unit_status. Фенотип хранится только для проверки спецификации замены
 // и никуда не выводится.
 type UnitCopy struct {
+	SourceStatus  UnitStatus
 	UnitID        uuid.UUID
 	ClinicID      int64
 	ComponentKind string

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -199,7 +200,7 @@ func (s *Service) Dispatch(ctx context.Context, msg *messaging.Message, c Dispat
 		if err := s.store.AddReserved(ctx, tx, o.SourceClinicID, o.ComponentKind, -used); err != nil {
 			return err
 		}
-		if err := s.store.RecountAvailable(ctx, tx, o.SourceClinicID, o.ComponentKind); err != nil {
+		if err := s.store.RecountAvailable(ctx, tx, o.SourceClinicID, o.ComponentKind, s.clock.Now()); err != nil {
 			return err
 		}
 		changed, err := s.store.CASStatus(ctx, tx, o, domain.StatusDispatched, "DISPATCHED", s.clock.Now())
@@ -291,6 +292,19 @@ func (s *Service) Receive(ctx context.Context, msg *messaging.Message, c Receive
 		violations, err := domain.EvaluateTransport(o.ComponentKind, domain.TransportConditions{DepartedAt: *n.DepartedAt, ArrivedAt: c.At, DepartureTemperature: n.DepartureTemperature, ArrivalTemperature: c.Temperature, DepartureContainerIntact: n.DepartureContainerIntact, ArrivalContainerIntact: c.ContainerIntact, TemperatureExcursion: c.TemperatureExcursion})
 		if err != nil {
 			return err
+		}
+		units, err := s.store.UnitsForView(ctx, tx, o.ID)
+		if err != nil {
+			return err
+		}
+		copies, err := s.store.UnitCopies(ctx, tx, units)
+		if err != nil {
+			return err
+		}
+		for _, code := range domain.TransportUnitViolations(o, units, copies, c.At) {
+			if !slices.Contains(violations, code) {
+				violations = append(violations, code)
+			}
 		}
 		n.ArrivedAt = &c.At
 		n.ArrivalTemperature = c.Temperature

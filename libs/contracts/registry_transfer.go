@@ -16,6 +16,7 @@ func init() {
 		func() Payload { return &transfer.TransferRejected{} },
 		func() Payload { return &transfer.TransferExpired{} },
 		func() Payload { return &transfer.TransferCancelled{} },
+		func() Payload { return &transfer.RequestCancellationProcessed{} },
 		func() Payload { return &transfer.TransferBroken{} },
 		func() Payload { return &transfer.TransferUnitReplaced{} },
 		func() Payload { return &transfer.TransportRequested{} },

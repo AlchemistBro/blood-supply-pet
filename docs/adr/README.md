@@ -42,3 +42,5 @@
 | [0034](0034-planning-projection-rebuild.md) | Восстановление проекций planning | принят |
 | [0035](0035-kubernetes-bootstrap-and-recovery-drill.md) | Запуск kind по фазам и отдельное учение PITR | принят |
 | [0036](0036-demo-seed-through-service-api.md) | Наполнение синтетического стенда через API | принят |
+| [0037](0037-request-cancellation-acknowledgement.md) | Завершение отмены заявки по результату transfer | принят |
+| [0038](0038-unit-metadata-and-confirmed-specification.md) | Метаданные единицы после подтверждения | принят |

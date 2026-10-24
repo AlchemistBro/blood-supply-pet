@@ -56,15 +56,16 @@ var RejectReasons = []string{RejectUnitsWithdrawn, RejectSourceRefused}
 // п. 62 а): она не выбыла, но обязательство нарушается — решение проекта (ADR-0027). Поэтому перечисление
 // своё, а не общее с UnitWithdrawn.
 const (
-	BrokenIssued      = "ISSUED"
-	BrokenDiscarded   = "DISCARDED"
-	BrokenTransferred = "TRANSFERRED"
-	BrokenExpired     = "EXPIRED"
-	BrokenQuarantine  = "QUARANTINE"
+	BrokenIssued               = "ISSUED"
+	BrokenDiscarded            = "DISCARDED"
+	BrokenTransferred          = "TRANSFERRED"
+	BrokenExpired              = "EXPIRED"
+	BrokenQuarantine           = "QUARANTINE"
+	BrokenSpecificationChanged = "SPECIFICATION_CHANGED"
 )
 
 // BrokenReasons — все причины нарушения в порядке схемы.
-var BrokenReasons = []string{BrokenIssued, BrokenDiscarded, BrokenTransferred, BrokenExpired, BrokenQuarantine}
+var BrokenReasons = []string{BrokenIssued, BrokenDiscarded, BrokenTransferred, BrokenExpired, BrokenQuarantine, BrokenSpecificationChanged}
 
 // Причины эскалации дежурному (EscalationRaised).
 const (

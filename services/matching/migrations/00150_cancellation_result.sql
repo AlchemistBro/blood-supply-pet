@@ -1,0 +1,5 @@
+-- +goose Up
+INSERT INTO request_status_dict VALUES('CANCELLATION_REQUESTED'),('CANCELLATION_REJECTED');
+-- +goose Down
+UPDATE clinical_request SET request_status_code='TASK_OPENED' WHERE request_status_code IN('CANCELLATION_REQUESTED','CANCELLATION_REJECTED');
+DELETE FROM request_status_dict WHERE status_code IN('CANCELLATION_REQUESTED','CANCELLATION_REJECTED');

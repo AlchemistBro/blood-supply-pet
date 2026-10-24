@@ -259,7 +259,7 @@ func (h *harness) assertStockConsistent(clinic int64, kind string) {
 		h.t.Fatal(err)
 	}
 	inStock := h.count(`SELECT count(*) FROM unit_copy u JOIN ref_unit_status s USING (unit_status_code)
-		WHERE u.clinic_id = $1 AND u.component_kind_code = $2 AND s.is_available AND u.local_dispatch_obligation_id IS NULL AND NOT u.clinical_use_blocked`, clinic, kind)
+		WHERE u.clinic_id = $1 AND u.component_kind_code = $2 AND s.is_available AND u.expires_at>$3 AND u.local_dispatch_obligation_id IS NULL AND NOT u.clinical_use_blocked`, clinic, kind, h.clock.Now())
 	confirmed := h.count(`SELECT count(*) FROM allocation a JOIN unit_copy u USING (unit_id)
 		WHERE u.clinic_id = $1 AND u.component_kind_code = $2 AND a.status = 'CONFIRMED'`, clinic, kind)
 	if available != inStock {

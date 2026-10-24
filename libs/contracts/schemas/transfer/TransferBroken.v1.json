@@ -13,6 +13,6 @@
     "target_clinic_id": { "type": "integer", "minimum": 1, "description": "Клиника-получатель обязательства; для фильтра живых статусов без запроса к transfer" },
     "request_id": { "type": "string", "format": "uuid" },
     "unit_id": { "type": "string", "format": "uuid" },
-    "reason": { "type": "string", "enum": ["ISSUED", "DISCARDED", "TRANSFERRED", "EXPIRED", "QUARANTINE"] }
+    "reason": { "type": "string", "enum": ["ISSUED", "DISCARDED", "TRANSFERRED", "EXPIRED", "QUARANTINE", "SPECIFICATION_CHANGED"] }
   }
 }

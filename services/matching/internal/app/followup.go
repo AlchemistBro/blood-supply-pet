@@ -53,7 +53,7 @@ func (s *Service) openRemoteChoice(ctx context.Context, tx pgx.Tx, request domai
 
 // followUp не меняет клинический выбор: тот же вид, группа и версия правила; местный вариант автоматически не выбирается.
 func (s *Service) followUp(ctx context.Context, tx pgx.Tx, n RequestRecord, parent uuid.UUID, version int64, eventType, reason string, remaining int) error {
-	if n.Selection == nil || remaining <= 0 {
+	if n.Selection == nil || remaining <= 0 || cancellationRequested(n.Status) {
 		return nil
 	}
 	rows, err := s.store.RequestInputs(ctx, tx, n.Request.RequestID)
@@ -161,7 +161,7 @@ func (s *Service) shortfall(ctx context.Context, msg messaging.Message) error {
 		if err != nil {
 			return err
 		}
-		if n.Status == "CANCELLED" {
+		if cancellationRequested(n.Status) {
 			return nil
 		}
 		_, remaining, err := s.requestProgress(ctx, tx, n.Request)

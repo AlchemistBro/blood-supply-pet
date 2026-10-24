@@ -51,7 +51,10 @@
           "TEMPERATURE",
           "CONTAINER",
           "DURATION",
-          "TEMPERATURE_NOT_RECORDED"
+          "TEMPERATURE_NOT_RECORDED",
+          "UNIT_EXPIRED",
+          "UNIT_UNAVAILABLE",
+          "SPECIFICATION_CHANGED"
         ]
       }
     }

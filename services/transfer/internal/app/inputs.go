@@ -54,6 +54,7 @@ type UnitRegistered struct {
 
 // UnitUpdated — изменился статус единицы (в том числе карантин).
 type UnitUpdated struct {
+	ExpiresAt     *time.Time
 	UnitID        uuid.UUID
 	ClinicID      int64
 	ComponentKind string

@@ -57,7 +57,7 @@ func (s *Service) lockUnitScope(ctx context.Context, tx pgx.Tx, unitID uuid.UUID
 		return unitScope{}, fmt.Errorf("единица %s: %w", unitID, errUnitMovedConcurrently)
 	}
 	if after.copyKey != nil && *after.copyKey != event {
-		s.log.WarnContext(ctx, "клиника или вид в событии единицы расходятся с копией; используется копия",
+		s.log.WarnContext(ctx, "клиника или вид в событии расходятся с копией; заблокированы оба остатка",
 			"unit_id", unitID, "event_clinic_id", event.clinicID, "copy_clinic_id", after.copyKey.clinicID)
 	}
 	return after, nil
