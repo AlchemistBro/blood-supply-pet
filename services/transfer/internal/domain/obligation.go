@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/transfer"
+	"github.com/AlchemistBro/blood-supply-pet/libs/k1seal"
 )
 
 // Origin — откуда пришло задание.
@@ -36,45 +37,50 @@ const (
 // Obligation — обязательство на передачу O07 в том виде, в котором оно хранится в базе transfer.
 // Номера случая пациента здесь нет: заявку представляет только request_id.
 type Obligation struct {
-	ProtectedFloors map[int64]int
-	ID              uuid.UUID
-	ChoiceID        uuid.UUID
-	RequestID       uuid.UUID
-	Origin          Origin
-	SourceClinicID  int64
-	TargetClinicID  int64
-	ComponentKind   string
-	BloodGroup      *string
-	RequestedQty    int
-	ConfirmedQty    int
-	Status          Status
-	UrgencyCode     string
-	Deadline        time.Time
-	ConfirmWindow   time.Duration
-	FallbackSources []int64
-	Spec            ReplacementSpec
-	ConfirmKey      string
-	TransportRef    string
-	StatusReason    string
-	Version         int64
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	PatientAllocationKey    *uuid.UUID
+	PatientAllocationStatus string
+	PatientAllocationAt     *time.Time
+	PatientCaseSealed       k1seal.Sealed
+	ProtectedFloors         map[int64]int
+	ID                      uuid.UUID
+	ChoiceID                uuid.UUID
+	RequestID               uuid.UUID
+	Origin                  Origin
+	SourceClinicID          int64
+	TargetClinicID          int64
+	ComponentKind           string
+	BloodGroup              *string
+	RequestedQty            int
+	ConfirmedQty            int
+	Status                  Status
+	UrgencyCode             string
+	Deadline                time.Time
+	ConfirmWindow           time.Duration
+	FallbackSources         []int64
+	Spec                    ReplacementSpec
+	ConfirmKey              string
+	TransportRef            string
+	StatusReason            string
+	Version                 int64
+	CreatedAt               time.Time
+	UpdatedAt               time.Time
 }
 
 // NewObligation — данные для открытия задания (команда OpenObligation или эскалация по таймеру).
 type NewObligation struct {
-	ProtectedFloors map[int64]int
-	ChoiceID        uuid.UUID
-	RequestID       uuid.UUID
-	Origin          Origin
-	SourceClinicID  int64
-	TargetClinicID  int64
-	ComponentKind   string
-	RequestedQty    int
-	UrgencyCode     string
-	ConfirmWindow   time.Duration // ноль — взять из справочника срочности
-	FallbackSources []int64
-	Spec            ReplacementSpec
+	PatientCaseSealed k1seal.Sealed
+	ProtectedFloors   map[int64]int
+	ChoiceID          uuid.UUID
+	RequestID         uuid.UUID
+	Origin            Origin
+	SourceClinicID    int64
+	TargetClinicID    int64
+	ComponentKind     string
+	RequestedQty      int
+	UrgencyCode       string
+	ConfirmWindow     time.Duration // ноль — взять из справочника срочности
+	FallbackSources   []int64
+	Spec              ReplacementSpec
 }
 
 // ErrInvalidObligation — команда открытия некорректна; повтор её не исправит.
@@ -82,6 +88,14 @@ var ErrInvalidObligation = errors.New("некорректная команда �
 
 // Validate проверяет инварианты, которые дублируют CHECK в схеме: ошибка понятнее нарушения ограничения.
 func (n NewObligation) Validate() error {
+	if !n.PatientCaseSealed.IsZero() {
+		if n.Origin != OriginDoctorChoice {
+			return fmt.Errorf("%w: конверт допустим только для заявки врача", ErrInvalidObligation)
+		}
+		if _, err := k1seal.ParseSealed(string(n.PatientCaseSealed)); err != nil {
+			return fmt.Errorf("%w: неверный конверт номера случая", ErrInvalidObligation)
+		}
+	}
 	for clinic, floor := range n.ProtectedFloors {
 		if clinic <= 0 || floor < 0 || floor > 2147483647 {
 			return fmt.Errorf("%w: некорректный порог источника", ErrInvalidObligation)

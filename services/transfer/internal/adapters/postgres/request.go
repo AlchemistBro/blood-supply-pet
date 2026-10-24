@@ -22,3 +22,12 @@ func (Store) CancelRequest(ctx context.Context, db app.DB, id uuid.UUID, reason 
 	_, err := db.Exec(ctx, `INSERT INTO cancelled_request VALUES($1,$2,$3) ON CONFLICT DO NOTHING`, id, reason, at)
 	return err
 }
+
+func (Store) SetPatientDelivery(ctx context.Context, db app.DB, id, key uuid.UUID, status string) error {
+	_, err := db.Exec(ctx, `UPDATE obligation SET patient_allocation_key=$2,patient_allocation_status=$3,patient_allocation_at=NULL WHERE obligation_id=$1`, id, key, status)
+	return err
+}
+func (Store) AcknowledgePatient(ctx context.Context, db app.DB, id, key uuid.UUID, at time.Time) error {
+	_, err := db.Exec(ctx, `UPDATE obligation SET patient_allocation_status='ACKNOWLEDGED',patient_allocation_at=$3 WHERE obligation_id=$1 AND patient_allocation_key=$2 AND patient_allocation_status='PENDING'`, id, key, at)
+	return err
+}

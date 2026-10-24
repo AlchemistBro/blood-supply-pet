@@ -21,24 +21,42 @@ import (
 
 // Узкие DTO экрана намеренно не содержат фенотип и номер случая (ADR-0011, ADR-0020).
 type taskView struct {
-	ID        uuid.UUID   `json:"obligation_id"`
-	Source    int64       `json:"source_clinic_id"`
-	Target    int64       `json:"target_clinic_id"`
-	Kind      string      `json:"component_kind"`
-	Group     string      `json:"blood_group"`
-	Requested int         `json:"requested_qty"`
-	Confirmed int         `json:"confirmed_qty"`
-	Status    string      `json:"status"`
-	Urgency   string      `json:"urgency"`
-	Deadline  time.Time   `json:"deadline"`
-	Units     []uuid.UUID `json:"units"`
-	Spec      struct {
+	PatientStatus string      `json:"patient_allocation_status"`
+	RequestID     uuid.UUID   `json:"request_id"`
+	Origin        string      `json:"origin"`
+	ID            uuid.UUID   `json:"obligation_id"`
+	Source        int64       `json:"source_clinic_id"`
+	Target        int64       `json:"target_clinic_id"`
+	Kind          string      `json:"component_kind"`
+	Group         string      `json:"blood_group"`
+	Requested     int         `json:"requested_qty"`
+	Confirmed     int         `json:"confirmed_qty"`
+	Status        string      `json:"status"`
+	Urgency       string      `json:"urgency"`
+	Deadline      time.Time   `json:"deadline"`
+	Units         []uuid.UUID `json:"units"`
+	Spec          struct {
 		PhenotypeRequired bool `json:"phenotype_required"`
 	} `json:"spec"`
 }
 
 func (t taskView) StatusBadge() ui.Badge { return ui.StatusBadge(ui.ObligationStatus(t.Status)) }
-func (t taskView) Pending() bool         { return t.Status == "PENDING" }
+
+func (t taskView) PatientDeliveryLabel() string { return patientDeliveryLabel(t.PatientStatus) }
+
+func patientDeliveryLabel(status string) string {
+	switch status {
+	case "PENDING":
+		return "Закрепление передаётся в АИСТ-М"
+	case "ACKNOWLEDGED":
+		return "Закрепление подтверждено АИСТ-М"
+	case "RELEASE_REQUESTED":
+		return "Снятие закрепления отправлено в очередь АИСТ-М"
+	default:
+		return "Закрепление в АИСТ-М пока не требуется"
+	}
+}
+func (t taskView) Pending() bool { return t.Status == "PENDING" }
 func (t taskView) Replaceable() bool {
 	return t.Status == "CONFIRMED" || t.Status == "TRANSPORT_REQUESTED"
 }
@@ -55,16 +73,17 @@ type candidateView struct {
 	Available bool      `json:"available"`
 }
 type taskScreen struct {
-	History    []historyView
-	Items      []taskView
-	Task       taskView
-	Candidates []candidateView
-	Key        string
-	Clinic     int64
-	Status     string
-	Statuses   []ui.ObligationStatus
-	Message    string
-	CanAct     bool
+	CanReadCase bool
+	History     []historyView
+	Items       []taskView
+	Task        taskView
+	Candidates  []candidateView
+	Key         string
+	Clinic      int64
+	Status      string
+	Statuses    []ui.ObligationStatus
+	Message     string
+	CanAct      bool
 }
 
 type historyView struct {
@@ -96,7 +115,7 @@ func (s *Server) screenPage(r *http.Request, title string) ui.Page {
 	if p.ClinicID != nil {
 		page.Header.Clinic = fmt.Sprintf("Клиника № %d", *p.ClinicID)
 	}
-	if auth.Allowed(auth.OpViewTasks, p.Roles) {
+	if s.transfer != nil && s.inventory != nil && auth.Allowed(auth.OpViewTasks, p.Roles) {
 		page.Nav = append(page.Nav, ui.NavItem{Label: "Задания на передачу", URL: "/tasks", Active: strings.HasPrefix(r.URL.Path, "/tasks")})
 	}
 	if s.demand != nil && auth.Allowed(auth.OpViewDemand, p.Roles) {
@@ -104,6 +123,12 @@ func (s *Server) screenPage(r *http.Request, title string) ui.Page {
 	}
 	if s.planning != nil && auth.Allowed(auth.OpViewPlan, p.Roles) {
 		page.Nav = append(page.Nav, ui.NavItem{Label: "План пополнения", URL: "/plans", Active: strings.HasPrefix(r.URL.Path, "/plans")})
+	}
+	if s.matching != nil && auth.Allowed(auth.OpViewRequests, p.Roles) {
+		page.Nav = append(page.Nav, ui.NavItem{Label: "Заявки врача", URL: "/requests", Active: strings.HasPrefix(r.URL.Path, "/requests")})
+	}
+	if s.matching != nil && auth.Allowed(auth.OpViewRules, p.Roles) {
+		page.Nav = append(page.Nav, ui.NavItem{Label: "Правила подбора", URL: "/rules", Active: strings.HasPrefix(r.URL.Path, "/rules")})
 	}
 	if s.inventory != nil && auth.Allowed(auth.OpViewStock, p.Roles) {
 		page.Nav = append(page.Nav, ui.NavItem{Label: "Запас клиники", URL: "/stock", Active: strings.HasPrefix(r.URL.Path, "/stock")})
@@ -206,7 +231,7 @@ func (s *Server) taskCard(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) showTask(w http.ResponseWriter, r *http.Request, status int, task taskView, message string) {
 	p, _ := auth.FromContext(r.Context())
-	data := taskScreen{Task: task, Key: uuid.NewString(), Message: message, CanAct: auth.Allowed(auth.OpConfirmTransfer, p.Roles) && auth.SameClinic(p, task.Source)}
+	data := taskScreen{Task: task, Key: uuid.NewString(), Message: message, CanAct: auth.Allowed(auth.OpConfirmTransfer, p.Roles) && auth.SameClinic(p, task.Source), CanReadCase: s.matching != nil && auth.Allowed(auth.OpReadPatientCase, p.Roles) && task.Origin == "DOCTOR_CHOICE" && task.Replaceable()}
 	var history struct {
 		Items []historyView `json:"items"`
 	}
@@ -216,14 +241,10 @@ func (s *Server) showTask(w http.ResponseWriter, r *http.Request, status int, ta
 	}
 	data.History = history.Items
 	if data.CanAct && (task.Pending() || task.Replaceable()) {
-		q := url.Values{"kind": {task.Kind}, "fefo": {"true"}, "limit": {"100"}}
-		if task.Group != "" {
-			q.Set("group", task.Group)
-		}
 		var candidates struct {
 			Units []candidateView `json:"units"`
 		}
-		if err := s.inventory.GetJSON(r.Context(), fmt.Sprintf("/clinics/%d/units?%s", task.Source, q.Encode()), &candidates); err != nil {
+		if err := s.transfer.GetJSON(r.Context(), "/obligations/"+task.ID.String()+"/candidates", &candidates); err != nil {
 			s.serviceFailure(w, r, err)
 			return
 		}

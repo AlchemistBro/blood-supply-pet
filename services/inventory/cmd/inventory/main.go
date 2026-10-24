@@ -5,6 +5,7 @@ import (
 	"context"
 
 	"github.com/AlchemistBro/blood-supply-pet/libs/contracts"
+	"github.com/AlchemistBro/blood-supply-pet/libs/k1seal/opener"
 	"github.com/AlchemistBro/blood-supply-pet/libs/messaging"
 
 	auditc "github.com/AlchemistBro/blood-supply-pet/libs/contracts/audit"
@@ -30,9 +31,16 @@ func main() {
 			if err != nil {
 				return nil, err
 			}
+			keys, err := opener.KeyringFromEnv()
+			if err != nil {
+				return nil, err
+			}
+			store := postgres.New(rt.Pool)
+			aist := aistclient.New(cfg.AistURL, aistclient.Options{StatusTimeout: cfg.StatusTimeout})
+			patient := &app.PatientAllocations{Pool: rt.Pool, Store: store, Source: aist, Keys: keys, Journal: rt.Journal, Clock: rt.Clock, Ref: rt.Refdata, Log: rt.Log}
 			svc := app.New(app.Deps{
-				Pool: rt.Pool, Store: postgres.New(rt.Pool),
-				Aist:      aistclient.New(cfg.AistURL, aistclient.Options{StatusTimeout: cfg.StatusTimeout}),
+				Pool: rt.Pool, Store: store,
+				Aist:      aist,
 				Publisher: events.New(rt.Journal), Journal: rt.Journal, Ref: rt.Refdata, Clock: rt.Clock, Log: rt.Log,
 				Config: app.Config{
 					PollInterval: cfg.PollInterval, PageLimit: cfg.PageLimit, StatusTimeout: cfg.StatusTimeout,
@@ -40,7 +48,7 @@ func main() {
 				},
 			})
 			api.Mount(rt.Mux, svc, rt.Deny(), api.Options{DevEnabled: rt.Cfg.Environment == "local"})
-			workers := []runtime.Worker{svc.RunSync, svc.RunSnapshots}
+			workers := []runtime.Worker{svc.RunSync, svc.RunSnapshots, patient.Run}
 			if len(rt.Cfg.KafkaBrokers) > 0 {
 				if err := messaging.EnsureTopics(ctx, rt.Cfg.KafkaBrokers, 1, messaging.WithDLT(contracts.TopicPlanningEvents)...); err != nil {
 					return nil, err
@@ -50,6 +58,14 @@ func main() {
 					return nil, err
 				}
 				workers = append(workers, consumer.Run)
+				if err := messaging.EnsureTopics(ctx, rt.Cfg.KafkaBrokers, 1, messaging.WithDLT(contracts.TopicInventoryCommands)...); err != nil {
+					return nil, err
+				}
+				commands, err := messaging.NewConsumer(messaging.ConsumerConfig{Brokers: rt.Cfg.KafkaBrokers, Group: "inventory-commands", Topics: []string{contracts.TopicInventoryCommands}}, patient.Handle, rt.Log)
+				if err != nil {
+					return nil, err
+				}
+				workers = append(workers, commands.Run)
 			}
 			return workers, nil
 		},

@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/AlchemistBro/blood-supply-pet/libs/phenotype"
 )
 
 // ErrInvalidRequest — заявка не проходит проверку и не подбирается (FR029).
@@ -131,49 +133,10 @@ func positiveHours(v string) (int, error) {
 }
 
 // Phenotype — набор маркеров «есть/нет»: имя антигена → присутствует.
-type Phenotype map[string]bool
+type Phenotype = phenotype.Markers
 
 // ParsePhenotype разбирает запись вида "C+c-E+e-K-": имя антигена (латиница и цифры) и знак.
 // Пробелы, запятые и «;» между маркерами допускаются. Противоречивая запись (K+ и K-) — ошибка.
 func ParsePhenotype(s string) (Phenotype, error) {
-	p := Phenotype{}
-	var name strings.Builder
-	for _, ch := range s {
-		switch {
-		case ch == ' ' || ch == ',' || ch == ';':
-			if name.Len() > 0 {
-				return nil, errors.New("маркер фенотипа без знака")
-			}
-		case ch == '+' || ch == '-':
-			if name.Len() == 0 {
-				return nil, errors.New("знак фенотипа без маркера")
-			}
-			marker, present := name.String(), ch == '+'
-			if prev, ok := p[marker]; ok && prev != present {
-				return nil, errors.New("противоречивые требования фенотипа")
-			}
-			p[marker] = present
-			name.Reset()
-		case ch >= 'A' && ch <= 'Z', ch >= 'a' && ch <= 'z', ch >= '0' && ch <= '9':
-			name.WriteRune(ch)
-		default:
-			return nil, errors.New("недопустимый символ в записи фенотипа")
-		}
-	}
-	if name.Len() > 0 {
-		return nil, errors.New("маркер фенотипа без знака")
-	}
-	return p, nil
-}
-
-// Satisfies — выполняет ли фенотип единицы все требования. Требование к маркеру, о котором у единицы
-// нет сведений, не выполнено: ограничение заявки строже нехватки запаса (FR030).
-func (p Phenotype) Satisfies(req Phenotype) bool {
-	for marker, present := range req {
-		got, ok := p[marker]
-		if !ok || got != present {
-			return false
-		}
-	}
-	return true
+	return phenotype.Parse(s)
 }

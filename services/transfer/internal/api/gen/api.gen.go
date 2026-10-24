@@ -231,6 +231,18 @@ type CancelResult struct {
 	Status       ObligationStatus   `json:"status"`
 }
 
+// Candidate defines model for Candidate.
+type Candidate struct {
+	Available     bool               `json:"available"`
+	BloodGroup    string             `json:"blood_group"`
+	ClinicId      int64              `json:"clinic_id"`
+	ComponentKind string             `json:"component_kind"`
+	ExpiresAt     time.Time          `json:"expires_at"`
+	Status        string             `json:"status"`
+	UnitId        openapi_types.UUID `json:"unit_id"`
+	VolumeMl      int64              `json:"volume_ml"`
+}
+
 // ConfirmInput defines model for ConfirmInput.
 type ConfirmInput struct {
 	// AcceptPartial Согласен закрепить только оставшиеся на месте единицы
@@ -270,18 +282,20 @@ type HistoryEntry struct {
 
 // Obligation defines model for Obligation.
 type Obligation struct {
-	BloodGroup      *string            `json:"blood_group,omitempty"`
-	ChoiceId        openapi_types.UUID `json:"choice_id"`
-	ComponentKind   string             `json:"component_kind"`
-	ConfirmedQty    int                `json:"confirmed_qty"`
-	CreatedAt       time.Time          `json:"created_at"`
-	Deadline        time.Time          `json:"deadline"`
-	FallbackSources []int64            `json:"fallback_sources"`
-	ObligationId    openapi_types.UUID `json:"obligation_id"`
-	Origin          ObligationOrigin   `json:"origin"`
-	RequestId       openapi_types.UUID `json:"request_id"`
-	RequestedQty    int                `json:"requested_qty"`
-	SourceClinicId  int64              `json:"source_clinic_id"`
+	BloodGroup                      *string            `json:"blood_group,omitempty"`
+	ChoiceId                        openapi_types.UUID `json:"choice_id"`
+	ComponentKind                   string             `json:"component_kind"`
+	ConfirmedQty                    int                `json:"confirmed_qty"`
+	CreatedAt                       time.Time          `json:"created_at"`
+	Deadline                        time.Time          `json:"deadline"`
+	FallbackSources                 []int64            `json:"fallback_sources"`
+	ObligationId                    openapi_types.UUID `json:"obligation_id"`
+	Origin                          ObligationOrigin   `json:"origin"`
+	PatientAllocationAcknowledgedAt *time.Time         `json:"patient_allocation_acknowledged_at,omitempty"`
+	PatientAllocationStatus         string             `json:"patient_allocation_status"`
+	RequestId                       openapi_types.UUID `json:"request_id"`
+	RequestedQty                    int                `json:"requested_qty"`
+	SourceClinicId                  int64              `json:"source_clinic_id"`
 
 	// Spec Спецификация замены без фенотипа
 	Spec           SpecView         `json:"spec"`
@@ -454,6 +468,9 @@ type ServerInterface interface {
 	// CancelObligation Отменить задание (служба или дежурный). Из конечного статуса — без изменений, cancelled=false.
 	// (POST /obligations/{id}/cancel)
 	CancelObligation(w http.ResponseWriter, r *http.Request, id ObligationId)
+	// GetCandidates До 100 свободных единиц FEFO, подходящих спецификации; без фенотипа в ответе
+	// (GET /obligations/{id}/candidates)
+	GetCandidates(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// ConfirmTransfer Подтвердить задание единицами (оператор клиники-источника). Ответ — в том же запросе.
 	// (POST /obligations/{id}/confirm)
 	ConfirmTransfer(w http.ResponseWriter, r *http.Request, id ObligationId)
@@ -593,6 +610,32 @@ func (siw *ServerInterfaceWrapper) CancelObligation(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CancelObligation(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCandidates operation middleware
+func (siw *ServerInterfaceWrapper) GetCandidates(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCandidates(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -855,6 +898,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/obligations/{id}/candidates", wrapper.GetCandidates)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/obligations", wrapper.ListObligations)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/obligations", wrapper.OpenObligation)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/obligations/{id}", wrapper.GetObligation)
@@ -1188,6 +1232,30 @@ func (response CancelObligation404ApplicationProblemPlusJSONResponse) VisitCance
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCandidatesRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type GetCandidatesResponseObject interface {
+	VisitGetCandidatesResponse(w http.ResponseWriter) error
+}
+
+type GetCandidates200JSONResponse struct {
+	Units []Candidate `json:"units"`
+}
+
+func (response GetCandidates200JSONResponse) VisitGetCandidatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1643,6 +1711,9 @@ type StrictServerInterface interface {
 	// CancelObligation Отменить задание (служба или дежурный). Из конечного статуса — без изменений, cancelled=false.
 	// (POST /obligations/{id}/cancel)
 	CancelObligation(ctx context.Context, request CancelObligationRequestObject) (CancelObligationResponseObject, error)
+	// GetCandidates До 100 свободных единиц FEFO, подходящих спецификации; без фенотипа в ответе
+	// (GET /obligations/{id}/candidates)
+	GetCandidates(ctx context.Context, request GetCandidatesRequestObject) (GetCandidatesResponseObject, error)
 	// ConfirmTransfer Подтвердить задание единицами (оператор клиники-источника). Ответ — в том же запросе.
 	// (POST /obligations/{id}/confirm)
 	ConfirmTransfer(ctx context.Context, request ConfirmTransferRequestObject) (ConfirmTransferResponseObject, error)
@@ -1805,6 +1876,32 @@ func (sh *strictHandler) CancelObligation(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CancelObligationResponseObject); ok {
 		if err := validResponse.VisitCancelObligationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetCandidates operation middleware
+func (sh *strictHandler) GetCandidates(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request GetCandidatesRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCandidates(ctx, request.(GetCandidatesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCandidates")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCandidatesResponseObject); ok {
+		if err := validResponse.VisitGetCandidatesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

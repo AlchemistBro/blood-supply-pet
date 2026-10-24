@@ -1,5 +1,7 @@
 {{define "content"}}
 {{$t := .Content.Task}}
+<p role="status">{{$t.PatientDeliveryLabel}}</p>
+{{if .Content.CanReadCase}}<p><a href="/requests/{{$t.RequestID}}/patient-case">Показать номер случая с записью в аудит</a></p>{{end}}
 <p><a href="/tasks?clinic={{$t.Source}}">← Задания клиники-источника</a></p>
 {{with .Content.Message}}<div class="alert" role="status">{{.}}</div>{{end}}
 <dl><dt>Номер</dt><dd>{{$t.ID}}</dd><dt>Источник → получатель</dt><dd>Клиника № {{$t.Source}} → клиника № {{$t.Target}}</dd><dt>Компонент и группа крови</dt><dd>{{$t.Kind}} {{$t.Group}}</dd><dt>Количество</dt><dd>{{$t.Confirmed}} из {{$t.Requested}}</dd><dt>Срочность</dt><dd>{{$t.Urgency}}</dd><dt>Срок подтверждения</dt><dd>{{datetime $t.Deadline}}</dd><dt>Требования к фенотипу</dt><dd>{{if $t.Spec.PhenotypeRequired}}Есть{{else}}Нет{{end}}</dd></dl>

@@ -5,9 +5,181 @@ info:
   description: "Контракт сервиса matching. Источник истины для HTTP: код сервера генерируется из этого файла."
 servers:
   - url: http://localhost:8104
-paths: {}
+paths:
+  /requests:
+    get:
+      operationId: listRequests
+      x-bs-operation: VIEW_REQUESTS
+      responses:
+        "200": { description: Доступные заявки, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Request" } } } } }
+    post:
+      operationId: createRequest
+      x-bs-operation: CREATE_REQUEST
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NewRequest" }
+      responses:
+        "201": { description: Заявка и варианты, content: { application/json: { schema: { $ref: "#/components/schemas/Request" } } } }
+  /requests/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getRequest
+      x-bs-operation: VIEW_REQUESTS
+      responses:
+        "200": { description: Заявка, content: { application/json: { schema: { $ref: "#/components/schemas/Request" } } } }
+  /requests/{id}/variants:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getVariants
+      x-bs-operation: VIEW_REQUESTS
+      responses:
+        "200": { description: Варианты заявки, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Variant" } } } } }
+  /requests/{id}/patient-case:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: readPatientCase
+      x-bs-operation: READ_PATIENT_CASE
+      responses:
+        "200":
+          description: Номер случая после фиксации аудита, Cache-Control no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [patient_case_no]
+                properties:
+                  patient_case_no: { type: string }
+  /requests/{id}/select:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: selectVariant
+      x-bs-operation: SELECT_VARIANT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [variant_offer_id, choice_id]
+              properties:
+                variant_offer_id: { type: string, format: uuid }
+                choice_id: { type: string, format: uuid }
+      responses:
+        "200": { description: Выбор сохранён, content: { application/json: { schema: { $ref: "#/components/schemas/Request" } } } }
+  /requests/{id}/cancel:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: cancelRequest
+      x-bs-operation: CANCEL_REQUEST
+      responses:
+        "204": { description: Заявка отменена }
+  /rules:
+    get:
+      operationId: listRules
+      x-bs-operation: VIEW_RULES
+      responses:
+        "200": { description: Версии правил O15, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Rule" } } } } }
+  /rules/{code}/versions:
+    parameters:
+      - { name: code, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: addRuleVersion
+      x-bs-operation: MANAGE_RULES
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Rule" }
+      responses:
+        "204": { description: Новая версия сохранена и записана в аудит }
 components:
   schemas:
+    NewRequest:
+      type: object
+      required: [idempotency_key, patient_case_no, component_kind, requested_units, urgency, blood_group, phenotype, constraints]
+      properties:
+        idempotency_key: { type: string, format: uuid }
+        patient_case_no: { type: string, minLength: 1, maxLength: 128 }
+        component_kind: { type: string }
+        requested_units: { type: integer, minimum: 1, maximum: 10000 }
+        urgency: { type: string }
+        blood_group: { type: string }
+        phenotype: { type: string, maxLength: 128 }
+        constraints:
+          type: array
+          maxItems: 3
+          items:
+            $ref: "#/components/schemas/Constraint"
+    Constraint:
+      type: object
+      required: [code, value]
+      properties:
+        code: { type: string }
+        value: { type: string }
+    Request:
+      type: object
+      required: [clinical_request_id, clinic_id, created_by, status, component_kind, requested_units, urgency, blood_group, created_at, stock_watermark, stock_synced_at, variants, notes, patient_allocation_status]
+      properties:
+        clinical_request_id: { type: string, format: uuid }
+        clinic_id: { type: integer, format: int64 }
+        created_by: { type: string }
+        status: { type: string }
+        component_kind: { type: string }
+        requested_units: { type: integer }
+        urgency: { type: string }
+        blood_group: { type: string }
+        created_at: { type: string, format: date-time }
+        stock_watermark: { type: integer, format: int64 }
+        stock_synced_at: { type: string, format: date-time }
+        variants: { type: array, items: { $ref: "#/components/schemas/Variant" } }
+        notes: { type: array, items: { type: string } }
+        selected_variant_id: { type: string, format: uuid }
+        patient_allocation_status: { type: string }
+    Variant:
+      type: object
+      required: [variant_offer_id, rank_no, source_clinic_id, is_local, component_kind, blood_group, available_units, offered_units, delivery_minutes, delivery_status, is_deficit_stock_used, protected_known, explanation, rule_code, rule_version, unit_ids]
+      properties:
+        variant_offer_id: { type: string, format: uuid }
+        rank_no: { type: integer }
+        source_clinic_id: { type: integer, format: int64 }
+        is_local: { type: boolean }
+        component_kind: { type: string }
+        blood_group: { type: string }
+        available_units: { type: integer }
+        offered_units: { type: integer }
+        delivery_minutes: { type: integer }
+        delivery_status: { type: string }
+        is_deficit_stock_used: { type: boolean }
+        protected_known: { type: boolean }
+        explanation: { type: string }
+        rule_code: { type: string }
+        rule_version: { type: integer, format: int64 }
+        unit_ids: { type: array, items: { type: string, format: uuid } }
+    Rule:
+      type: object
+      required: [matching_rule_id, rule_code, version_no, component_kind, requested_group, allowed_group, allowed_kind, application_condition, is_exception, priority, basis_document, basis_clause, valid_from]
+      properties:
+        matching_rule_id: { type: string, format: uuid }
+        rule_code: { type: string }
+        version_no: { type: integer, format: int64 }
+        component_kind: { type: string }
+        requested_group: { type: string }
+        allowed_group: { type: string }
+        allowed_kind: { type: string }
+        application_condition: { type: string }
+        is_exception: { type: boolean }
+        priority: { type: integer }
+        basis_document: { type: string }
+        basis_clause: { type: string }
+        valid_from: { type: string, format: date-time }
+        valid_to: { type: string, format: date-time }
     Problem:
       type: object
       required: [title, status]

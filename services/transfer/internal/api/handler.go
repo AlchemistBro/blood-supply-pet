@@ -22,14 +22,15 @@ import (
 // Operations — операция матрицы прав для каждого маршрута. Совпадает с x-bs-operation в openapi.yaml
 // (это проверяет тест контракта).
 var Operations = map[string]auth.Operation{
-	"GET /obligations/{id}/history":  auth.OpViewObligation,
-	"POST /obligations/{id}/reject":  auth.OpRejectTransfer,
-	"POST /obligations":              auth.OpOpenObligation,
-	"GET /obligations":               auth.OpViewObligation,
-	"GET /obligations/{id}":          auth.OpViewObligation,
-	"POST /obligations/{id}/confirm": auth.OpConfirmTransfer,
-	"POST /obligations/{id}/replace": auth.OpReplaceUnit,
-	"POST /obligations/{id}/cancel":  auth.OpCancelObligation,
+	"GET /obligations/{id}/candidates": auth.OpConfirmTransfer,
+	"GET /obligations/{id}/history":    auth.OpViewObligation,
+	"POST /obligations/{id}/reject":    auth.OpRejectTransfer,
+	"POST /obligations":                auth.OpOpenObligation,
+	"GET /obligations":                 auth.OpViewObligation,
+	"GET /obligations/{id}":            auth.OpViewObligation,
+	"POST /obligations/{id}/confirm":   auth.OpConfirmTransfer,
+	"POST /obligations/{id}/replace":   auth.OpReplaceUnit,
+	"POST /obligations/{id}/cancel":    auth.OpCancelObligation,
 }
 
 // Handler реализует gen.StrictServerInterface.

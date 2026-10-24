@@ -178,7 +178,8 @@ func (s *Service) openTx(ctx context.Context, tx pgx.Tx, n domain.NewObligation,
 		return uuid.Nil, false, fmt.Errorf("uuid v7: %w", err)
 	}
 	o := domain.Obligation{
-		ID: id, ChoiceID: n.ChoiceID, RequestID: n.RequestID, Origin: n.Origin, SourceClinicID: n.SourceClinicID,
+		PatientCaseSealed: n.PatientCaseSealed,
+		ID:                id, ChoiceID: n.ChoiceID, RequestID: n.RequestID, Origin: n.Origin, SourceClinicID: n.SourceClinicID,
 		TargetClinicID: n.TargetClinicID, ComponentKind: n.ComponentKind, BloodGroup: n.Spec.BloodGroup,
 		RequestedQty: n.RequestedQty, Status: domain.StatusPending, UrgencyCode: n.UrgencyCode,
 		Deadline: domain.Deadline(now, window), ConfirmWindow: window, FallbackSources: n.FallbackSources, ProtectedFloors: n.ProtectedFloors,

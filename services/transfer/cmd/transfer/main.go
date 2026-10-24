@@ -57,7 +57,7 @@ func setup(ctx context.Context, rt *runtime.Runtime) ([]runtime.Worker, error) {
 		return workers, nil
 	}
 	topics := []string{contracts.TopicTransferCommands, contracts.TopicInventoryEvents, contracts.TopicLogisticsReplies,
-		contracts.TopicTransferEvents, contracts.TopicLogisticsCommands, contracts.TopicAuditEvents}
+		contracts.TopicTransferEvents, contracts.TopicLogisticsCommands, contracts.TopicAuditEvents, contracts.TopicInventoryCommands}
 	if err := messaging.EnsureTopics(ctx, rt.Cfg.KafkaBrokers, 1, messaging.WithDLT(topics...)...); err != nil {
 		return nil, err
 	}

@@ -14,6 +14,7 @@ import (
 	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/inventory"
 	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/logistics"
 	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/transfer"
+	"github.com/AlchemistBro/blood-supply-pet/libs/k1seal"
 	"github.com/AlchemistBro/blood-supply-pet/libs/messaging"
 	"github.com/AlchemistBro/blood-supply-pet/services/transfer/internal/app"
 	"github.com/AlchemistBro/blood-supply-pet/services/transfer/internal/domain"
@@ -61,6 +62,12 @@ func (h *Handlers) Commands(ctx context.Context, msg messaging.Message) error {
 // Inventory — inventory.events: проекция единиц и защищённого объёма.
 func (h *Handlers) Inventory(ctx context.Context, msg messaging.Message) error {
 	switch msg.Type {
+	case (inventory.PatientAllocationAcknowledged{}).MessageType():
+		var event inventory.PatientAllocationAcknowledged
+		if err := decode(msg, &event); err != nil {
+			return err
+		}
+		return h.svc.OnPatientAllocationAcknowledged(ctx, &msg, event)
 	case (inventory.UnitRegistered{}).MessageType():
 		var e inventory.UnitRegistered
 		if err := decode(msg, &e); err != nil {
@@ -153,8 +160,9 @@ func decode(msg messaging.Message, v any) error {
 // OpenObligationInput переводит команду в открытие задания. Номера случая пациента в команде нет.
 func OpenObligationInput(c transfer.OpenObligation) domain.NewObligation {
 	return domain.NewObligation{
-		ProtectedFloors: c.ProtectedFloors,
-		ChoiceID:        c.ChoiceID, RequestID: c.RequestID, Origin: domain.Origin(c.Origin),
+		PatientCaseSealed: k1seal.Sealed(c.PatientCaseSealed),
+		ProtectedFloors:   c.ProtectedFloors,
+		ChoiceID:          c.ChoiceID, RequestID: c.RequestID, Origin: domain.Origin(c.Origin),
 		SourceClinicID: c.SourceClinicID, TargetClinicID: c.TargetClinicID, ComponentKind: c.ComponentKind,
 		RequestedQty: c.RequestedQty, UrgencyCode: c.Urgency,
 		ConfirmWindow: time.Duration(c.ConfirmWindowSeconds) * time.Second, FallbackSources: c.FallbackSources,

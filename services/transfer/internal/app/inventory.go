@@ -148,6 +148,9 @@ func (s *Service) breakHolding(ctx context.Context, tx pgx.Tx, unitID uuid.UUID,
 	if err := s.command(ctx, tx, o.ID, CancelTransport{ObligationID: o.ID, Reason: reason.CancelTransportReason()}); err != nil {
 		return err
 	}
+	if err := s.releasePatient(ctx, tx, o, o.Version+1, "OBLIGATION_BROKEN"); err != nil {
+		return err
+	}
 	return s.audit(ctx, tx, actorSystem, ActionBroken, o, map[string]any{
 		"unit_id": unitID, "reason": string(reason), "unit_reason": unitReason, "from_status": string(o.Status),
 		"released_units": released,

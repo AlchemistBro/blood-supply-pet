@@ -96,6 +96,7 @@ type AllocationRequest struct {
 
 // Allocation — принятое закрепление. Номер случая хранится, но наружу и в логи не отдаётся.
 type Allocation struct {
+	Released            bool      `json:"released"`
 	AllocationID        string    `json:"allocation_id"`
 	IdempotencyKey      string    `json:"idempotency_key"`
 	PatientCaseNo       string    `json:"-"`
@@ -119,11 +120,12 @@ type Store struct {
 	version int64
 	units   map[string]*Unit
 	// byVersion[v-1] — код единицы, получившей версию v. Запись устарела, если версия единицы уже больше.
-	byVersion   []string
-	allocations []*Allocation
-	byKey       map[string]*Allocation
-	allocatedTo map[string]string // код единицы → ключ закрепления
-	generated   int64
+	byVersion    []string
+	allocations  []*Allocation
+	byKey        map[string]*Allocation
+	allocatedTo  map[string]string // код единицы → ключ закрепления
+	releasedKeys map[string]bool
+	generated    int64
 
 	unavailableUntil time.Time
 	slow             time.Duration
@@ -132,11 +134,12 @@ type Store struct {
 // New создаёт пустое состояние. Справочники нужны для проверки клиник, видов и групп.
 func New(clk clock.Clock, ref *refdata.Set) *Store {
 	return &Store{
-		clk:         clk,
-		ref:         ref,
-		units:       map[string]*Unit{},
-		byKey:       map[string]*Allocation{},
-		allocatedTo: map[string]string{},
+		clk:          clk,
+		ref:          ref,
+		units:        map[string]*Unit{},
+		byKey:        map[string]*Allocation{},
+		allocatedTo:  map[string]string{},
+		releasedKeys: map[string]bool{},
 	}
 }
 
@@ -306,6 +309,7 @@ func isWithdrawn(status string) bool {
 func (s *Store) Changes(since int64, limit int) (units []Unit, more bool, current int64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.expireLocked()
 	units = []Unit{}
 	current = s.version
 	// since >= версии — изменений нет. Ранний выход заодно исключает переполнение since+1 при MaxInt64.
@@ -332,6 +336,7 @@ func (s *Store) Changes(since int64, limit int) (units []Unit, more bool, curren
 func (s *Store) Statuses(codes []string) (found []Unit, missing []string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.expireLocked()
 	found, missing = []Unit{}, []string{}
 	for _, c := range codes {
 		if u, ok := s.units[c]; ok {
@@ -347,6 +352,7 @@ func (s *Store) Statuses(codes []string) (found []Unit, missing []string) {
 func (s *Store) Snapshot() []Unit {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.expireLocked()
 	out := make([]Unit, 0, len(s.units))
 	for _, u := range s.units {
 		out = append(out, *u)
@@ -414,6 +420,10 @@ func (s *Store) Allocate(req AllocationRequest) (a Allocation, created bool, err
 		}
 		return clone(prev), false, nil
 	}
+	if s.releasedKeys[req.IdempotencyKey] {
+		return Allocation{}, false, fmt.Errorf("%w: закрепление уже снято", ErrInvalid)
+	}
+	s.expireLocked()
 	if !s.clinicExists(req.RecipientClinicCode) {
 		return Allocation{}, false, fmt.Errorf("%w: неизвестная клиника-получатель %q", ErrInvalid, req.RecipientClinicCode)
 	}
@@ -454,6 +464,42 @@ func (s *Store) Allocations() []Allocation {
 		out = append(out, clone(a))
 	}
 	return out
+}
+
+// Release сохраняет историю и надгробие: старый POST после снятия не закрепляет единицы вновь.
+func (s *Store) Release(key string) error {
+	if key == "" {
+		return fmt.Errorf("%w: нет ключа закрепления", ErrInvalid)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.releasedKeys[key] = true
+	if a, ok := s.byKey[key]; ok {
+		a.Released = true
+		for _, code := range a.AistUnitCodes {
+			if s.allocatedTo[code] == key {
+				delete(s.allocatedTo, code)
+			}
+		}
+	}
+	return nil
+}
+
+// expireLocked моделирует списание истёкших единиц в источнике; версии наблюдаемы через ИНТ-01.
+func (s *Store) expireLocked() {
+	var due []string
+	for code, u := range s.units {
+		if !isWithdrawn(u.Status) && !u.ExpiresAt.After(s.clk.Now()) {
+			due = append(due, code)
+		}
+	}
+	slices.Sort(due)
+	for _, code := range due {
+		u := s.units[code]
+		u.Status = StatusDiscarded
+		u.WithdrawalReason = ReasonExpired
+		s.bump(u)
+	}
 }
 
 func clone(a *Allocation) Allocation {

@@ -47,6 +47,10 @@ type DB interface {
 
 // Store — порт хранилища transfer. Каждый переход статуса — CAS по ожидаемому статусу и версии из o.
 type Store interface {
+	SetPatientDelivery(context.Context, DB, uuid.UUID, uuid.UUID, string) error
+	AcknowledgePatient(context.Context, DB, uuid.UUID, uuid.UUID, time.Time) error
+	Candidates(context.Context, DB, domain.Obligation, time.Time, int) ([]domain.UnitCopy, error)
+	LiveAvailable(context.Context, DB, int64, string, time.Time) (int, error)
 	LockRequest(context.Context, DB, uuid.UUID) error
 	RequestCancelled(context.Context, DB, uuid.UUID) (bool, error)
 	CancelRequest(context.Context, DB, uuid.UUID, string, time.Time) error

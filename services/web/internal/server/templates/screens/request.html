@@ -1,0 +1,12 @@
+{{define "content"}}
+<div id="request-live" hx-get="/requests/{{.Content.Request.ID}}" hx-trigger="every 15s" hx-select="#request-live" hx-swap="outerHTML">
+<p><a href="/requests">← Заявки врача</a></p>
+<p role="status">{{.Content.Request.PatientDeliveryLabel}}</p>
+{{with .Content.Request}}<dl><dt>Заявка</dt><dd>{{.ID}}</dd><dt>Статус</dt><dd>{{.Status}}</dd><dt>Компонент</dt><dd>{{.Kind}} {{.Group}} — {{.Requested}} ед.</dd><dt>Срочность</dt><dd>{{.Urgency}}</dd><dt>Запас обновлён</dt><dd>{{datetime .Synced}}; водяной знак {{.Watermark}}</dd></dl>{{end}}
+{{if .Content.CanReadCase}}<p><a href="/requests/{{.Content.Request.ID}}/patient-case">Показать номер случая с записью в аудит</a></p>{{end}}
+{{range .Content.Request.Notes}}<p>{{.}}</p>{{end}}
+{{range .Content.Request.Variants}}<section class="card"><h2>Вариант {{.Rank}}: {{if .Local}}местный запас{{else}}клиника № {{.Source}}{{end}}</h2><p>{{.Kind}} {{.Group}} — доступно {{.Available}} ед., предложено {{.Offered}} ед.</p><p>Получение: {{.Minutes}} мин., {{.Delivery}}. Правило {{.Rule}}, версия {{.RuleVersion}}.</p>{{if not .Local}}{{if not .ProtectedKnown}}<p role="status">Сведений о защищённом остатке пока нет. Выбор станет доступен после обновления данных.</p>{{else if .DeficitStock}}<p role="status">Вариант расходует защищённый запас источника. Подтверждение передачи ограничено его текущим защищённым остатком.</p>{{end}}{{end}}<p>{{.Explanation}}</p>
+{{if $.Content.CanSelect}}<form method="post" action="/requests/{{$.Content.Request.ID}}/select"><input type="hidden" name="csrf_token" value="{{$.CSRFToken}}"><input type="hidden" name="choice_id" value="{{$.Content.Key}}"><input type="hidden" name="variant_offer_id" value="{{.ID}}"><button class="btn btn--primary" type="submit">Выбрать вариант</button></form>{{end}}</section>{{else}}<p>Допустимых вариантов нет. Нехватка запаса не отменяет ограничений заявки.</p>{{end}}
+{{if .Content.CanCancel}}<form method="post" action="/requests/{{.Content.Request.ID}}/cancel"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><button class="btn btn--danger" type="submit">Отменить заявку</button></form>{{end}}
+</div>
+{{end}}

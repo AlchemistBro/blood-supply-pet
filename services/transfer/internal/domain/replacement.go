@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/AlchemistBro/blood-supply-pet/libs/phenotype"
 )
 
 // ReplacementResult — ответ на замену единицы равноценной до отправки (ADR-0011). Шесть вариантов.
@@ -142,10 +144,10 @@ func (s ReplacementSpec) Mismatch(sourceClinicID int64, kind string, u UnitCopy)
 	if rh, ok := s.requiredRh(); ok && rh != u.RhPositive {
 		return MismatchRh
 	}
-	if s.Phenotype != nil && (u.Phenotype == nil || *u.Phenotype != *s.Phenotype) {
+	if s.Phenotype != nil && (u.Phenotype == nil || !phenotype.Matches(*u.Phenotype, *s.Phenotype)) {
 		return MismatchPhenotype
 	}
-	if s.MinExpiresAt != nil && u.ExpiresAt.Before(*s.MinExpiresAt) {
+	if s.MinExpiresAt != nil && !u.ExpiresAt.After(*s.MinExpiresAt) {
 		return MismatchExpiry
 	}
 	return ""

@@ -35,7 +35,7 @@ func operatorEnv(t *testing.T, confirmCode int, message string) (*env, *int) {
 			}
 			w.WriteHeader(confirmCode)
 			_ = json.NewEncoder(w).Encode(map[string]string{"code": "CONFIRMED", "message": message})
-		case strings.HasSuffix(r.URL.Path, "/units"):
+		case strings.HasSuffix(r.URL.Path, "/units"), strings.HasSuffix(r.URL.Path, "/candidates"):
 			_, _ = w.Write([]byte(`{"units":[{"unit_id":"` + unitID + `","available":true,"component_kind":"RBC","blood_group":"O+","volume_ml":300,"phenotype":"SECRET-PHENOTYPE"}]}`))
 		case r.URL.Path == "/sync/last":
 			_, _ = w.Write([]byte(`{}`))

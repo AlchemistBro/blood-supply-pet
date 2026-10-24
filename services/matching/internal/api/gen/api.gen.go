@@ -6,13 +6,136 @@
 package gen
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
+
+	"github.com/oapi-codegen/runtime"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
+
+// Constraint defines model for Constraint.
+type Constraint struct {
+	Code  string `json:"code"`
+	Value string `json:"value"`
+}
+
+// NewRequest defines model for NewRequest.
+type NewRequest struct {
+	BloodGroup     string             `json:"blood_group"`
+	ComponentKind  string             `json:"component_kind"`
+	Constraints    []Constraint       `json:"constraints"`
+	IdempotencyKey openapi_types.UUID `json:"idempotency_key"`
+	PatientCaseNo  string             `json:"patient_case_no"`
+	Phenotype      string             `json:"phenotype"`
+	RequestedUnits int                `json:"requested_units"`
+	Urgency        string             `json:"urgency"`
+}
+
+// Request defines model for Request.
+type Request struct {
+	BloodGroup              string              `json:"blood_group"`
+	ClinicId                int64               `json:"clinic_id"`
+	ClinicalRequestId       openapi_types.UUID  `json:"clinical_request_id"`
+	ComponentKind           string              `json:"component_kind"`
+	CreatedAt               time.Time           `json:"created_at"`
+	CreatedBy               string              `json:"created_by"`
+	Notes                   []string            `json:"notes"`
+	PatientAllocationStatus string              `json:"patient_allocation_status"`
+	RequestedUnits          int                 `json:"requested_units"`
+	SelectedVariantId       *openapi_types.UUID `json:"selected_variant_id,omitempty"`
+	Status                  string              `json:"status"`
+	StockSyncedAt           time.Time           `json:"stock_synced_at"`
+	StockWatermark          int64               `json:"stock_watermark"`
+	Urgency                 string              `json:"urgency"`
+	Variants                []Variant           `json:"variants"`
+}
+
+// Rule defines model for Rule.
+type Rule struct {
+	AllowedGroup         string             `json:"allowed_group"`
+	AllowedKind          string             `json:"allowed_kind"`
+	ApplicationCondition string             `json:"application_condition"`
+	BasisClause          string             `json:"basis_clause"`
+	BasisDocument        string             `json:"basis_document"`
+	ComponentKind        string             `json:"component_kind"`
+	IsException          bool               `json:"is_exception"`
+	MatchingRuleId       openapi_types.UUID `json:"matching_rule_id"`
+	Priority             int                `json:"priority"`
+	RequestedGroup       string             `json:"requested_group"`
+	RuleCode             string             `json:"rule_code"`
+	ValidFrom            time.Time          `json:"valid_from"`
+	ValidTo              *time.Time         `json:"valid_to,omitempty"`
+	VersionNo            int64              `json:"version_no"`
+}
+
+// Variant defines model for Variant.
+type Variant struct {
+	AvailableUnits     int                  `json:"available_units"`
+	BloodGroup         string               `json:"blood_group"`
+	ComponentKind      string               `json:"component_kind"`
+	DeliveryMinutes    int                  `json:"delivery_minutes"`
+	DeliveryStatus     string               `json:"delivery_status"`
+	Explanation        string               `json:"explanation"`
+	IsDeficitStockUsed bool                 `json:"is_deficit_stock_used"`
+	IsLocal            bool                 `json:"is_local"`
+	OfferedUnits       int                  `json:"offered_units"`
+	ProtectedKnown     bool                 `json:"protected_known"`
+	RankNo             int                  `json:"rank_no"`
+	RuleCode           string               `json:"rule_code"`
+	RuleVersion        int64                `json:"rule_version"`
+	SourceClinicId     int64                `json:"source_clinic_id"`
+	UnitIds            []openapi_types.UUID `json:"unit_ids"`
+	VariantOfferId     openapi_types.UUID   `json:"variant_offer_id"`
+}
+
+// SelectVariantJSONBody defines parameters for SelectVariant.
+type SelectVariantJSONBody struct {
+	ChoiceId       openapi_types.UUID `json:"choice_id"`
+	VariantOfferId openapi_types.UUID `json:"variant_offer_id"`
+}
+
+// CreateRequestJSONRequestBody defines body for CreateRequest for application/json ContentType.
+type CreateRequestJSONRequestBody = NewRequest
+
+// SelectVariantJSONRequestBody defines body for SelectVariant for application/json ContentType.
+type SelectVariantJSONRequestBody SelectVariantJSONBody
+
+// AddRuleVersionJSONRequestBody defines body for AddRuleVersion for application/json ContentType.
+type AddRuleVersionJSONRequestBody = Rule
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+
+	// (GET /requests)
+	ListRequests(w http.ResponseWriter, r *http.Request)
+
+	// (POST /requests)
+	CreateRequest(w http.ResponseWriter, r *http.Request)
+
+	// (GET /requests/{id})
+	GetRequest(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+
+	// (POST /requests/{id}/cancel)
+	CancelRequest(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+
+	// (GET /requests/{id}/patient-case)
+	ReadPatientCase(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+
+	// (POST /requests/{id}/select)
+	SelectVariant(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+
+	// (GET /requests/{id}/variants)
+	GetVariants(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+
+	// (GET /rules)
+	ListRules(w http.ResponseWriter, r *http.Request)
+
+	// (POST /rules/{code}/versions)
+	AddRuleVersion(w http.ResponseWriter, r *http.Request, code string)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -23,6 +146,204 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListRequests operation middleware
+func (siw *ServerInterfaceWrapper) ListRequests(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRequests(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateRequest operation middleware
+func (siw *ServerInterfaceWrapper) CreateRequest(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateRequest(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRequest operation middleware
+func (siw *ServerInterfaceWrapper) GetRequest(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRequest(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CancelRequest operation middleware
+func (siw *ServerInterfaceWrapper) CancelRequest(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CancelRequest(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReadPatientCase operation middleware
+func (siw *ServerInterfaceWrapper) ReadPatientCase(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReadPatientCase(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SelectVariant operation middleware
+func (siw *ServerInterfaceWrapper) SelectVariant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SelectVariant(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetVariants operation middleware
+func (siw *ServerInterfaceWrapper) GetVariants(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetVariants(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListRules operation middleware
+func (siw *ServerInterfaceWrapper) ListRules(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRules(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddRuleVersion operation middleware
+func (siw *ServerInterfaceWrapper) AddRuleVersion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "code" -------------
+	var code string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "code", r.PathValue("code"), &code, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "code", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddRuleVersion(w, r, code)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 type UnescapedCookieParamError struct {
 	ParamName string
@@ -138,11 +459,242 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		}
 	}
 
+	wrapper := ServerInterfaceWrapper{
+		Handler:            si,
+		HandlerMiddlewares: options.Middlewares,
+		ErrorHandlerFunc:   options.ErrorHandlerFunc,
+	}
+
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/requests", wrapper.ListRequests)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/requests", wrapper.CreateRequest)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/requests/{id}", wrapper.GetRequest)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/requests/{id}/variants", wrapper.GetVariants)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/requests/{id}/patient-case", wrapper.ReadPatientCase)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/requests/{id}/select", wrapper.SelectVariant)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/requests/{id}/cancel", wrapper.CancelRequest)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/rules", wrapper.ListRules)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/rules/{code}/versions", wrapper.AddRuleVersion)
+
 	return m
+}
+
+type ListRequestsRequestObject struct {
+}
+
+type ListRequestsResponseObject interface {
+	VisitListRequestsResponse(w http.ResponseWriter) error
+}
+
+type ListRequests200JSONResponse []Request
+
+func (response ListRequests200JSONResponse) VisitListRequestsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRequestRequestObject struct {
+	Body *CreateRequestJSONRequestBody
+}
+
+type CreateRequestResponseObject interface {
+	VisitCreateRequestResponse(w http.ResponseWriter) error
+}
+
+type CreateRequest201JSONResponse Request
+
+func (response CreateRequest201JSONResponse) VisitCreateRequestResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRequestRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type GetRequestResponseObject interface {
+	VisitGetRequestResponse(w http.ResponseWriter) error
+}
+
+type GetRequest200JSONResponse Request
+
+func (response GetRequest200JSONResponse) VisitGetRequestResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelRequestRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type CancelRequestResponseObject interface {
+	VisitCancelRequestResponse(w http.ResponseWriter) error
+}
+
+type CancelRequest204Response struct {
+}
+
+func (response CancelRequest204Response) VisitCancelRequestResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ReadPatientCaseRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type ReadPatientCaseResponseObject interface {
+	VisitReadPatientCaseResponse(w http.ResponseWriter) error
+}
+
+type ReadPatientCase200JSONResponse struct {
+	PatientCaseNo string `json:"patient_case_no"`
+}
+
+func (response ReadPatientCase200JSONResponse) VisitReadPatientCaseResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SelectVariantRequestObject struct {
+	Id   openapi_types.UUID `json:"id"`
+	Body *SelectVariantJSONRequestBody
+}
+
+type SelectVariantResponseObject interface {
+	VisitSelectVariantResponse(w http.ResponseWriter) error
+}
+
+type SelectVariant200JSONResponse Request
+
+func (response SelectVariant200JSONResponse) VisitSelectVariantResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetVariantsRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type GetVariantsResponseObject interface {
+	VisitGetVariantsResponse(w http.ResponseWriter) error
+}
+
+type GetVariants200JSONResponse []Variant
+
+func (response GetVariants200JSONResponse) VisitGetVariantsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRulesRequestObject struct {
+}
+
+type ListRulesResponseObject interface {
+	VisitListRulesResponse(w http.ResponseWriter) error
+}
+
+type ListRules200JSONResponse []Rule
+
+func (response ListRules200JSONResponse) VisitListRulesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddRuleVersionRequestObject struct {
+	Code string `json:"code"`
+	Body *AddRuleVersionJSONRequestBody
+}
+
+type AddRuleVersionResponseObject interface {
+	VisitAddRuleVersionResponse(w http.ResponseWriter) error
+}
+
+type AddRuleVersion204Response struct {
+}
+
+func (response AddRuleVersion204Response) VisitAddRuleVersionResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
 }
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+
+	// (GET /requests)
+	ListRequests(ctx context.Context, request ListRequestsRequestObject) (ListRequestsResponseObject, error)
+
+	// (POST /requests)
+	CreateRequest(ctx context.Context, request CreateRequestRequestObject) (CreateRequestResponseObject, error)
+
+	// (GET /requests/{id})
+	GetRequest(ctx context.Context, request GetRequestRequestObject) (GetRequestResponseObject, error)
+
+	// (POST /requests/{id}/cancel)
+	CancelRequest(ctx context.Context, request CancelRequestRequestObject) (CancelRequestResponseObject, error)
+
+	// (GET /requests/{id}/patient-case)
+	ReadPatientCase(ctx context.Context, request ReadPatientCaseRequestObject) (ReadPatientCaseResponseObject, error)
+
+	// (POST /requests/{id}/select)
+	SelectVariant(ctx context.Context, request SelectVariantRequestObject) (SelectVariantResponseObject, error)
+
+	// (GET /requests/{id}/variants)
+	GetVariants(ctx context.Context, request GetVariantsRequestObject) (GetVariantsResponseObject, error)
+
+	// (GET /rules)
+	ListRules(ctx context.Context, request ListRulesRequestObject) (ListRulesResponseObject, error)
+
+	// (POST /rules/{code}/versions)
+	AddRuleVersion(ctx context.Context, request AddRuleVersionRequestObject) (AddRuleVersionResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -182,4 +734,253 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// ListRequests operation middleware
+func (sh *strictHandler) ListRequests(w http.ResponseWriter, r *http.Request) {
+	var request ListRequestsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRequests(ctx, request.(ListRequestsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRequests")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRequestsResponseObject); ok {
+		if err := validResponse.VisitListRequestsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateRequest operation middleware
+func (sh *strictHandler) CreateRequest(w http.ResponseWriter, r *http.Request) {
+	var request CreateRequestRequestObject
+
+	var body CreateRequestJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateRequest(ctx, request.(CreateRequestRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateRequest")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateRequestResponseObject); ok {
+		if err := validResponse.VisitCreateRequestResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetRequest operation middleware
+func (sh *strictHandler) GetRequest(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request GetRequestRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRequest(ctx, request.(GetRequestRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRequest")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRequestResponseObject); ok {
+		if err := validResponse.VisitGetRequestResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CancelRequest operation middleware
+func (sh *strictHandler) CancelRequest(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request CancelRequestRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CancelRequest(ctx, request.(CancelRequestRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CancelRequest")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CancelRequestResponseObject); ok {
+		if err := validResponse.VisitCancelRequestResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReadPatientCase operation middleware
+func (sh *strictHandler) ReadPatientCase(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request ReadPatientCaseRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReadPatientCase(ctx, request.(ReadPatientCaseRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReadPatientCase")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReadPatientCaseResponseObject); ok {
+		if err := validResponse.VisitReadPatientCaseResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SelectVariant operation middleware
+func (sh *strictHandler) SelectVariant(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request SelectVariantRequestObject
+
+	request.Id = id
+
+	var body SelectVariantJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SelectVariant(ctx, request.(SelectVariantRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SelectVariant")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SelectVariantResponseObject); ok {
+		if err := validResponse.VisitSelectVariantResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetVariants operation middleware
+func (sh *strictHandler) GetVariants(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request GetVariantsRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetVariants(ctx, request.(GetVariantsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetVariants")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetVariantsResponseObject); ok {
+		if err := validResponse.VisitGetVariantsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRules operation middleware
+func (sh *strictHandler) ListRules(w http.ResponseWriter, r *http.Request) {
+	var request ListRulesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRules(ctx, request.(ListRulesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRules")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRulesResponseObject); ok {
+		if err := validResponse.VisitListRulesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AddRuleVersion operation middleware
+func (sh *strictHandler) AddRuleVersion(w http.ResponseWriter, r *http.Request, code string) {
+	var request AddRuleVersionRequestObject
+
+	request.Code = code
+
+	var body AddRuleVersionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AddRuleVersion(ctx, request.(AddRuleVersionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AddRuleVersion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AddRuleVersionResponseObject); ok {
+		if err := validResponse.VisitAddRuleVersionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }

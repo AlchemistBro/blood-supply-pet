@@ -190,6 +190,7 @@ services:
     environment:
       <<: *service-env
       BS_DB_URL: postgres://inventory:inventory@postgres:5432/inventory?sslmode=disable
+      BS_K1_KEYS: ${BS_K1_KEYS:-demo1:ZGVtby1rMS1rZXktbm90LWZvci1wcm9kdWN0aW9uISE=} # gitleaks:allow (демо-ключ)
       BS_AIST_URL: http://sim-aist:8201
       # Демо-стенд: опрос АИСТ-М чаще значения по умолчанию, чтобы сквозные сценарии шли быстрее.
       BS_AIST_POLL_INTERVAL: 1s
@@ -267,6 +268,7 @@ services:
     environment:
       <<: *service-env
       BS_DB_URL: postgres://matching:matching@postgres:5432/matching?sslmode=disable
+      BS_K1_KEYS: ${BS_K1_KEYS:-demo1:ZGVtby1rMS1rZXktbm90LWZvci1wcm9kdWN0aW9uISE=} # gitleaks:allow (демо-ключ)
     ports: ["8104:8080"]
     healthcheck: *service-health
     depends_on: *service-deps

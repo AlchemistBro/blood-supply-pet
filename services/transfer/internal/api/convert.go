@@ -22,6 +22,7 @@ func toObligation(v app.ObligationView) gen.Obligation {
 		fallback = []int64{}
 	}
 	return gen.Obligation{
+		PatientAllocationStatus: v.PatientAllocationStatus, PatientAllocationAcknowledgedAt: v.PatientAllocationAt,
 		ObligationId: v.ID, ChoiceId: v.ChoiceID, RequestId: v.RequestID, Origin: gen.ObligationOrigin(v.Origin),
 		SourceClinicId: v.SourceClinicID, TargetClinicId: v.TargetClinicID, ComponentKind: v.ComponentKind,
 		BloodGroup: v.BloodGroup, RequestedQty: v.RequestedQty, ConfirmedQty: v.ConfirmedQty,

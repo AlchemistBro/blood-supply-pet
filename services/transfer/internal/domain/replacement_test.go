@@ -84,10 +84,10 @@ func TestReplacementSpecChecksEveryCriterion(t *testing.T) {
 	}
 }
 
-func TestExpiryExactlyAtArrivalIsEnough(t *testing.T) {
+func TestExpiryExactlyAtArrivalIsRejected(t *testing.T) {
 	u := candidate()
 	u.ExpiresAt = arrival
-	if r := fullSpec().Mismatch(7, "RBC", u); r != "" {
+	if r := fullSpec().Mismatch(7, "RBC", u); r != domain.MismatchExpiry {
 		t.Errorf("годность ровно на момент прибытия: %s", r)
 	}
 }

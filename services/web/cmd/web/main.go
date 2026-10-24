@@ -28,6 +28,7 @@ import (
 
 // config — переменные web сверх общих (BS_OIDC_ISSUER, BS_OIDC_AUDIENCE и прочие читает runtime).
 type config struct {
+	MatchingURL  string `env:"BS_MATCHING_URL" envDefault:"http://matching:8080"`
 	PlanningURL  string `env:"BS_PLANNING_URL" envDefault:"http://planning:8080"`
 	DemandURL    string `env:"BS_DEMAND_URL" envDefault:"http://demand:8080"`
 	TransferURL  string `env:"BS_TRANSFER_URL" envDefault:"http://transfer:8080"`
@@ -107,6 +108,7 @@ func setup(ctx context.Context, rt *runtime.Runtime) ([]runtime.Worker, error) {
 		SessionTTL: cfg.SessionTTL, CookieSecure: cfg.CookieSecure, HSTSMaxAge: cfg.HSTSMaxAge,
 		DemoAccess: cfg.DemoAccess, Version: runtime.Version,
 	}, server.Deps{OIDC: client, Codec: codec, Audit: recorder, Clock: rt.Clock, Log: rt.Log,
+		Matching: svcclient.New("matching", cfg.MatchingURL),
 		Planning: svcclient.New("planning", cfg.PlanningURL),
 		Demand:   svcclient.New("demand", cfg.DemandURL),
 		Transfer: svcclient.New("transfer", cfg.TransferURL), Inventory: svcclient.New("inventory", cfg.InventoryURL)})

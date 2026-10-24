@@ -168,7 +168,7 @@ func (h *Handler) BuildPlan(ctx context.Context, req gen.BuildPlanRequestObject)
 		return nil, app.ErrInvalid
 	}
 	p, _ := auth.FromContext(ctx)
-	n, err := h.svc.Build(ctx, req.Body.IdempotencyKey, req.Body.EmergencyForecastId, p.Username)
+	n, err := h.svc.Build(ctx, req.Body.IdempotencyKey, req.Body.EmergencyForecastId, p.Username, p.PrimaryRole())
 	if err != nil {
 		return nil, err
 	}

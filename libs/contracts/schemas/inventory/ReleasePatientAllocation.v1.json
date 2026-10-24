@@ -22,7 +22,8 @@
       "type": "string",
       "enum": [
         "OBLIGATION_CANCELLED",
-        "OBLIGATION_BROKEN"
+        "OBLIGATION_BROKEN",
+        "UNIT_REPLACED"
       ]
     }
   }

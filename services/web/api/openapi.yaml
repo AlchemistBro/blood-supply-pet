@@ -10,6 +10,69 @@ info:
 servers:
   - url: http://localhost:8080
 paths:
+  /rules:
+    get:
+      operationId: rulesPage
+      x-bs-operation: VIEW_RULES
+      responses:
+        "200": { description: Справочник O15 }
+  /rules/{code}/versions:
+    parameters:
+      - { name: code, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: addRuleVersion
+      x-bs-operation: MANAGE_RULES
+      responses:
+        "303": { description: Новая версия сохранена }
+  /requests:
+    get:
+      operationId: requestList
+      x-bs-operation: VIEW_REQUESTS
+      responses:
+        "200": { description: Доступные заявки врача }
+    post:
+      operationId: createClinicalRequest
+      x-bs-operation: CREATE_REQUEST
+      responses:
+        "303": { description: Переход к вариантам заявки }
+  /requests/new:
+    get:
+      operationId: newRequest
+      x-bs-operation: CREATE_REQUEST
+      responses:
+        "200": { description: Форма заявки с ограничениями и CSRF }
+  /requests/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: requestDetail
+      x-bs-operation: VIEW_REQUESTS
+      responses:
+        "200": { description: Варианты и статус заявки }
+  /requests/{id}/select:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: selectRequestVariant
+      x-bs-operation: SELECT_VARIANT
+      responses:
+        "303": { description: Выбор врача сохранён }
+  /requests/{id}/cancel:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: cancelClinicalRequest
+      x-bs-operation: CANCEL_REQUEST
+      responses:
+        "303": { description: Заявка отменена }
+  /requests/{id}/patient-case:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: patientCase
+      x-bs-operation: READ_PATIENT_CASE
+      responses:
+        "200": { description: Номер случая после аудита matching, без кэширования }
   /deficits:
     get:
       operationId: deficitsPage

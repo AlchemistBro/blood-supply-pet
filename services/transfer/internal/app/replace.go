@@ -101,6 +101,20 @@ func (s *Service) replaceLocked(ctx context.Context, tx pgx.Tx, o domain.Obligat
 	if len(notInStock) > 0 {
 		return domain.UnitUnavailable{UnitID: c.NewUnitID}, nil
 	}
+	copies, err := s.store.UnitCopies(ctx, tx, []uuid.UUID{c.NewUnitID})
+	if err != nil {
+		return nil, err
+	}
+	u, ok := copies[c.NewUnitID]
+	if !ok {
+		return domain.SpecMismatch{Reason: domain.MismatchUnknownUnit}, nil
+	}
+	if mismatch := locked.Spec.Mismatch(locked.SourceClinicID, locked.ComponentKind, u); mismatch != "" {
+		return domain.SpecMismatch{Reason: mismatch}, nil
+	}
+	if !u.ExpiresAt.After(now) {
+		return domain.UnitUnavailable{UnitID: c.NewUnitID}, nil
+	}
 
 	// Под блокировкой O07 оба изменения обязаны пройти; иначе откат всей транзакции.
 	touched, err := s.store.CASTouch(ctx, tx, locked, now)
@@ -127,6 +141,18 @@ func (s *Service) replaceLocked(ctx context.Context, tx pgx.Tx, o domain.Obligat
 		"old_unit_id": c.OldUnitID, "new_unit_id": c.NewUnitID, "rule_version": o.Spec.RuleVersion,
 	}); err != nil {
 		return nil, err
+	}
+	if !locked.PatientCaseSealed.IsZero() {
+		if err := s.releasePatient(ctx, tx, locked, locked.Version+1, "UNIT_REPLACED"); err != nil {
+			return nil, err
+		}
+		units, err := s.store.ConfirmedUnits(ctx, tx, locked.ID)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.allocatePatient(ctx, tx, locked, locked.Version+1, units); err != nil {
+			return nil, err
+		}
 	}
 	return domain.Replaced{ObligationID: o.ID, OldUnitID: c.OldUnitID, NewUnitID: c.NewUnitID}, nil
 }

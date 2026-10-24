@@ -105,7 +105,11 @@ func (s *Service) acceptForecast(ctx context.Context, f int02.EmergencyForecast,
 		if _, err := s.journal.Publish(ctx, tx, contracts.TopicPlanningEvents, id.String(), planning.EmergencyForecastAccepted{EmergencyForecastID: id, ScenarioVersion: f.ScenarioVersion, Territory: f.Territory.Name, PeriodStart: f.PeriodStart, PeriodEnd: f.PeriodEnd, IsRoughEstimate: rough, LinesCount: len(f.Lines)}); err != nil {
 			return err
 		}
-		return s.journal.Audit(ctx, tx, messaging.AuditEntry{UserID: actor, Action: action, ObjectType: "emergency_forecast", ObjectID: id.String(), Result: auditc.ResultSuccess, Details: details})
+		role := "SERVICE"
+		if action == "FORECAST_ADJUSTED" {
+			role = "CLINIC_OPERATOR"
+		}
+		return s.journal.Audit(ctx, tx, messaging.AuditEntry{UserID: actor, Role: role, Action: action, ObjectType: "emergency_forecast", ObjectID: id.String(), Result: auditc.ResultSuccess, Details: details})
 	})
 	return id, err
 }

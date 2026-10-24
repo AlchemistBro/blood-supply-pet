@@ -53,11 +53,15 @@ type Obligation struct {
 	TransportRef     *string
 	StatusReason     *string
 	// Когда экстренное задание передано дежурному из-за недоступной АИСТ-М: одна эскалация на задание
-	EscalatedAt     *time.Time
-	Version         int64
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
-	ProtectedFloors []byte
+	EscalatedAt             *time.Time
+	Version                 int64
+	CreatedAt               time.Time
+	UpdatedAt               time.Time
+	ProtectedFloors         []byte
+	PatientCaseSealed       *string
+	PatientAllocationKey    *uuid.UUID
+	PatientAllocationStatus string
+	PatientAllocationAt     *time.Time
 }
 
 type RefBloodGroup struct {
