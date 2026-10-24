@@ -36,6 +36,16 @@ spec:
             - configMapRef:
                 name: web-config
           env:
+            - name: BS_TRANSFER_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: service-endpoints
+                  key: BS_TRANSFER_URL
+            - name: BS_INVENTORY_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: service-endpoints
+                  key: BS_INVENTORY_URL
             - name: BS_HTTP_ADDR
               value: ":8080"
             - name: BS_OIDC_CLIENT_ID

@@ -23,12 +23,16 @@ import (
 type doc = map[string]any
 
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	in := io.Reader(os.Stdin)
 	if len(os.Args) > 1 {
-		f, err := os.Open(os.Args[1])
+		f, err := os.Open(os.Args[1]) //nolint:gosec // путь локального файла явно задаёт пользователь команды проверки
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "k8scheck:", err)
-			os.Exit(2)
+			return 2
 		}
 		defer func() { _ = f.Close() }()
 		in = f
@@ -36,18 +40,18 @@ func main() {
 	docs, err := parse(in)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "k8scheck:", err)
-		os.Exit(2)
+		return 2
 	}
 	problems := check(docs)
 	if len(problems) == 0 {
 		fmt.Printf("k8scheck: объектов %d, замечаний нет\n", len(docs))
-		return
+		return 0
 	}
 	fmt.Printf("k8scheck: замечаний %d\n", len(problems))
 	for _, p := range problems {
 		fmt.Println("  -", p)
 	}
-	os.Exit(1)
+	return 1
 }
 
 // parse читает поток YAML-документов, пустые документы пропускает.

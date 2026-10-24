@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: matching
   version: 0.1.0
-  description: Контракт сервиса matching. Источник истины для HTTP: код сервера генерируется из этого файла.
+  description: "Контракт сервиса matching. Источник истины для HTTP: код сервера генерируется из этого файла."
 servers:
   - url: http://localhost:8104
 paths: {}
