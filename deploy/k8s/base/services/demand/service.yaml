@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: demand
+  namespace: bs-app
+  labels:
+    app.kubernetes.io/name: demand
+spec:
+  selector:
+    app.kubernetes.io/name: demand
+  ports:
+    - name: http
+      port: 8102
+      targetPort: http

@@ -1,0 +1,158 @@
+# Основная сеть (bs-app): сервисы и Kafka. Политики этого файла не касаются подов с данными K1
+# (метка blood-supply.io/data-class): для них отдельные, более узкие правила в app-k1.yaml.
+# Политики складываются, поэтому общие правила обязаны их исключать, иначе K1 получил бы всё то же самое.
+
+# ---------------------------------------------------------------- Kafka
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kafka-ingress
+  namespace: bs-app
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: kafka}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {blood-supply.io/runtime: go-service}
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: kafka-topics}
+      ports:
+        - {protocol: TCP, port: 9092}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kafka-topics-egress
+  namespace: bs-app
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: kafka-topics}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: kafka}
+      ports:
+        - {protocol: TCP, port: 9092}
+---
+# ---------------------------------------------------------------- вход в сервисы
+# web — из ingress-nginx.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: web-from-ingress
+  namespace: bs-app
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: web}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: ingress-nginx}
+      ports:
+        - {protocol: TCP, port: 8080}
+---
+# planning — ИНТ-02: из ingress-nginx (C02 снаружи) и от имитатора C02 в bs-sims.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: planning-int-forecast
+  namespace: bs-app
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: planning}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: ingress-nginx}
+        - namespaceSelector:
+            matchLabels: {blood-supply.io/segment: sims}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: sim-emergency}
+      ports:
+        - {protocol: TCP, port: 8103}
+---
+# Внутренние API сервисов (8101–8108): друг от друга (web → audit, transfer → inventory, web → сервисы).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: services-internal-ingress
+  namespace: bs-app
+spec:
+  podSelector:
+    matchLabels: {blood-supply.io/runtime: go-service}
+    matchExpressions:
+      - {key: blood-supply.io/data-class, operator: DoesNotExist}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {blood-supply.io/runtime: go-service}
+      ports:
+        - {protocol: TCP, port: 8101, endPort: 8108}
+---
+# ---------------------------------------------------------------- выход из сервисов
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: services-egress
+  namespace: bs-app
+spec:
+  podSelector:
+    matchLabels: {blood-supply.io/runtime: go-service}
+    matchExpressions:
+      - {key: blood-supply.io/data-class, operator: DoesNotExist}
+  policyTypes: [Egress]
+  egress:
+    # Kafka (outbox → relay → topic → inbox).
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: kafka}
+      ports:
+        - {protocol: TCP, port: 9092}
+    # Своя база: в сегмент данных только к PostgreSQL и только на 5432. Какая база — решают роль и pg_hba.
+    - to:
+        - namespaceSelector:
+            matchLabels: {blood-supply.io/segment: data}
+          podSelector:
+            matchLabels: {cnpg.io/cluster: pg}
+      ports:
+        - {protocol: TCP, port: 5432}
+    # Keycloak: JWKS, discovery, служебные токены.
+    - to:
+        - namespaceSelector:
+            matchLabels: {blood-supply.io/segment: edge}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: keycloak}
+      ports:
+        - {protocol: TCP, port: 8080}
+    # Телеметрия (OTLP).
+    - to:
+        - namespaceSelector:
+            matchLabels: {blood-supply.io/segment: observability}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: otel-lgtm}
+      ports:
+        - {protocol: TCP, port: 4317}
+        - {protocol: TCP, port: 4318}
+    # Внутренние API других сервисов.
+    - to:
+        - podSelector:
+            matchLabels: {blood-supply.io/runtime: go-service}
+      ports:
+        - {protocol: TCP, port: 8101, endPort: 8108}
+    # Смежные системы на стенде — имитаторы: C03 (logistics-gateway) и почтовый шлюз C04 (notification).
+    # Вне local/ci namespace bs-sims нет, правило ничего не открывает; адреса настоящих систем — в overlay.
+    - to:
+        - namespaceSelector:
+            matchLabels: {blood-supply.io/segment: sims}
+          podSelector:
+            matchExpressions:
+              - {key: app.kubernetes.io/name, operator: In, values: [sim-logistics, mailpit]}
+      ports:
+        - {protocol: TCP, port: 8203}
+        - {protocol: TCP, port: 1025}

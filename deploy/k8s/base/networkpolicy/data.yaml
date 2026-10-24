@@ -1,0 +1,96 @@
+# Сегмент данных (bs-data) принимает только сервисы с базой (bs-app), Keycloak (его база в общем кластере)
+# и оператор CloudNativePG. Наружу — только хранилище копий и API Kubernetes (менеджер экземпляра CNPG).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pg-ingress
+  namespace: bs-data
+spec:
+  podSelector:
+    matchLabels: {cnpg.io/cluster: pg}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: {blood-supply.io/segment: app}
+          podSelector:
+            matchLabels: {blood-supply.io/runtime: go-service}
+        - namespaceSelector:
+            matchLabels: {blood-supply.io/segment: edge}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: keycloak}
+      ports:
+        - {protocol: TCP, port: 5432}
+    # Экземпляры кластера между собой: репликация, pg_rewind, статус (8000).
+    - from:
+        - podSelector:
+            matchLabels: {cnpg.io/cluster: pg}
+    # Оператор: статус экземпляра (8000) и метрики (9187).
+    - from:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: cnpg-system}
+      ports:
+        - {protocol: TCP, port: 8000}
+        - {protocol: TCP, port: 9187}
+        - {protocol: TCP, port: 5432}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pg-egress
+  namespace: bs-data
+spec:
+  podSelector:
+    matchLabels: {cnpg.io/cluster: pg}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: {cnpg.io/cluster: pg}
+    # Архив WAL и базовые копии (barman-cloud → MinIO).
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: minio}
+      ports:
+        - {protocol: TCP, port: 9000}
+    # Менеджер экземпляра обращается к API Kubernetes. Адрес API-сервера зависит от кластера,
+    # поэтому открыт любой адрес, но только на портах API (443 у Service kubernetes, 6443 у узла kind).
+    - to:
+        - ipBlock: {cidr: 0.0.0.0/0}
+      ports:
+        - {protocol: TCP, port: 443}
+        - {protocol: TCP, port: 6443}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: minio-ingress
+  namespace: bs-data
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: minio}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {cnpg.io/cluster: pg}
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: minio-setup}
+      ports:
+        - {protocol: TCP, port: 9000}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: minio-setup-egress
+  namespace: bs-data
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: minio-setup}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/name: minio}
+      ports:
+        - {protocol: TCP, port: 9000}

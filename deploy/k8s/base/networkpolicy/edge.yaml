@@ -1,0 +1,39 @@
+# Сегмент доступа (bs-edge): Keycloak принимает браузеры через ingress и сервисы (JWKS, токены, discovery),
+# сам ходит только в свою базу.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: keycloak-ingress
+  namespace: bs-edge
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: keycloak}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: ingress-nginx}
+        - namespaceSelector:
+            matchLabels: {blood-supply.io/segment: app}
+          podSelector:
+            matchLabels: {blood-supply.io/runtime: go-service}
+      ports:
+        - {protocol: TCP, port: 8080}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: keycloak-egress
+  namespace: bs-edge
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: keycloak}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {blood-supply.io/segment: data}
+          podSelector:
+            matchLabels: {cnpg.io/cluster: pg}
+      ports:
+        - {protocol: TCP, port: 5432}

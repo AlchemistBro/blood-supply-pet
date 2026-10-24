@@ -1,0 +1,127 @@
+# Единственный вход в систему (сегмент доступа ПР4, ADR-0009): ingress-nginx, класс nginx, TLS.
+# Наружу публикуются только web (/), Keycloak (/auth, ingress-edge.yaml) и приём прогноза ЧС ИНТ-02.
+# API остальных сервисов в Ingress нет: внутрь кластера запросы идут только через web.
+#
+# TLS: секрет bs-tls (kubernetes.io/tls) в bs-app и bs-edge. Ключ в репозитории не хранится; пока секрета
+# нет, ingress-nginx отдаёт свой самоподписанный сертификат по умолчанию (README, раздел «Вход и TLS»).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: web
+  namespace: bs-app
+  labels:
+    app.kubernetes.io/name: web
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # Загрузка CSV оценки расхода (FR050) — до 5 МБ; больше nginx отвечает 413.
+    nginx.ingress.kubernetes.io/proxy-body-size: "5m"
+    # Лимит запросов с одного адреса: 20 в секунду, всплеск до 60.
+    nginx.ingress.kubernetes.io/limit-rps: "20"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "3"
+    # SSE (обновление статусов без перезагрузки): без буферизации и с долгим чтением.
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [localhost]
+      secretName: bs-tls
+  rules:
+    - host: localhost
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  name: http
+---
+# Служебные пути web (/metrics, /healthz, /readyz, /openapi.yaml) снаружи закрыты: отдельный Ingress на те же
+# пути с допуском только 127.0.0.1 перекрывает общий маршрут «/» (более длинный префикс выигрывает).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: web-internal-paths
+  namespace: bs-app
+  labels:
+    app.kubernetes.io/name: web
+  annotations:
+    nginx.ingress.kubernetes.io/whitelist-source-range: "127.0.0.1/32"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [localhost]
+      secretName: bs-tls
+  rules:
+    - host: localhost
+      http:
+        paths:
+          - path: /metrics
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  name: http
+          - path: /healthz
+            pathType: Exact
+            backend:
+              service:
+                name: web
+                port:
+                  name: http
+          - path: /readyz
+            pathType: Exact
+            backend:
+              service:
+                name: web
+                port:
+                  name: http
+          - path: /openapi.yaml
+            pathType: Exact
+            backend:
+              service:
+                name: web
+                port:
+                  name: http
+---
+# ИНТ-02: агрегированный прогноз ЧС от C02 только в planning (NFR010: белый список полей на входе).
+# Путь снаружи тот же, что в compose: /api/int/forecast → planning /int/forecast.
+# Три барьера: фильтр адресов источника (whitelist-source-range; в демо — частные сети, в prod-example —
+# адрес шлюза C02), служебный токен Keycloak (planning проверяет JWT и роль), лимит 5 запросов в секунду.
+# В реальном развёртывании добавляется mTLS клиента C02 (auth-tls-secret, README).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: int-forecast
+  namespace: bs-app
+  labels:
+    app.kubernetes.io/name: planning
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /int/forecast
+    nginx.ingress.kubernetes.io/whitelist-source-range: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.1/32"
+    nginx.ingress.kubernetes.io/limit-rps: "5"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "2"
+    nginx.ingress.kubernetes.io/proxy-body-size: "1m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [localhost]
+      secretName: bs-tls
+  rules:
+    - host: localhost
+      http:
+        paths:
+          - path: /api/int/forecast
+            pathType: Exact
+            backend:
+              service:
+                name: planning
+                port:
+                  name: http

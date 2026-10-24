@@ -1,0 +1,57 @@
+# Сервисы приложения (bs-app). Стандарт пода — components/go-service; здесь — общие настройки окружения.
+# Секреты (<svc>-db, web-secrets, service-client, k1-keys) — в components/demo-secrets
+# или во внешнем менеджере секретов.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - web
+  - inventory
+  - demand
+  - planning
+  - matching
+  - transfer
+  - logistics-gateway
+  - notification
+  - audit
+
+components:
+  - ../../components/go-service
+
+configMapGenerator:
+  # Общее для всех сервисов (envFrom). Overlay меняет BS_ENV и при другом хосте — BS_OIDC_ISSUER.
+  - name: platform-env
+    namespace: bs-app
+    literals:
+      - BS_ENV=k8s
+      - BS_LOG_LEVEL=info
+      - BS_LOG_FORMAT=json
+      - BS_KAFKA_BROKERS=kafka.bs-app.svc:9092
+      # Издатель — внешний адрес Keycloak за ingress (KC_HOSTNAME + realm); ключи, discovery (web)
+      # и служебные токены (BS_SERVICE_TOKEN_URL: transfer; web берёт его из discovery) — изнутри кластера.
+      - BS_OIDC_ISSUER=https://localhost/auth/realms/blood-supply
+      - BS_OIDC_JWKS_URL=http://keycloak.bs-edge.svc:8080/auth/realms/blood-supply/protocol/openid-connect/certs
+      - BS_OIDC_DISCOVERY_URL=http://keycloak.bs-edge.svc:8080/auth/realms/blood-supply
+      - BS_SERVICE_TOKEN_URL=http://keycloak.bs-edge.svc:8080/auth/realms/blood-supply/protocol/openid-connect/token
+      - BS_OIDC_AUDIENCE=blood-supply-api
+      - BS_OTEL_ENDPOINT=otel-lgtm.bs-observability.svc:4318
+  # Адреса сервисов: web → audit (ADR-0017), transfer → inventory (ADR-0004); остальные — для будущих
+  # вызовов web. Каждый сервис берёт только нужные ключи (configMapKeyRef).
+  - name: service-endpoints
+    namespace: bs-app
+    literals:
+      - BS_INVENTORY_URL=http://inventory.bs-app.svc:8101
+      - BS_DEMAND_URL=http://demand.bs-app.svc:8102
+      - BS_PLANNING_URL=http://planning.bs-app.svc:8103
+      - BS_MATCHING_URL=http://matching.bs-app.svc:8104
+      - BS_TRANSFER_URL=http://transfer.bs-app.svc:8105
+      - BS_LOGISTICS_URL=http://logistics-gateway.bs-app.svc:8106
+      - BS_NOTIFICATION_URL=http://notification.bs-app.svc:8107
+      - BS_AUDIT_URL=http://audit.bs-app.svc:8108
+  # Смежные системы. На стенде — имитаторы в bs-sims; prod-example подменяет адреса настоящими.
+  - name: external-systems
+    namespace: bs-app
+    literals:
+      - BS_AIST_URL=http://sim-aist.bs-sims.svc:8201
+      - BS_C03_URL=http://sim-logistics.bs-sims.svc:8203
+      - BS_SMTP_ADDR=mailpit.bs-sims.svc:1025

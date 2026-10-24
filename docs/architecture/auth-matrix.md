@@ -38,6 +38,12 @@
 | `GET /units/{id}` | VIEW_STOCK | 2xx | 2xx | 2xx | 2xx | 403 | 403 |
 | `GET /units/{id}/history` | VIEW_STOCK | 2xx | 2xx | 2xx | 2xx | 403 | 403 |
 
+## notification
+
+| Метод и путь | Операция | CLINIC_OPERATOR | DUTY_OFFICER | IT_SERVICE | PHYSICIAN | SERVICE | TERRITORIAL_ANALYST |
+| --- | --- | :---: | :---: | :---: | :---: | :---: | :---: |
+| `GET /notifications` | READ_AUDIT | 403 | 2xx | 2xx | 403 | 403 | 403 |
+
 ## transfer
 
 | Метод и путь | Операция | CLINIC_OPERATOR | DUTY_OFFICER | IT_SERVICE | PHYSICIAN | SERVICE | TERRITORIAL_ANALYST |

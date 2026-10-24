@@ -1,0 +1,120 @@
+# Имитаторы (bs-sims): принимают только сервисы bs-app, наружу — только то, что делает сама смежная система.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: bs-sims
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: bs-sims
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+          podSelector:
+            matchLabels: {k8s-app: kube-dns}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+---
+# C01 (sim-aist) — только inventory; C03 (sim-logistics) — только logistics-gateway; C04 (Mailpit) — только notification.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sim-aist-ingress
+  namespace: bs-sims
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: sim-aist}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: {blood-supply.io/segment: app}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: inventory}
+      ports:
+        - {protocol: TCP, port: 8201}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sim-logistics-ingress
+  namespace: bs-sims
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: sim-logistics}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: {blood-supply.io/segment: app}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: logistics-gateway}
+      ports:
+        - {protocol: TCP, port: 8203}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mailpit-ingress
+  namespace: bs-sims
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: mailpit}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: {blood-supply.io/segment: app}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: notification}
+      ports:
+        - {protocol: TCP, port: 1025}
+---
+# C02 (sim-emergency) → planning, ИНТ-02.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sim-emergency-egress
+  namespace: bs-sims
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: sim-emergency}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {blood-supply.io/segment: app}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: planning}
+      ports:
+        - {protocol: TCP, port: 8103}
+---
+# Телеметрия имитатора перевозчика.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sim-logistics-egress
+  namespace: bs-sims
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: sim-logistics}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {blood-supply.io/segment: observability}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: otel-lgtm}
+      ports:
+        - {protocol: TCP, port: 4318}

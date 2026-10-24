@@ -1,0 +1,68 @@
+# inventory — запас единиц компонентов крови, синхронизация с АИСТ-М (ИНТ-01), закрепление (ИНТ-05).
+# Держит номер случая в aist_outbox_message до квитанции АИСТ-М, поэтому получает ключи K1 (ADR-0020).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory
+  namespace: bs-app
+  labels:
+    app.kubernetes.io/name: inventory
+    app.kubernetes.io/component: service
+    blood-supply.io/runtime: go-service
+    blood-supply.io/data-class: k1
+spec:
+  # Число реплик ведёт HPA (hpa.yaml), поле replicas не задаётся, чтобы apply его не сбрасывал.
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: inventory
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: inventory
+        app.kubernetes.io/component: service
+        blood-supply.io/runtime: go-service
+        blood-supply.io/data-class: k1
+      annotations:
+        prometheus.io/port: "8101"
+    spec:
+      containers:
+        - name: app
+          image: ghcr.io/alchemistbro/blood-supply-inventory:edge
+          ports:
+            - name: http
+              containerPort: 8101
+          envFrom:
+            - configMapRef:
+                name: platform-env
+          env:
+            - name: BS_HTTP_ADDR
+              value: ":8101"
+            - name: BS_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: inventory-db
+                  key: BS_DB_URL
+            - name: BS_AIST_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: external-systems
+                  key: BS_AIST_URL
+            # Опрос изменений АИСТ-М (ИНТ-01); значения равны умолчаниям services/inventory/internal/config.
+            - name: BS_AIST_POLL_INTERVAL
+              value: 5s
+            - name: BS_AIST_PAGE_LIMIT
+              value: "500"
+            - name: BS_AIST_STATUS_TIMEOUT
+              value: 3s
+            # Формат kid:base64key[,kid:base64key], первый — текущий (libs/k1seal/opener).
+            - name: BS_K1_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: k1-keys
+                  key: BS_K1_KEYS
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 384Mi
