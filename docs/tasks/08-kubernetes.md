@@ -5,6 +5,12 @@
 
 ## Чеклист
 
+Реализация на 24.10.2026: `task k8s:up/down/logs/smoke/network-check/drill`, kind-конфиг с закреплённым образом,
+Calico, запуск платформы до Deployment сервисов, изолированная проверка NetworkPolicy, HTTP/роль smoke Job,
+сценарий отказа primary и PITR в `pg-drill`, workflow `k8s.yml`, runbook восстановления. Сценарии не исполнялись:
+проверены Go-код, Bash-синтаксис, YAML workflow и сборка overlays. Ни измерения RTO/RPO, ни зелёный кластерный
+прогон не заявляются. Публикация образов и запуск workflow в GitHub не выполнялись.
+
 ### Манифесты
 - [ ] `deploy/k8s/base`: namespaces `bs-edge`, `bs-app`, `bs-data`, `bs-observability`; CloudNativePG operator + `Cluster` (2 экземпляра, backup в MinIO, `ScheduledBackup` суточный, retention 7d), `Database` и роль на сервис; Kafka StatefulSet (KRaft) + init топиков; Keycloak + realm ConfigMap; OTel Collector + lgtm; Mailpit; MinIO.
 - [ ] На каждый сервис: Deployment (probes, resources, securityContext, env из ConfigMap/Secret), Service, HPA (web, inventory, matching), PDB, NetworkPolicy, ServiceMonitor/PodMonitor (или OTel scrape).

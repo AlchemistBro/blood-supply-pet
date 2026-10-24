@@ -1,0 +1,57 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: pg-drill
+  namespace: bs-data
+  labels: {blood-supply.io/demo: "true"}
+spec:
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgresql:16.9
+  enableSuperuserAccess: false
+  bootstrap:
+    recovery:
+      source: pg
+      recoveryTarget:
+        targetTime: "__TARGET_TIME__"
+  externalClusters:
+    - name: pg
+      barmanObjectStore:
+        destinationPath: s3://pg-backups/
+        endpointURL: http://minio.bs-data.svc:9000
+        serverName: pg
+        s3Credentials:
+          accessKeyId: {name: pg-backup-s3, key: ACCESS_KEY_ID}
+          secretAccessKey: {name: pg-backup-s3, key: ACCESS_SECRET_KEY}
+        wal: {maxParallel: 2}
+  storage: {size: 5Gi}
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 512Mi}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: pg-drill-access, namespace: bs-data}
+spec:
+  podSelector: {matchLabels: {cnpg.io/cluster: pg-drill}}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: cnpg-system}}
+      ports: [{protocol: TCP, port: 8000}, {protocol: TCP, port: 9187}, {protocol: TCP, port: 5432}]
+  egress:
+    - to: [{podSelector: {matchLabels: {app.kubernetes.io/name: minio}}}]
+      ports: [{protocol: TCP, port: 9000}]
+    - to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}}]
+      ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    - to: [{ipBlock: {cidr: 0.0.0.0/0}}]
+      ports: [{protocol: TCP, port: 443}, {protocol: TCP, port: 6443}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: minio-drill-ingress, namespace: bs-data}
+spec:
+  podSelector: {matchLabels: {app.kubernetes.io/name: minio}}
+  policyTypes: [Ingress]
+  ingress:
+    - from: [{podSelector: {matchLabels: {cnpg.io/cluster: pg-drill}}}]
+      ports: [{protocol: TCP, port: 9000}]

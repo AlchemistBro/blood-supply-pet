@@ -161,6 +161,30 @@ tasks:
     cmds:
       - go run ./services/planning/cmd/planning-rebuild
 
+  k8s:up:
+    desc: Собрать образы и поднять выделенный kind blood-supply (требует Docker)
+    cmds: [bash deploy/k8s/up.sh]
+
+  k8s:down:
+    desc: Удалить только выделенный kind-кластер blood-supply и его данные
+    cmds: [kind delete cluster --name blood-supply]
+
+  k8s:smoke:
+    desc: Проверить готовность, вход и отказ чужой роли в kind blood-supply
+    cmds: [bash deploy/k8s/smoke.sh]
+
+  k8s:network-check:
+    desc: Проверить фактическое исполнение NetworkPolicy в kind blood-supply
+    cmds: [bash deploy/k8s/network-check.sh]
+
+  k8s:drill:
+    desc: Учение PITR только в демо-kind, с отказом primary и отдельной восстановленной копией
+    cmds: [bash deploy/k8s/drill/drill.sh]
+
+  k8s:logs:
+    desc: Логи сервисов выделенного kind-кластера
+    cmds: [kubectl --context kind-blood-supply logs -n bs-app -l blood-supply.io/runtime=go-service --all-containers --prefix --max-log-requests=20 --tail=100]
+
   authmatrix:
     desc: Проверить x-bs-operation в контрактах и актуальность docs/architecture/auth-matrix.md (NFR011)
     cmds:
