@@ -301,6 +301,11 @@ func (Store) UnitCopies(ctx context.Context, db app.DB, ids []uuid.UUID) (map[uu
 			RhPositive: r.RhPositive, Phenotype: r.Phenotype, VolumeML: r.VolumeMl, ExpiresAt: r.ExpiresAt,
 			Status: domain.UnitStatus(r.UnitStatusCode), Version: r.Version,
 		}
+		if r.LocalDispatchObligationID != nil || r.ClinicalUseBlocked {
+			u := out[r.UnitID]
+			u.Status = domain.UnitTransferred
+			out[r.UnitID] = u
+		}
 	}
 	return out, nil
 }
@@ -425,6 +430,7 @@ func toObligation(r gen.Obligation) (domain.Obligation, error) {
 		return domain.Obligation{}, err
 	}
 	return domain.Obligation{
+		ClinicalUseBlocked: r.ClinicalUseBlocked, TransportViolations: r.TransportViolations,
 		PatientAllocationKey: r.PatientAllocationKey, PatientAllocationStatus: r.PatientAllocationStatus, PatientAllocationAt: r.PatientAllocationAt,
 		PatientCaseSealed: k1seal.Sealed(deref(r.PatientCaseSealed)),
 		ProtectedFloors:   floors,

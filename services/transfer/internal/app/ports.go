@@ -47,6 +47,15 @@ type DB interface {
 
 // Store — порт хранилища transfer. Каждый переход статуса — CAS по ожидаемому статусу и версии из o.
 type Store interface {
+	RaiseEscalation(context.Context, DB, EscalationRecord) (bool, error)
+	Escalations(context.Context, DB, bool, int, *uuid.UUID) ([]EscalationRecord, error)
+	CloseEscalation(context.Context, DB, uuid.UUID, string, string, string, time.Time) (EscalationRecord, bool, error)
+	Transport(context.Context, DB, uuid.UUID) (TransportRecord, error)
+	SaveTransport(context.Context, DB, TransportRecord) error
+	DispatchUnits(context.Context, DB, uuid.UUID, []uuid.UUID, time.Time) (int, error)
+	BlockTransportUnits(context.Context, DB, uuid.UUID) error
+	UnitsForView(context.Context, DB, uuid.UUID) ([]uuid.UUID, error)
+	AllObligations(context.Context, DB, *domain.Status, int, int) ([]domain.Obligation, error)
 	SetPatientDelivery(context.Context, DB, uuid.UUID, uuid.UUID, string) error
 	AcknowledgePatient(context.Context, DB, uuid.UUID, uuid.UUID, time.Time) error
 	Candidates(context.Context, DB, domain.Obligation, time.Time, int) ([]domain.UnitCopy, error)

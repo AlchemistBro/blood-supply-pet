@@ -11,6 +11,107 @@ info:
 servers:
   - url: http://localhost:8105
 paths:
+  /escalations:
+    get:
+      operationId: listEscalations
+      x-bs-operation: HANDLE_ESCALATION
+      parameters:
+        - { name: include_closed, in: query, schema: { type: boolean } }
+      responses:
+        "200": { description: Последние 200 эскалаций, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Escalation" } } } } }
+  /escalations/{id}/close:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: closeEscalation
+      x-bs-operation: HANDLE_ESCALATION
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resolution, comment]
+              properties:
+                resolution: { type: string, enum: [RESOLVED, NO_ACTION_REQUIRED] }
+                comment: { type: string, minLength: 1, maxLength: 1000 }
+      responses:
+        "204": { description: Эскалация закрыта; запрет использования единиц не снимается }
+  /duty/obligations:
+    get:
+      operationId: listAllObligations
+      x-bs-operation: HANDLE_ESCALATION
+      parameters:
+        - { name: status, in: query, schema: { type: string } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0 } }
+      responses:
+        "200": { description: До 100 заданий всех клиник, content: { application/json: { schema: { $ref: "#/components/schemas/ObligationList" } } } }
+  /obligations/{id}/manual-transport:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: assignManualTransport
+      x-bs-operation: HANDLE_ESCALATION
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [transport_ref, courier_ref]
+              properties:
+                transport_ref: { type: string, minLength: 1, maxLength: 128 }
+                courier_ref: { type: string, minLength: 1, maxLength: 64 }
+      responses:
+        "204": { description: Ручная перевозка назначена }
+  /obligations/{id}/transport:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getTransport
+      x-bs-operation: VIEW_OBLIGATION
+      responses:
+        "200": { description: Регистрация перевозки, content: { application/json: { schema: { $ref: "#/components/schemas/Transport" } } } }
+  /obligations/{id}/dispatch:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: dispatchTransfer
+      x-bs-operation: DISPATCH_TRANSFER
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [courier_ref, container_intact]
+              properties:
+                courier_ref: { type: string }
+                container_intact: { type: boolean }
+                temperature_c: { type: number, format: double }
+                at: { type: string, format: date-time }
+      responses:
+        "204": { description: Отправка зарегистрирована }
+  /obligations/{id}/receive:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: receiveTransfer
+      x-bs-operation: RECEIVE_TRANSFER
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [container_intact, temperature_excursion]
+              properties:
+                container_intact: { type: boolean }
+                temperature_excursion: { type: boolean }
+                temperature_c: { type: number, format: double }
+                at: { type: string, format: date-time }
+      responses:
+        "204": { description: Приёмка зарегистрирована; нарушения запрещают использование }
   /obligations/{id}/candidates:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
@@ -248,6 +349,36 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
   schemas:
+    Transport:
+      type: object
+      required: [obligation_id, transport_ref, courier_ref, manual, assigned_by, assigned_at, departure_container_intact, arrival_container_intact, conditions_violated, violations]
+      properties:
+        obligation_id: { type: string, format: uuid }
+        transport_ref: { type: string }
+        courier_ref: { type: string }
+        manual: { type: boolean }
+        assigned_by: { type: string }
+        assigned_at: { type: string, format: date-time }
+        departed_at: { type: string, format: date-time }
+        arrived_at: { type: string, format: date-time }
+        temperature_at_dispatch_c: { type: number, format: double }
+        temperature_at_arrival_c: { type: number, format: double }
+        departure_container_intact: { type: boolean }
+        arrival_container_intact: { type: boolean }
+        conditions_violated: { type: boolean }
+        violations: { type: array, items: { type: string } }
+    Escalation:
+      type: object
+      required: [escalation_id, obligation_id, reason, raised_at, closed_by, resolution, comment]
+      properties:
+        escalation_id: { type: string, format: uuid }
+        obligation_id: { type: string, format: uuid }
+        reason: { type: string }
+        raised_at: { type: string, format: date-time }
+        closed_at: { type: string, format: date-time }
+        closed_by: { type: string }
+        resolution: { type: string }
+        comment: { type: string }
     Candidate:
       type: object
       required: [unit_id, clinic_id, component_kind, blood_group, volume_ml, expires_at, status, available]
@@ -304,7 +435,7 @@ components:
       type: object
       required: [obligation_id, choice_id, request_id, origin, source_clinic_id, target_clinic_id, component_kind,
                  requested_qty, confirmed_qty, status, urgency, deadline, fallback_sources, spec, units, version,
-                 created_at, updated_at, patient_allocation_status]
+                 created_at, updated_at, patient_allocation_status, clinical_use_blocked, transport_violations]
       properties:
         obligation_id: { type: string, format: uuid }
         choice_id: { type: string, format: uuid }
@@ -333,6 +464,8 @@ components:
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
         patient_allocation_status: { type: string }
+        clinical_use_blocked: { type: boolean }
+        transport_violations: { type: array, items: { type: string } }
         patient_allocation_acknowledged_at: { type: string, format: date-time }
     ObligationList:
       type: object

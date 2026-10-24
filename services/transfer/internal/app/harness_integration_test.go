@@ -303,7 +303,7 @@ func (h *harness) assertStockConsistent(clinic int64, kind string) {
 		clinic, kind).Scan(&available, &reserved); err != nil {
 		h.t.Fatal(err)
 	}
-	inStock := h.count(`SELECT count(*) FROM unit_copy WHERE clinic_id = $1 AND component_kind_code = $2 AND unit_status_code = 'IN_STOCK'`, clinic, kind)
+	inStock := h.count(`SELECT count(*) FROM unit_copy WHERE clinic_id = $1 AND component_kind_code = $2 AND unit_status_code = 'IN_STOCK' AND local_dispatch_obligation_id IS NULL AND NOT clinical_use_blocked`, clinic, kind)
 	confirmed := h.count(`SELECT count(*) FROM allocation a JOIN unit_copy u USING (unit_id)
 		WHERE u.clinic_id = $1 AND u.component_kind_code = $2 AND a.status = 'CONFIRMED'`, clinic, kind)
 	if available != inStock {

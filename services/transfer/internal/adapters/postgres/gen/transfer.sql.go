@@ -340,7 +340,7 @@ func (q *Queries) IsAllocatedTo(ctx context.Context, arg IsAllocatedToParams) (b
 }
 
 const lockObligation = `-- name: LockObligation :one
-SELECT obligation_id, choice_id, request_id, origin, source_clinic_id, target_clinic_id, component_kind_code, blood_group_code, requested_qty, confirmed_qty, status, urgency_code, deadline, confirm_window_seconds, fallback_sources, spec_blood_group_code, spec_rh_positive, spec_phenotype, spec_min_expires_at, spec_rule_version, confirm_key, transport_ref, status_reason, escalated_at, version, created_at, updated_at, protected_floors, patient_case_sealed, patient_allocation_key, patient_allocation_status, patient_allocation_at FROM obligation WHERE obligation_id = $1 FOR UPDATE
+SELECT obligation_id, choice_id, request_id, origin, source_clinic_id, target_clinic_id, component_kind_code, blood_group_code, requested_qty, confirmed_qty, status, urgency_code, deadline, confirm_window_seconds, fallback_sources, spec_blood_group_code, spec_rh_positive, spec_phenotype, spec_min_expires_at, spec_rule_version, confirm_key, transport_ref, status_reason, escalated_at, version, created_at, updated_at, protected_floors, patient_case_sealed, patient_allocation_key, patient_allocation_status, patient_allocation_at, clinical_use_blocked, transport_violations FROM obligation WHERE obligation_id = $1 FOR UPDATE
 `
 
 // Вторая блокировка в порядке «Остаток, затем O07».
@@ -380,6 +380,8 @@ func (q *Queries) LockObligation(ctx context.Context, obligationID uuid.UUID) (O
 		&i.PatientAllocationKey,
 		&i.PatientAllocationStatus,
 		&i.PatientAllocationAt,
+		&i.ClinicalUseBlocked,
+		&i.TransportViolations,
 	)
 	return i, err
 }
@@ -430,7 +432,7 @@ func (q *Queries) MarkEscalated(ctx context.Context, arg MarkEscalatedParams) (i
 
 const notInStockAmong = `-- name: NotInStockAmong :many
 SELECT u.unit_id FROM unit_copy u JOIN ref_unit_status s USING (unit_status_code)
-WHERE u.unit_id = ANY($1::uuid[]) AND NOT s.is_available
+WHERE u.unit_id = ANY($1::uuid[]) AND (NOT s.is_available OR u.local_dispatch_obligation_id IS NOT NULL OR u.clinical_use_blocked)
 `
 
 // Недоступные по справочнику ref_unit_status: карантин и выбывшие.
@@ -455,7 +457,7 @@ func (q *Queries) NotInStockAmong(ctx context.Context, unitIds []uuid.UUID) ([]u
 }
 
 const obligationByID = `-- name: ObligationByID :one
-SELECT obligation_id, choice_id, request_id, origin, source_clinic_id, target_clinic_id, component_kind_code, blood_group_code, requested_qty, confirmed_qty, status, urgency_code, deadline, confirm_window_seconds, fallback_sources, spec_blood_group_code, spec_rh_positive, spec_phenotype, spec_min_expires_at, spec_rule_version, confirm_key, transport_ref, status_reason, escalated_at, version, created_at, updated_at, protected_floors, patient_case_sealed, patient_allocation_key, patient_allocation_status, patient_allocation_at FROM obligation WHERE obligation_id = $1
+SELECT obligation_id, choice_id, request_id, origin, source_clinic_id, target_clinic_id, component_kind_code, blood_group_code, requested_qty, confirmed_qty, status, urgency_code, deadline, confirm_window_seconds, fallback_sources, spec_blood_group_code, spec_rh_positive, spec_phenotype, spec_min_expires_at, spec_rule_version, confirm_key, transport_ref, status_reason, escalated_at, version, created_at, updated_at, protected_floors, patient_case_sealed, patient_allocation_key, patient_allocation_status, patient_allocation_at, clinical_use_blocked, transport_violations FROM obligation WHERE obligation_id = $1
 `
 
 func (q *Queries) ObligationByID(ctx context.Context, obligationID uuid.UUID) (Obligation, error) {
@@ -494,6 +496,8 @@ func (q *Queries) ObligationByID(ctx context.Context, obligationID uuid.UUID) (O
 		&i.PatientAllocationKey,
 		&i.PatientAllocationStatus,
 		&i.PatientAllocationAt,
+		&i.ClinicalUseBlocked,
+		&i.TransportViolations,
 	)
 	return i, err
 }
@@ -521,7 +525,7 @@ func (q *Queries) ObligationIDByChoice(ctx context.Context, choiceID uuid.UUID) 
 }
 
 const obligationsByRequest = `-- name: ObligationsByRequest :many
-SELECT obligation_id, choice_id, request_id, origin, source_clinic_id, target_clinic_id, component_kind_code, blood_group_code, requested_qty, confirmed_qty, status, urgency_code, deadline, confirm_window_seconds, fallback_sources, spec_blood_group_code, spec_rh_positive, spec_phenotype, spec_min_expires_at, spec_rule_version, confirm_key, transport_ref, status_reason, escalated_at, version, created_at, updated_at, protected_floors, patient_case_sealed, patient_allocation_key, patient_allocation_status, patient_allocation_at FROM obligation WHERE request_id = $1 ORDER BY created_at, obligation_id
+SELECT obligation_id, choice_id, request_id, origin, source_clinic_id, target_clinic_id, component_kind_code, blood_group_code, requested_qty, confirmed_qty, status, urgency_code, deadline, confirm_window_seconds, fallback_sources, spec_blood_group_code, spec_rh_positive, spec_phenotype, spec_min_expires_at, spec_rule_version, confirm_key, transport_ref, status_reason, escalated_at, version, created_at, updated_at, protected_floors, patient_case_sealed, patient_allocation_key, patient_allocation_status, patient_allocation_at, clinical_use_blocked, transport_violations FROM obligation WHERE request_id = $1 ORDER BY created_at, obligation_id
 `
 
 func (q *Queries) ObligationsByRequest(ctx context.Context, requestID uuid.UUID) ([]Obligation, error) {
@@ -566,6 +570,8 @@ func (q *Queries) ObligationsByRequest(ctx context.Context, requestID uuid.UUID)
 			&i.PatientAllocationKey,
 			&i.PatientAllocationStatus,
 			&i.PatientAllocationAt,
+			&i.ClinicalUseBlocked,
+			&i.TransportViolations,
 		); err != nil {
 			return nil, err
 		}
@@ -578,7 +584,7 @@ func (q *Queries) ObligationsByRequest(ctx context.Context, requestID uuid.UUID)
 }
 
 const obligationsBySource = `-- name: ObligationsBySource :many
-SELECT obligation_id, choice_id, request_id, origin, source_clinic_id, target_clinic_id, component_kind_code, blood_group_code, requested_qty, confirmed_qty, status, urgency_code, deadline, confirm_window_seconds, fallback_sources, spec_blood_group_code, spec_rh_positive, spec_phenotype, spec_min_expires_at, spec_rule_version, confirm_key, transport_ref, status_reason, escalated_at, version, created_at, updated_at, protected_floors, patient_case_sealed, patient_allocation_key, patient_allocation_status, patient_allocation_at FROM obligation
+SELECT obligation_id, choice_id, request_id, origin, source_clinic_id, target_clinic_id, component_kind_code, blood_group_code, requested_qty, confirmed_qty, status, urgency_code, deadline, confirm_window_seconds, fallback_sources, spec_blood_group_code, spec_rh_positive, spec_phenotype, spec_min_expires_at, spec_rule_version, confirm_key, transport_ref, status_reason, escalated_at, version, created_at, updated_at, protected_floors, patient_case_sealed, patient_allocation_key, patient_allocation_status, patient_allocation_at, clinical_use_blocked, transport_violations FROM obligation
 WHERE source_clinic_id = $1
   AND ($2::text IS NULL OR status = $2)
 ORDER BY created_at DESC, obligation_id
@@ -634,6 +640,8 @@ func (q *Queries) ObligationsBySource(ctx context.Context, arg ObligationsBySour
 			&i.PatientAllocationKey,
 			&i.PatientAllocationStatus,
 			&i.PatientAllocationAt,
+			&i.ClinicalUseBlocked,
+			&i.TransportViolations,
 		); err != nil {
 			return nil, err
 		}
@@ -680,7 +688,7 @@ func (q *Queries) PendingDueBy(ctx context.Context, arg PendingDueByParams) ([]u
 const recountAvailable = `-- name: RecountAvailable :exec
 UPDATE source_stock SET available_units = (
     SELECT count(*) FROM unit_copy u JOIN ref_unit_status s USING (unit_status_code)
-    WHERE u.clinic_id = $1 AND u.component_kind_code = $2 AND s.is_available)
+    WHERE u.clinic_id = $1 AND u.component_kind_code = $2 AND s.is_available AND u.local_dispatch_obligation_id IS NULL AND NOT u.clinical_use_blocked)
 WHERE source_stock.clinic_id = $1 AND source_stock.component_kind_code = $2
 `
 
@@ -793,7 +801,7 @@ func (q *Queries) SetUnitCopyStatus(ctx context.Context, arg SetUnitCopyStatusPa
 }
 
 const unitCopies = `-- name: UnitCopies :many
-SELECT unit_id, clinic_id, component_kind_code, blood_group_code, rh_positive, phenotype, volume_ml, expires_at, unit_status_code, status_reason, version, updated_at FROM unit_copy WHERE unit_id = ANY($1::uuid[])
+SELECT unit_id, clinic_id, component_kind_code, blood_group_code, rh_positive, phenotype, volume_ml, expires_at, unit_status_code, status_reason, version, updated_at, local_dispatch_obligation_id, clinical_use_blocked FROM unit_copy WHERE unit_id = ANY($1::uuid[])
 `
 
 func (q *Queries) UnitCopies(ctx context.Context, unitIds []uuid.UUID) ([]UnitCopy, error) {
@@ -818,6 +826,8 @@ func (q *Queries) UnitCopies(ctx context.Context, unitIds []uuid.UUID) ([]UnitCo
 			&i.StatusReason,
 			&i.Version,
 			&i.UpdatedAt,
+			&i.LocalDispatchObligationID,
+			&i.ClinicalUseBlocked,
 		); err != nil {
 			return nil, err
 		}
@@ -863,7 +873,8 @@ ON CONFLICT (unit_id) DO UPDATE
 SET clinic_id = excluded.clinic_id, component_kind_code = excluded.component_kind_code,
     blood_group_code = excluded.blood_group_code, rh_positive = excluded.rh_positive, phenotype = excluded.phenotype,
     volume_ml = excluded.volume_ml, expires_at = excluded.expires_at, unit_status_code = excluded.unit_status_code,
-    status_reason = NULL, version = excluded.version, updated_at = excluded.updated_at
+    status_reason = NULL, version = excluded.version, updated_at = excluded.updated_at,
+    local_dispatch_obligation_id = CASE WHEN unit_copy.clinic_id<>excluded.clinic_id THEN NULL ELSE unit_copy.local_dispatch_obligation_id END
 WHERE unit_copy.version < excluded.version
 `
 

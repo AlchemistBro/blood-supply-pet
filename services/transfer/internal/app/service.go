@@ -15,6 +15,7 @@ import (
 	"github.com/AlchemistBro/blood-supply-pet/libs/clock"
 	"github.com/AlchemistBro/blood-supply-pet/libs/contracts"
 	auditc "github.com/AlchemistBro/blood-supply-pet/libs/contracts/audit"
+	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/transfer"
 	"github.com/AlchemistBro/blood-supply-pet/libs/messaging"
 	bspgx "github.com/AlchemistBro/blood-supply-pet/libs/pgx"
 	"github.com/AlchemistBro/blood-supply-pet/services/transfer/internal/domain"
@@ -95,6 +96,20 @@ func (s *Service) inTx(ctx context.Context, msg *messaging.Message, fn func(ctx 
 }
 
 func (s *Service) event(ctx context.Context, tx pgx.Tx, obligationID uuid.UUID, p contracts.Payload) error {
+	if event, ok := p.(transfer.EscalationRaised); ok {
+		at := event.At
+		if at.IsZero() {
+			at = s.clock.Now()
+		}
+		id, err := uuid.NewV7()
+		if err != nil {
+			return err
+		}
+		created, err := s.store.RaiseEscalation(ctx, tx, EscalationRecord{ID: id, ObligationID: obligationID, Reason: event.Reason, RaisedAt: at})
+		if err != nil || !created {
+			return err
+		}
+	}
 	if _, err := s.journal.Publish(ctx, tx, contracts.TopicTransferEvents, obligationID.String(), p); err != nil {
 		return fmt.Errorf("событие %s: %w", p.MessageType(), err)
 	}
@@ -108,10 +123,14 @@ func (s *Service) command(ctx context.Context, tx pgx.Tx, obligationID uuid.UUID
 	return nil
 }
 
-func (s *Service) audit(ctx context.Context, tx pgx.Tx, actor, action string, o domain.Obligation, details map[string]any) error {
+func (s *Service) audit(ctx context.Context, tx pgx.Tx, actor, action string, o domain.Obligation, details map[string]any, roles ...string) error {
 	clinic := o.SourceClinicID
+	role := "SERVICE"
+	if len(roles) > 0 {
+		role = roles[0]
+	}
 	if err := s.journal.Audit(ctx, tx, messaging.AuditEntry{
-		UserID: actor, ClinicID: &clinic, Action: action, ObjectType: objectObligation, ObjectID: o.ID.String(),
+		UserID: actor, Role: role, ClinicID: &clinic, Action: action, ObjectType: objectObligation, ObjectID: o.ID.String(),
 		Result: auditc.ResultSuccess, Details: details,
 	}); err != nil {
 		return fmt.Errorf("аудит %s: %w", action, err)
@@ -268,7 +287,7 @@ func (s *Service) AllocationHistory(ctx context.Context, unitID uuid.UUID) ([]do
 }
 
 func (s *Service) view(ctx context.Context, o domain.Obligation) (ObligationView, error) {
-	units, err := s.store.ConfirmedUnits(ctx, s.pool, o.ID)
+	units, err := s.store.UnitsForView(ctx, s.pool, o.ID)
 	if err != nil {
 		return ObligationView{}, err
 	}

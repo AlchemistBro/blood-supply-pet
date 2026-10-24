@@ -22,15 +22,22 @@ import (
 // Operations — операция матрицы прав для каждого маршрута. Совпадает с x-bs-operation в openapi.yaml
 // (это проверяет тест контракта).
 var Operations = map[string]auth.Operation{
-	"GET /obligations/{id}/candidates": auth.OpConfirmTransfer,
-	"GET /obligations/{id}/history":    auth.OpViewObligation,
-	"POST /obligations/{id}/reject":    auth.OpRejectTransfer,
-	"POST /obligations":                auth.OpOpenObligation,
-	"GET /obligations":                 auth.OpViewObligation,
-	"GET /obligations/{id}":            auth.OpViewObligation,
-	"POST /obligations/{id}/confirm":   auth.OpConfirmTransfer,
-	"POST /obligations/{id}/replace":   auth.OpReplaceUnit,
-	"POST /obligations/{id}/cancel":    auth.OpCancelObligation,
+	"GET /escalations":                        auth.OpHandleEscalation,
+	"POST /escalations/{id}/close":            auth.OpHandleEscalation,
+	"GET /duty/obligations":                   auth.OpHandleEscalation,
+	"GET /obligations/{id}/transport":         auth.OpViewObligation,
+	"POST /obligations/{id}/manual-transport": auth.OpHandleEscalation,
+	"POST /obligations/{id}/dispatch":         auth.OpDispatchTransfer,
+	"POST /obligations/{id}/receive":          auth.OpReceiveTransfer,
+	"GET /obligations/{id}/candidates":        auth.OpConfirmTransfer,
+	"GET /obligations/{id}/history":           auth.OpViewObligation,
+	"POST /obligations/{id}/reject":           auth.OpRejectTransfer,
+	"POST /obligations":                       auth.OpOpenObligation,
+	"GET /obligations":                        auth.OpViewObligation,
+	"GET /obligations/{id}":                   auth.OpViewObligation,
+	"POST /obligations/{id}/confirm":          auth.OpConfirmTransfer,
+	"POST /obligations/{id}/replace":          auth.OpReplaceUnit,
+	"POST /obligations/{id}/cancel":           auth.OpCancelObligation,
 }
 
 // Handler реализует gen.StrictServerInterface.
@@ -95,6 +102,10 @@ func errorHandler(log *slog.Logger, onDenied auth.Denied) func(w http.ResponseWr
 			}
 			httpx.WriteProblem(w, r, http.StatusForbidden, "Недостаточно прав",
 				"Задание принадлежит другой клинике. Действовать можно только по заданиям своей клиники.")
+		case errors.Is(err, app.ErrConflict):
+			httpx.WriteProblem(w, r, http.StatusConflict, "Состояние изменилось", "Обновите задание и повторите действие.")
+		case errors.Is(err, domain.ErrInvalidTransport):
+			httpx.WriteProblem(w, r, http.StatusUnprocessableEntity, "Неверные данные перевозки", "Проверьте код работника, целостность, температуру и время.")
 		case errors.Is(err, app.ErrNotFound):
 			httpx.WriteProblem(w, r, http.StatusNotFound, "Задание не найдено", "Проверьте номер задания или обновите список.")
 		case errors.Is(err, errBadRequest), errors.Is(err, domain.ErrInvalidObligation), errors.Is(err, app.ErrInvalidEvent):

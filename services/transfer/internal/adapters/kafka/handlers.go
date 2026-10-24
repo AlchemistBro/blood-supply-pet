@@ -131,10 +131,20 @@ func (h *Handlers) Logistics(ctx context.Context, msg messaging.Message) error {
 		}
 		return h.svc.OnLogisticsReply(ctx, &msg, app.LogisticsReply{Kind: app.ReplyCancelled, ObligationID: r.ObligationID})
 	case (logistics.TransportDelivered{}).MessageType():
-		// Статусы DISPATCHED и DELIVERED появляются на этапе 7. До тех пор доставка только отмечается в логе:
-		// постоянная ошибка отправила бы в DLT каждую штатную доставку и подняла бы ложный алерт.
-		h.log.InfoContext(ctx, "TransportDelivered пропущен: статусы доставки появятся на этапе 7", "message_id", msg.ID)
-		return nil
+		var e logistics.TransportDelivered
+		if err := decode(msg, &e); err != nil {
+			return err
+		}
+		intact := e.ContainerIntact != nil && *e.ContainerIntact
+		excursion := e.TempExcursion != nil && *e.TempExcursion
+		return h.svc.Receive(ctx, &msg, app.ReceiveInput{ObligationID: e.ObligationID, TransportRef: e.ShipmentRef, Actor: msg.Producer, Role: "SERVICE", At: e.DeliveredAt, Temperature: e.TemperatureAtArrivalC, DepartureTemperature: e.TemperatureAtDispatchC, ContainerIntact: intact, TemperatureExcursion: excursion})
+	case (logistics.TransportDispatched{}).MessageType():
+		var e logistics.TransportDispatched
+		if err := decode(msg, &e); err != nil {
+			return err
+		}
+		intact := e.ContainerIntact != nil && *e.ContainerIntact
+		return h.svc.Dispatch(ctx, &msg, app.DispatchInput{ObligationID: e.ObligationID, TransportRef: e.ShipmentRef, CourierRef: e.CourierRef, Actor: msg.Producer, Role: "SERVICE", At: e.DispatchedAt, Temperature: e.TemperatureAtDispatchC, ContainerIntact: intact})
 	default:
 		return h.foreign(ctx, msg)
 	}
