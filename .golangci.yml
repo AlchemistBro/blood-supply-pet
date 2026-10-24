@@ -79,6 +79,10 @@ linters:
     rules:
       - path: _test\.go
         linters: [gosec, errcheck, noctx, forbidigo]
+      # Фальшивые серверы тестов выпускают токены и ставят сетевые дедлайны по системным часам.
+      - path: /(?:oidctest|smtptest)/
+        linters: [forbidigo]
+        text: time\.Now
       # time.Now запрещён только в бизнес-коде сервисов; libs/clock (реализация Clock), измерение длительности
       # в libs/httpx и libs/messaging, тестовая инфраструктура и точки входа cmd остаются на системных часах.
       - path-except: ^services/[^/]+/internal/
