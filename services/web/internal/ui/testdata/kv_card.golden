@@ -1,0 +1,13 @@
+<section class="card">
+<h2>Параметры</h2>
+<dl class="kv">
+<dt>Получатель</dt>
+<dd>Клиника № 14</dd>
+<dt>Количество, ед.</dt>
+<dd class="num">3</dd>
+<dt>Статус</dt>
+<dd> <span class="badge badge--success">Подтверждено, единицы закреплены</span> <span class="badge badge--info"><span class="spinner" aria-hidden="true"></span>Закрепление передаётся в АИСТ-М</span></dd>
+<dt>Основание</dt>
+<dd><a href="/operator/tasks/7f3a">Задание 7f3a</a></dd>
+</dl>
+</section>

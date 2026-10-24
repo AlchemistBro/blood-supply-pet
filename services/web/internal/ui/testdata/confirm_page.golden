@@ -1,0 +1,15 @@
+<section class="card">
+<form class="confirm-form" method="post" action="/operator/tasks/7f3a/reject">
+<input type="hidden" name="csrf_token" value="tok123">
+<input type="hidden" name="idempotency_key" value="k-1">
+<p class="confirm-form__consequence">Задание будет отклонено, подбор предложит следующий источник.</p>
+<div class="field">
+<label for="reject-reason">Причина<span class="field__required" aria-hidden="true"> *</span></label>
+<textarea id="reject-reason" name="reason" aria-required="true"></textarea>
+</div>
+<div class="form-actions">
+<button type="submit" class="btn btn--danger-solid">Отказать</button>
+<a class="btn" href="/operator/tasks/7f3a">Отмена</a>
+</div>
+</form>
+</section>

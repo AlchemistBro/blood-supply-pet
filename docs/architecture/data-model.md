@@ -83,6 +83,7 @@ erDiagram
         varchar sync_result "SUCCESS | PARTIAL | FAILED"
         integer changes_count
         text error_text
+        bigint source_version "курсор опроса изменений"
     }
     aist_outbox_message {
         uuid aist_outbox_message_id PK
@@ -98,8 +99,23 @@ erDiagram
     }
 ```
 
+Дополнения к словарю ПР6 в базе `inventory`:
+
+- `sync_run.source_version` — курсор опроса изменений ИНТ-01: последняя версия АИСТ-М (`last_version` ответа), применённая
+  сеансом. Двигается в транзакции каждой страницы вместе с единицами и outbox. Следующий сеанс продолжает от курсора
+  последнего сеанса `CHANGES` (а не от максимума): если источник сообщил `current_version` меньше курсора (перезапуск
+  имитатора), сеанс начинается с 0, в `error_text` пишется примечание. Отброшенные записи источника делают сеанс `PARTIAL`
+  с числом отброшенных в `error_text`; водяной знак двигает только `SUCCESS`.
+- `protected_volume_version_seq` — последовательность версий `ProtectedVolumePublished` для демо-публикации защищённого
+  объёма до появления `planning`: версия растёт только вперёд.
+- Строки `unit` не удаляются, строки `unit_status_history` не изменяются и не удаляются (триггеры): прослеживаемость
+  единицы до конечного использования (ПП РФ № 641).
+
 Представление `actual_stock` (O02): `clinic_id, component_kind_code, blood_group_code, unit_count, volume_ml, nearest_expiry`
 по единицам со статусом `is_available` и `expires_at > now()`. Индекс `(clinic_id, component_kind_code, blood_group_code, expires_at)`.
+Расчёт вынесен в SQL-функции с моментом годности параметром: `available_unit_at(p_at)` (единицы запаса) и
+`actual_stock_at(p_at)` (сводка); представление `actual_stock` — `actual_stock_at(now())`. Сервис передаёт время своих
+часов (`Clock`), поэтому сроки в тестах воспроизводимы. Для FEFO (FR015) — индекс `(clinic_id, expires_at, unit_id)`.
 
 Справочник статусов единицы `ref_unit_status` (в ПР6 `unit_status_dict`) создаётся миграцией `libs/refdata` `00003` и
 сидируется из `libs/refdata` во все базы (версия набора справочников 2).

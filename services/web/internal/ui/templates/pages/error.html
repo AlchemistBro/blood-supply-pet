@@ -1,0 +1,9 @@
+{{/* Страница ошибки: 403, 404, 500. Page.Content — ErrorView. Текст человеческим русским языком, без подробностей. */}}
+{{define "content" -}}
+{{with .Content}}
+<section class="card">
+<p>{{.Text}}</p>
+{{with .BackURL}}<a class="btn" href="{{.}}">Вернуться на главную</a>{{end}}
+</section>
+{{end}}
+{{- end}}

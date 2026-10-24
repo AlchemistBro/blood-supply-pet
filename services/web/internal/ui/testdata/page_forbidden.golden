@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false,"selfRequestsOnly":true,"historyCacheSize":0,"refreshOnHistoryMiss":true}'>
+<title>Недостаточно прав · АС распределения компонентов донорской крови</title>
+<link rel="icon" href="/static/img/emblem.svg?v=test" type="image/svg+xml">
+<link rel="stylesheet" href="/static/css/app.css?v=test">
+<script src="/static/vendor/htmx.min.js?v=test" defer></script>
+<script src="/static/vendor/ext/sse.js?v=test" defer></script>
+<script src="/static/js/app.js?v=test" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Перейти к содержимому</a>
+<header class="topbar">
+<a class="topbar__brand" href="/">
+<img class="topbar__emblem" src="/static/img/emblem.svg?v=test" alt="" width="32" height="32">
+<span class="topbar__title">АС распределения компонентов донорской крови</span>
+</a>
+</header>
+<div class="shell shell--no-nav">
+<main id="main" class="content" tabindex="-1">
+<div class="page-heading">
+<h1>Недостаточно прав</h1>
+<div class="page-actions">
+</div>
+</div>
+<div class="flashes" id="flashes" aria-live="polite"></div>
+<section class="card">
+<p>У вашей роли нет доступа к этому разделу. Если доступ нужен для работы, обратитесь во внешнюю ИТ-службу.</p>
+<a class="btn" href="/">Вернуться на главную</a>
+</section>
+</main>
+</div>
+<footer class="footer">
+<span class="footer__demo">Демонстрационные данные и правила. Клиническое решение принимает врач.</span>
+<span>Версия v0.2.0</span>
+</footer>
+</body>
+</html>

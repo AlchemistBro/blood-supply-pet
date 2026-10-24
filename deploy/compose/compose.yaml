@@ -157,6 +157,113 @@ services:
     ports: ["8108:8080"]
     depends_on: *service-deps
 
+  web:
+    build: { context: ../.., dockerfile: deploy/docker/Dockerfile, args: { SERVICE: web, VERSION: "${IMAGE_TAG:-dev}" } }
+    image: ghcr.io/alchemistbro/blood-supply-web:${IMAGE_TAG:-dev}
+    profiles: ["services"]
+    environment:
+      <<: *service-env
+      # Без базы (ADR-0018): сессия в зашифрованной cookie, аудит по HTTP (ADR-0017).
+      BS_WEB_PUBLIC_URL: ${WEB_PUBLIC_URL:-https://localhost}
+      BS_OIDC_DISCOVERY_URL: http://keycloak:8080/realms/blood-supply
+      BS_OIDC_CLIENT_ID: web
+      BS_OIDC_CLIENT_SECRET: web-demo-secret
+      # Демо-ключ по умолчанию: старый .env без BS_SESSION_KEY не ломает стенд.
+      BS_SESSION_KEY: ${BS_SESSION_KEY:-/SOEjDxUt7nj0eKQL+i7zzr82TvK/a2fNw4TZh596RU=}
+      # HSTS на localhost перевёл бы браузер на https и для Keycloak на http://localhost:8180 (HSTS не
+      # различает порты), и вход сломался бы. В Kubernetes и проде заголовок включён (значение по умолчанию).
+      BS_HSTS_MAX_AGE: "0"
+      BS_AUDIT_URL: http://audit:8080
+      BS_SERVICE_CLIENT_ID: services
+      BS_SERVICE_CLIENT_SECRET: services-demo-secret
+    ports: ["8080:8080"]
+    depends_on:
+      keycloak: { condition: service_healthy }
+      audit: { condition: service_started }
+  # Сага подтверждения (этап 1): inventory, transfer, logistics-gateway и имитаторы C01, C03.
+  # Порты снаружи: inventory 8101, transfer 8105, logistics-gateway 8106, sim-aist 8201, sim-logistics 8203.
+  # Образ distroless без shell: проверка здоровья — бинарник /healthcheck (tools/healthcheck).
+  inventory:
+    build: { context: ../.., dockerfile: deploy/docker/Dockerfile, args: { SERVICE: inventory, VERSION: "${IMAGE_TAG:-dev}" } }
+    image: ghcr.io/alchemistbro/blood-supply-inventory:${IMAGE_TAG:-dev}
+    profiles: ["services"]
+    environment:
+      <<: *service-env
+      BS_DB_URL: postgres://inventory:inventory@postgres:5432/inventory?sslmode=disable
+      BS_AIST_URL: http://sim-aist:8201
+      # Демо-стенд: опрос АИСТ-М чаще значения по умолчанию, чтобы сквозные сценарии шли быстрее.
+      BS_AIST_POLL_INTERVAL: 1s
+    ports: ["8101:8080"]
+    healthcheck: &service-health
+      test: ["CMD", "/healthcheck", "http://127.0.0.1:8080/healthz"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+      start_period: 10s
+    depends_on:
+      <<: *service-deps
+      sim-aist: { condition: service_healthy }
+
+  transfer:
+    build: { context: ../.., dockerfile: deploy/docker/Dockerfile, args: { SERVICE: transfer, VERSION: "${IMAGE_TAG:-dev}" } }
+    image: ghcr.io/alchemistbro/blood-supply-transfer:${IMAGE_TAG:-dev}
+    profiles: ["services"]
+    environment:
+      <<: *service-env
+      BS_DB_URL: postgres://transfer:transfer@postgres:5432/transfer?sslmode=disable
+      # Единственный синхронный вызов между сервисами (ADR-0004): статус единиц в inventory.
+      BS_INVENTORY_URL: http://inventory:8080
+      # Служебный токен (client credentials) берётся у Keycloak внутри сети compose; iss в токене —
+      # публичный адрес (KC_HOSTNAME), его и проверяет inventory.
+      BS_SERVICE_TOKEN_URL: http://keycloak:8080/realms/blood-supply/protocol/openid-connect/token
+      BS_SERVICE_CLIENT_ID: services
+      BS_SERVICE_CLIENT_SECRET: ${SERVICES_CLIENT_SECRET:-services-demo-secret}
+    ports: ["8105:8080"]
+    healthcheck: *service-health
+    depends_on:
+      <<: *service-deps
+      inventory: { condition: service_healthy }
+
+  logistics-gateway:
+    build: { context: ../.., dockerfile: deploy/docker/Dockerfile, args: { SERVICE: logistics-gateway, VERSION: "${IMAGE_TAG:-dev}" } }
+    image: ghcr.io/alchemistbro/blood-supply-logistics-gateway:${IMAGE_TAG:-dev}
+    profiles: ["services"]
+    environment:
+      <<: *service-env
+      BS_DB_URL: postgres://logistics:logistics@postgres:5432/logistics?sslmode=disable
+      BS_C03_URL: http://sim-logistics:8203
+    ports: ["8106:8080"]
+    healthcheck: *service-health
+    depends_on:
+      <<: *service-deps
+      sim-logistics: { condition: service_healthy }
+
+  sim-aist:
+    build: { context: ../.., dockerfile: deploy/docker/Dockerfile, args: { SERVICE: sim-aist, VERSION: "${IMAGE_TAG:-dev}" } }
+    image: ghcr.io/alchemistbro/blood-supply-sim-aist:${IMAGE_TAG:-dev}
+    profiles: ["services"]
+    environment:
+      BS_HTTP_ADDR: ":8201"
+      BS_LOG_LEVEL: info
+    ports: ["8201:8201"]
+    healthcheck:
+      <<: *service-health
+      test: ["CMD", "/healthcheck", "http://127.0.0.1:8201/healthz"]
+
+  sim-logistics:
+    build: { context: ../.., dockerfile: deploy/docker/Dockerfile, args: { SERVICE: sim-logistics, VERSION: "${IMAGE_TAG:-dev}" } }
+    image: ghcr.io/alchemistbro/blood-supply-sim-logistics:${IMAGE_TAG:-dev}
+    profiles: ["services"]
+    environment:
+      BS_HTTP_ADDR: ":8203"
+      BS_ENV: local
+      BS_LOG_LEVEL: info
+      BS_OTEL_ENDPOINT: otel-lgtm:4318
+    ports: ["8203:8203"]
+    healthcheck:
+      <<: *service-health
+      test: ["CMD", "/healthcheck", "http://127.0.0.1:8203/healthz"]
+
 volumes:
   pgdata:
   kafkadata:
