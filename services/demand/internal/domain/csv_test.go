@@ -476,7 +476,8 @@ func TestParse_LimitsRejectFile(t *testing.T) {
 
 	lines := []string{shareHeader}
 	for i := 0; i <= MaxDataRows; i++ {
-		lines = append(lines, shareRow("D01", "C001", "1"))
+		// Короткая строка изолирует лимит количества от отдельного лимита 5 МиБ.
+		lines = append(lines, "D01;C001;1;D;D;2026-01-01;2026-12-31")
 	}
 	if f := ParseClinicShares(csvOf(lines...), ref); f.Status != StatusRejected || !strings.Contains(f.FileError, "больше 50000 строк") {
 		t.Fatalf("число строк: %s %q", f.Status, f.FileError)

@@ -24,7 +24,7 @@ func msg(typ, payload string) messaging.Message {
 	return messaging.Message{ID: uuid.New(), Type: typ, Topic: "test", Payload: []byte(payload)}
 }
 
-// Ядовитые сообщения — постоянная ошибка (DLT), чужие известные типы — пропуск, доставка — пропуск до этапа 7.
+// Ядовитые сообщения — постоянная ошибка (DLT), чужие известные типы — пропуск.
 func TestMessageClassification(t *testing.T) {
 	h := handlers()
 	ctx := context.Background()
@@ -39,6 +39,20 @@ func TestMessageClassification(t *testing.T) {
 		{"битый JSON команды", func() error { return h.Commands(ctx, msg("OpenObligation", `{`)) }, true},
 		{"битый JSON события", func() error { return h.Inventory(ctx, msg("UnitWithdrawn", `{`)) }, true},
 		{"битый JSON ответа", func() error { return h.Logistics(ctx, msg("TransportAccepted", `{`)) }, true},
+		{"доставка без идентификатора и времени", func() error { return h.Logistics(ctx, msg("TransportDelivered", `{}`)) }, true},
+		{"отправка без идентификатора и времени", func() error { return h.Logistics(ctx, msg("TransportDispatched", `{}`)) }, true},
+		{"доставка без идентификатора", func() error {
+			return h.Logistics(ctx, msg("TransportDelivered", `{"delivered_at":"2026-10-24T12:00:00Z"}`))
+		}, true},
+		{"доставка без времени", func() error {
+			return h.Logistics(ctx, msg("TransportDelivered", `{"obligation_id":"01920000-0000-7000-8000-000000000001"}`))
+		}, true},
+		{"отправка без идентификатора", func() error {
+			return h.Logistics(ctx, msg("TransportDispatched", `{"dispatched_at":"2026-10-24T12:00:00Z"}`))
+		}, true},
+		{"отправка без времени", func() error {
+			return h.Logistics(ctx, msg("TransportDispatched", `{"obligation_id":"01920000-0000-7000-8000-000000000001"}`))
+		}, true},
 		{"отрицательный защищённый объём", func() error {
 			return h.Inventory(ctx, msg("ProtectedVolumePublished", `{"clinic_id":1,"component_kind":"RBC","volume_units":-1,"version":1,"reason":"x"}`))
 		}, true},
@@ -50,7 +64,6 @@ func TestMessageClassification(t *testing.T) {
 	}
 	for name, run := range map[string]func() error{
 		"известный чужой тип":     func() error { return h.Inventory(ctx, msg("TransferConfirmed", `{}`)) },
-		"доставка до этапа 7":     func() error { return h.Logistics(ctx, msg("TransportDelivered", `{}`)) },
 		"команда шлюзу в ответах": func() error { return h.Logistics(ctx, msg("RequestTransport", `{}`)) },
 	} {
 		if err := run(); err != nil {

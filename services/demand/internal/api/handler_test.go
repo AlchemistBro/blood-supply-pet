@@ -56,6 +56,11 @@ var routes = []route{
 	{"GET", "/history", "/history"},
 	{"GET", "/shares/versions", "/shares/versions"},
 	{"GET", "/shares/current", "/shares/current"},
+	{"GET", "/estimates", "/estimates"},
+	{"POST", "/estimates", "/estimates"},
+	{"GET", "/estimates/{id}", "/estimates/0192f3a1-7b2c-7d4e-8f90-000000000001"},
+	{"POST", "/estimates/{id}/publish", "/estimates/0192f3a1-7b2c-7d4e-8f90-000000000001/publish"},
+	{"POST", "/estimates/{id}/reject", "/estimates/0192f3a1-7b2c-7d4e-8f90-000000000001/reject"},
 }
 
 func multipartBody(t *testing.T, kind, name string, content []byte) (*bytes.Buffer, string) {
@@ -125,8 +130,12 @@ func do(t *testing.T, srv *httptest.Server, r route, token string) reply {
 // Каждый эндпоинт: роль без права получает 403 и запись об отказе (аудит ACCESS_DENIED в сервисе).
 func TestEveryRouteForbiddenForRolesWithoutRight(t *testing.T) {
 	srv, denied := server(t)
-	for _, role := range []auth.Role{auth.RoleOperator, auth.RolePhysician, auth.RoleDuty, auth.RoleITService, auth.RoleService} {
+	for _, role := range []auth.Role{auth.RoleOperator, auth.RolePhysician, auth.RoleDuty, auth.RoleITService, auth.RoleService, auth.RoleAnalyst} {
 		for _, r := range routes {
+			op := operations[r.method+" "+r.pattern]
+			if auth.Allowed(op, []auth.Role{role}) {
+				continue
+			}
 			t.Run(string(role)+" "+r.method+" "+r.pattern, func(t *testing.T) {
 				before := len(*denied)
 				resp := do(t, srv, r, string(role))
@@ -136,7 +145,7 @@ func TestEveryRouteForbiddenForRolesWithoutRight(t *testing.T) {
 				if resp.Header.Get("Content-Type") != "application/problem+json" {
 					t.Fatalf("тип ответа %q", resp.Header.Get("Content-Type"))
 				}
-				if len(*denied) != before+1 || (*denied)[before].op != auth.OpUploadStatistics {
+				if len(*denied) != before+1 || (*denied)[before].op != op {
 					t.Fatalf("отказ не зафиксирован: %+v", *denied)
 				}
 			})

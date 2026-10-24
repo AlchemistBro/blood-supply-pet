@@ -26,6 +26,7 @@ func TestPlanningDeniesEveryRoleWithoutPermission(t *testing.T) {
 			}
 			method, path, _ := strings.Cut(pattern, " ")
 			path = strings.ReplaceAll(path, "{id}", uuid.NewString())
+			path = strings.ReplaceAll(path, "{lineId}", uuid.NewString())
 			r := httptest.NewRequest(method, path, strings.NewReader(`{}`))
 			r.Header.Set("Content-Type", "application/json")
 			r.Header.Set("Authorization", "Bearer "+idp.Token(t, authtest.TokenOptions{Username: "user", Roles: []auth.Role{role}}))

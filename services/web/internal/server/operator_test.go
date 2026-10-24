@@ -72,7 +72,11 @@ func TestOperatorConfirmWorksWithoutJavaScript(t *testing.T) {
 			rec := e.do(http.MethodPost, "/tasks/"+taskID+"/confirm", j, postForm(url.Values{
 				"csrf_token": {csrfOf(t, e, j)}, "unit_ids": {unitID}, "idempotency_key": {"form-key"},
 			}))
-			if rec.Code != status || *calls != 1 || !strings.Contains(rec.Body.String(), "Результат подтверждения") {
+			want := "Результат подтверждения"
+			if status == http.StatusServiceUnavailable {
+				want = "Сервис временно недоступен"
+			}
+			if rec.Code != status || *calls != 1 || !strings.Contains(rec.Body.String(), want) {
 				t.Fatalf("ответ формы: %d, вызовов %d, %s", rec.Code, *calls, rec.Body.String())
 			}
 		})

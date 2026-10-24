@@ -10,6 +10,8 @@ import (
 	"math"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/AlchemistBro/blood-supply-pet/libs/contracts"
 	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/inventory"
 	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/logistics"
@@ -136,6 +138,9 @@ func (h *Handlers) Logistics(ctx context.Context, msg messaging.Message) error {
 		if err := decode(msg, &e); err != nil {
 			return err
 		}
+		if e.ObligationID == uuid.Nil || e.DeliveredAt.IsZero() {
+			return messaging.Permanent(app.ErrInvalidEvent)
+		}
 		intact := e.ContainerIntact != nil && *e.ContainerIntact
 		excursion := e.TempExcursion != nil && *e.TempExcursion
 		return h.svc.Receive(ctx, &msg, app.ReceiveInput{ObligationID: e.ObligationID, TransportRef: e.ShipmentRef, Actor: msg.Producer, Role: "SERVICE", At: e.DeliveredAt, Temperature: e.TemperatureAtArrivalC, DepartureTemperature: e.TemperatureAtDispatchC, ContainerIntact: intact, TemperatureExcursion: excursion})
@@ -143,6 +148,9 @@ func (h *Handlers) Logistics(ctx context.Context, msg messaging.Message) error {
 		var e logistics.TransportDispatched
 		if err := decode(msg, &e); err != nil {
 			return err
+		}
+		if e.ObligationID == uuid.Nil || e.DispatchedAt.IsZero() {
+			return messaging.Permanent(app.ErrInvalidEvent)
 		}
 		intact := e.ContainerIntact != nil && *e.ContainerIntact
 		return h.svc.Dispatch(ctx, &msg, app.DispatchInput{ObligationID: e.ObligationID, TransportRef: e.ShipmentRef, CourierRef: e.CourierRef, Actor: msg.Producer, Role: "SERVICE", At: e.DispatchedAt, Temperature: e.TemperatureAtDispatchC, ContainerIntact: intact})

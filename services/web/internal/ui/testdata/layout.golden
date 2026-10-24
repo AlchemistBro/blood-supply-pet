@@ -65,7 +65,7 @@
 </main>
 </div>
 <footer class="footer">
-<span class="footer__demo">Демонстрационные данные и правила. Клиническое решение принимает врач.</span>
+<span class="footer__demo">Демонстрационная система. Данные и правила синтетические. Клиническое решение принимает врач.</span>
 <span>Версия v0.2.0</span>
 <a href="https://github.com/AlchemistBro/blood-supply-pet">Исходный код</a>
 </footer>

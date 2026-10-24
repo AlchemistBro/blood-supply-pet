@@ -228,7 +228,7 @@ func TestLoginFlow(t *testing.T) {
 		t.Fatalf("главная после входа: %d", rec.Code)
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, "operator-c001") || !strings.Contains(body, "Оператор клиники") || !strings.Contains(body, "№ 1") {
+	if !strings.Contains(body, "operator-c001") || !strings.Contains(body, "Оператор клинической организации") || !strings.Contains(body, "№ 1") {
 		t.Fatalf("в шапке логин, роль и клиника: %s", body)
 	}
 }
