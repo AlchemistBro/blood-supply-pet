@@ -17,8 +17,7 @@ import (
 type SSEConfig struct {
 	// Heartbeat — период комментария-пульса: прокси и балансировщики не рвут «молчащее» соединение.
 	Heartbeat time.Duration
-	// MaxStream — сколько держать поток, если снять дедлайн записи сервера нельзя (WriteTimeout 60 с
-	// в libs/httpx): поток закрывается раньше, браузер переподключается сам через retry.
+	// MaxStream — предельная длительность потока: при переподключении снова проверяются сессия и права.
 	MaxStream time.Duration
 }
 
@@ -84,13 +83,10 @@ func (s *SSE) serve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rc := http.NewResponseController(w)
-	// Поток живёт дольше WriteTimeout сервера: дедлайн записи снимается; если обёртки не дают — MaxStream.
-	var limit <-chan time.Time
-	if err := rc.SetWriteDeadline(time.Time{}); err != nil {
-		timer := time.NewTimer(s.cfg.MaxStream)
-		defer timer.Stop()
-		limit = timer.C
-	}
+	// Переподключение ограничивает время жизни уже проверенных прав и обновляет токен сессии.
+	_ = rc.SetWriteDeadline(time.Time{})
+	timer := time.NewTimer(s.cfg.MaxStream)
+	defer timer.Stop()
 
 	sub := s.hub.Subscribe(clinic)
 	defer s.hub.Unsubscribe(sub)
@@ -117,7 +113,7 @@ func (s *SSE) serve(w http.ResponseWriter, r *http.Request) {
 		case <-sub.Done():
 			// Медленный подписчик отключён хабом: браузер переподключится и получит свежие данные страницы.
 			return
-		case <-limit:
+		case <-timer.C:
 			return
 		case <-ticker.C:
 			_, err = io.WriteString(w, ": ping\n\n")
