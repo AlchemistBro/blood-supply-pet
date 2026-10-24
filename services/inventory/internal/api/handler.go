@@ -24,6 +24,7 @@ const (
 // operations — операция матрицы прав для каждого маршрута; совпадает с x-bs-operation в openapi.yaml
 // (проверяет TestEveryOperationHasPolicy).
 var operations = map[string]auth.Operation{
+	"GET /internal/sync-status":            auth.OpReadAudit,
 	"PUT /clinics/{id}/annual-consumption": auth.OpEnterConsumption,
 	"GET /clinics/{id}/norms":              auth.OpViewStock,
 	"POST /clinics/{id}/sync":              auth.OpSyncOnDemand,

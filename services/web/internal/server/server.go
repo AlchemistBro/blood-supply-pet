@@ -43,6 +43,7 @@ type OIDC interface {
 
 // Config — настройки web.
 type Config struct {
+	ObservabilityURL, MailpitURL string
 	// SessionTTL — абсолютный срок сессии (BS_SESSION_TTL).
 	SessionTTL time.Duration
 	// CookieSecure — атрибут Secure у cookie (BS_COOKIE_SECURE).
@@ -57,38 +58,40 @@ type Config struct {
 
 // Deps — зависимости сервера.
 type Deps struct {
-	AuditReader *svcclient.Client
-	Matching    *svcclient.Client
-	Planning    *svcclient.Client
-	Demand      *svcclient.Client
-	Transfer    *svcclient.Client
-	Inventory   *svcclient.Client
-	OIDC        OIDC
-	Codec       *session.Codec
-	Audit       auditclient.Recorder
-	Clock       clock.Clock
-	Log         *slog.Logger
+	Logistics, Notification *svcclient.Client
+	AuditReader             *svcclient.Client
+	Matching                *svcclient.Client
+	Planning                *svcclient.Client
+	Demand                  *svcclient.Client
+	Transfer                *svcclient.Client
+	Inventory               *svcclient.Client
+	OIDC                    OIDC
+	Codec                   *session.Codec
+	Audit                   auditclient.Recorder
+	Clock                   clock.Clock
+	Log                     *slog.Logger
 }
 
 // Server — обработчики и middleware web.
 type Server struct {
-	auditReader *svcclient.Client
-	matching    *svcclient.Client
-	planning    *svcclient.Client
-	demand      *svcclient.Client
-	transfer    *svcclient.Client
-	inventory   *svcclient.Client
-	ui          *ui.Renderer
-	cfg         Config
-	oidc        OIDC
-	sessions    *session.Store
-	login       *session.Store
-	audit       auditclient.Recorder
-	guard       *authz.Guard
-	clock       clock.Clock
-	log         *slog.Logger
-	pages       *pages
-	csp         string
+	logistics, notification *svcclient.Client
+	auditReader             *svcclient.Client
+	matching                *svcclient.Client
+	planning                *svcclient.Client
+	demand                  *svcclient.Client
+	transfer                *svcclient.Client
+	inventory               *svcclient.Client
+	ui                      *ui.Renderer
+	cfg                     Config
+	oidc                    OIDC
+	sessions                *session.Store
+	login                   *session.Store
+	audit                   auditclient.Recorder
+	guard                   *authz.Guard
+	clock                   clock.Clock
+	log                     *slog.Logger
+	pages                   *pages
+	csp                     string
 	// mux — маршруты web: белый список адресов возврата после входа (safeNext).
 	mux *http.ServeMux
 }
@@ -114,6 +117,7 @@ func New(cfg Config, d Deps) (*Server, error) {
 		return nil, err
 	}
 	s := &Server{
+		logistics: d.Logistics, notification: d.Notification,
 		auditReader: d.AuditReader,
 		matching:    d.Matching,
 		planning:    d.Planning,
@@ -158,6 +162,9 @@ func (s *Server) Register(mux *http.ServeMux) {
 	}
 	if s.auditReader != nil {
 		s.registerAudit(mux)
+	}
+	if s.inventory != nil && s.logistics != nil && s.notification != nil {
+		s.registerIntegrations(mux)
 	}
 }
 

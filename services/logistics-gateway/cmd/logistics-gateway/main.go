@@ -14,6 +14,7 @@ import (
 	"github.com/AlchemistBro/blood-supply-pet/services/logistics-gateway/internal/adapters/c03"
 	"github.com/AlchemistBro/blood-supply-pet/services/logistics-gateway/internal/adapters/kafka"
 	"github.com/AlchemistBro/blood-supply-pet/services/logistics-gateway/internal/adapters/postgres"
+	"github.com/AlchemistBro/blood-supply-pet/services/logistics-gateway/internal/api"
 	"github.com/AlchemistBro/blood-supply-pet/services/logistics-gateway/internal/app"
 	"github.com/AlchemistBro/blood-supply-pet/services/logistics-gateway/migrations"
 )
@@ -34,6 +35,7 @@ func main() {
 			gw := app.New(rt.Pool, postgres.New(rt.Pool), carrier,
 				kafka.Outbox{Journal: rt.Journal, Topic: contracts.TopicLogisticsReplies}, rt.Clock, rt.Log, cfg.settings())
 			progress := app.ProgressFeed{Store: postgres.ProgressStore{Pool: rt.Pool, Journal: rt.Journal}, Source: carrier, Clock: rt.Clock, Log: rt.Log}
+			api.Mount(rt.Mux, postgres.ProgressStore{Pool: rt.Pool, Journal: rt.Journal}.Status, rt.Deny())
 			workers := []runtime.Worker{estimates.Run, progress.Run}
 			if cfg.ReconcilerEnabled {
 				workers = append(workers, gw.RunReconciler)

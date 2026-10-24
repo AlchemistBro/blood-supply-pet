@@ -25,6 +25,13 @@ type ProgressOrder struct {
 	ID          uuid.UUID
 	ShipmentRef string
 }
+
+type TransportStatus struct {
+	ID                                 uuid.UUID
+	Status, ShipmentRef, LastError     string
+	UpdatedAt                          time.Time
+	DispatchReported, DeliveryReported bool
+}
 type ProgressSource interface {
 	Progress(context.Context, ProgressOrder) (ShipmentProgress, error)
 }

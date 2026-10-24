@@ -28,11 +28,15 @@ import (
 
 // config — переменные web сверх общих (BS_OIDC_ISSUER, BS_OIDC_AUDIENCE и прочие читает runtime).
 type config struct {
-	MatchingURL  string `env:"BS_MATCHING_URL" envDefault:"http://matching:8080"`
-	PlanningURL  string `env:"BS_PLANNING_URL" envDefault:"http://planning:8080"`
-	DemandURL    string `env:"BS_DEMAND_URL" envDefault:"http://demand:8080"`
-	TransferURL  string `env:"BS_TRANSFER_URL" envDefault:"http://transfer:8080"`
-	InventoryURL string `env:"BS_INVENTORY_URL" envDefault:"http://inventory:8080"`
+	LogisticsURL     string `env:"BS_LOGISTICS_URL" envDefault:"http://logistics-gateway:8080"`
+	NotificationURL  string `env:"BS_NOTIFICATION_URL" envDefault:"http://notification:8080"`
+	ObservabilityURL string `env:"BS_OBSERVABILITY_URL"`
+	MailpitURL       string `env:"BS_MAILPIT_URL"`
+	MatchingURL      string `env:"BS_MATCHING_URL" envDefault:"http://matching:8080"`
+	PlanningURL      string `env:"BS_PLANNING_URL" envDefault:"http://planning:8080"`
+	DemandURL        string `env:"BS_DEMAND_URL" envDefault:"http://demand:8080"`
+	TransferURL      string `env:"BS_TRANSFER_URL" envDefault:"http://transfer:8080"`
+	InventoryURL     string `env:"BS_INVENTORY_URL" envDefault:"http://inventory:8080"`
 	// PublicURL — адрес web, который видит браузер (redirect_uri и возврат после выхода).
 	PublicURL string `env:"BS_WEB_PUBLIC_URL" envDefault:"http://localhost:8080"`
 	// OIDCDiscoveryURL — адрес realm изнутри сети (compose: http://keycloak:8080/realms/blood-supply).
@@ -105,9 +109,11 @@ func setup(ctx context.Context, rt *runtime.Runtime) ([]runtime.Worker, error) {
 	}
 
 	srv, err := server.New(server.Config{
+		ObservabilityURL: cfg.ObservabilityURL, MailpitURL: cfg.MailpitURL,
 		SessionTTL: cfg.SessionTTL, CookieSecure: cfg.CookieSecure, HSTSMaxAge: cfg.HSTSMaxAge,
 		DemoAccess: cfg.DemoAccess, Version: runtime.Version,
 	}, server.Deps{OIDC: client, Codec: codec, Audit: recorder, Clock: rt.Clock, Log: rt.Log,
+		Logistics: svcclient.New("logistics-gateway", cfg.LogisticsURL), Notification: svcclient.New("notification", cfg.NotificationURL),
 		AuditReader: auditReader(cfg.AuditURL),
 		Matching:    svcclient.New("matching", cfg.MatchingURL),
 		Planning:    svcclient.New("planning", cfg.PlanningURL),

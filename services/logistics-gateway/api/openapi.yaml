@@ -2,12 +2,36 @@ openapi: 3.0.3
 info:
   title: logistics-gateway
   version: 0.1.0
-  description: "Шлюз перевозчика C03. Бизнес-эндпоинтов нет: команды и ответы идут через Kafka (logistics.commands, logistics.replies); служебные /healthz, /readyz, /metrics отдаёт libs/runtime."
+  description: "Шлюз перевозчика C03. Команды и ответы идут через Kafka; техническое состояние заказов доступно дежурному и ИТ-службе через HTTP. Служебные /healthz, /readyz, /metrics отдаёт libs/runtime."
 servers:
   - url: http://localhost:8106
-paths: {}
+paths:
+  /internal/transport-status:
+    get:
+      operationId: transportStatus
+      x-bs-operation: READ_AUDIT
+      summary: Последние заказы и ошибки шлюза для дежурного и ИТ-службы
+      responses:
+        "200":
+          description: До 100 последних заказов
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TransportStatus" }
 components:
   schemas:
+    TransportStatus:
+      type: object
+      required: [obligation_id, status, shipment_ref, last_error, updated_at, dispatch_reported, delivery_reported]
+      properties:
+        obligation_id: { type: string, format: uuid }
+        status: { type: string }
+        shipment_ref: { type: string }
+        last_error: { type: string }
+        updated_at: { type: string, format: date-time }
+        dispatch_reported: { type: boolean }
+        delivery_reported: { type: boolean }
     Problem:
       type: object
       required: [title, status]
