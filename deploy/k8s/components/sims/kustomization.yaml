@@ -30,3 +30,12 @@ configMapGenerator:
       - BS_OTEL_ENDPOINT=otel-lgtm.bs-observability.svc:4318
       # ИНТ-02: прогноз ЧС идёт в planning напрямую, минуя ingress (на входе — белый список полей, NFR010).
       - BS_PLANNING_URL=http://planning.bs-app.svc:8103
+      - BS_SERVICE_TOKEN_URL=http://keycloak.bs-edge.svc:8080/auth/realms/blood-supply/protocol/openid-connect/token
+
+# Только local/ci: тот же демо-клиент, который импортируется в Keycloak.
+secretGenerator:
+  - name: sim-emergency-client
+    namespace: bs-sims
+    literals:
+      - BS_SERVICE_CLIENT_ID=services
+      - BS_SERVICE_CLIENT_SECRET=services-demo-secret

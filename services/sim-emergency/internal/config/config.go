@@ -15,9 +15,12 @@ import (
 
 // Config — переменные окружения имитатора.
 type Config struct {
-	HTTPAddr  string `env:"BS_HTTP_ADDR" envDefault:":8202"`
-	LogLevel  string `env:"BS_LOG_LEVEL" envDefault:"info"`
-	LogFormat string `env:"BS_LOG_FORMAT" envDefault:"json"`
+	ServiceTokenURL     string `env:"BS_SERVICE_TOKEN_URL"`
+	ServiceClientID     string `env:"BS_SERVICE_CLIENT_ID" envDefault:"services"`
+	ServiceClientSecret string `env:"BS_SERVICE_CLIENT_SECRET"`
+	HTTPAddr            string `env:"BS_HTTP_ADDR" envDefault:":8202"`
+	LogLevel            string `env:"BS_LOG_LEVEL" envDefault:"info"`
+	LogFormat           string `env:"BS_LOG_FORMAT" envDefault:"json"`
 	// PlanningURL — база planning или nginx (с префиксом /api); путь /int/forecast добавляется.
 	PlanningURL string `env:"BS_PLANNING_URL" envDefault:"http://planning:8103"`
 	// NoAuth — отправлять без служебного токена (только локальная разработка).

@@ -2,6 +2,24 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
+  name: keycloak-sim-emergency-ingress
+  namespace: bs-edge
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: keycloak}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: {blood-supply.io/segment: sims}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: sim-emergency}
+      ports:
+        - {protocol: TCP, port: 8080}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
   name: default-deny
   namespace: bs-sims
 spec:
@@ -92,6 +110,13 @@ spec:
     matchLabels: {app.kubernetes.io/name: sim-emergency}
   policyTypes: [Egress]
   egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {blood-supply.io/segment: edge}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: keycloak}
+      ports:
+        - {protocol: TCP, port: 8080}
     - to:
         - namespaceSelector:
             matchLabels: {blood-supply.io/segment: app}

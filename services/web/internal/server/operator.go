@@ -102,6 +102,9 @@ func (s *Server) screenPage(r *http.Request, title string) ui.Page {
 	if s.demand != nil && auth.Allowed(auth.OpViewDemand, p.Roles) {
 		page.Nav = append(page.Nav, ui.NavItem{Label: "Потребность территории", URL: "/demand", Active: strings.HasPrefix(r.URL.Path, "/demand")})
 	}
+	if s.planning != nil && auth.Allowed(auth.OpViewPlan, p.Roles) {
+		page.Nav = append(page.Nav, ui.NavItem{Label: "План пополнения", URL: "/plans", Active: strings.HasPrefix(r.URL.Path, "/plans")})
+	}
 	if s.inventory != nil && auth.Allowed(auth.OpViewStock, p.Roles) {
 		page.Nav = append(page.Nav, ui.NavItem{Label: "Запас клиники", URL: "/stock", Active: strings.HasPrefix(r.URL.Path, "/stock")})
 		var sync struct {

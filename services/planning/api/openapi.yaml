@@ -5,9 +5,218 @@ info:
   description: "Контракт сервиса planning. Источник истины для HTTP: код сервера генерируется из этого файла."
 servers:
   - url: http://localhost:8103
-paths: {}
+paths:
+  /deficits:
+    get:
+      operationId: listDeficits
+      x-bs-operation: VIEW_PLAN
+      parameters:
+        - { name: clinic, in: query, schema: { type: integer, format: int64 } }
+        - { name: record_type, in: query, schema: { type: string } }
+        - { name: reason, in: query, schema: { type: string } }
+      responses:
+        "200": { description: Реестр дефицита, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/DeficitRecord" } } } } }
+  /forecasts:
+    get:
+      operationId: listForecasts
+      x-bs-operation: VIEW_PLAN
+      responses:
+        "200": { description: Последние прогнозы, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Forecast" } } } } }
+  /forecasts/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getForecast
+      x-bs-operation: VIEW_PLAN
+      responses:
+        "200": { description: Прогноз, content: { application/json: { schema: { $ref: "#/components/schemas/Forecast" } } } }
+  /forecasts/{id}/lines/{lineId}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: lineId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: adjustForecast
+      x-bs-operation: ADJUST_FORECAST
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [volume_ml, clinic_code, reason]
+              properties:
+                volume_ml: { type: integer, format: int64, minimum: 0, maximum: 1000000000 }
+                clinic_code: { type: string }
+                reason: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        "200":
+          description: Новая версия прогноза; исходная остаётся неизменной
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [emergency_forecast_id]
+                properties:
+                  emergency_forecast_id: { type: string, format: uuid }
+  /int/forecast:
+    post:
+      operationId: acceptForecast
+      x-bs-operation: RECEIVE_FORECAST
+      summary: ИНТ-02 — агрегированный прогноз ЧС; лишние поля отбрасываются до сохранения
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "201":
+          description: Прогноз принят
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [emergency_forecast_id]
+                properties:
+                  emergency_forecast_id: { type: string, format: uuid }
+  /plans:
+    get:
+      operationId: listPlans
+      x-bs-operation: VIEW_PLAN
+      responses:
+        "200": { description: Планы, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Plan" } } } } }
+    post:
+      operationId: buildPlan
+      x-bs-operation: BUILD_PLAN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [idempotency_key]
+              properties:
+                idempotency_key: { type: string, format: uuid }
+                emergency_forecast_id: { type: string, format: uuid }
+      responses:
+        "200": { description: План построен или уже существовал, content: { application/json: { schema: { $ref: "#/components/schemas/Plan" } } } }
+  /plans/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getPlan
+      x-bs-operation: VIEW_PLAN
+      responses:
+        "200": { description: План со снимком версий входов, content: { application/json: { schema: { $ref: "#/components/schemas/Plan" } } } }
 components:
   schemas:
+    DeficitRecord:
+      type: object
+      required: [deficit_record_id, record_type, origin_id, clinic_id, component_kind, blood_group, uncovered_ml, uncovered_units, reason, created_at]
+      properties:
+        deficit_record_id: { type: string, format: uuid }
+        record_type: { type: string }
+        origin_id: { type: string, format: uuid }
+        clinic_id: { type: integer, format: int64 }
+        component_kind: { type: string }
+        blood_group: { type: string }
+        uncovered_ml: { type: integer, format: int64 }
+        uncovered_units: { type: integer }
+        reason: { type: string }
+        created_at: { type: string, format: date-time }
+    Forecast:
+      type: object
+      required: [emergency_forecast_id, scenario_version, period_start, period_end, is_rough_estimate, lines]
+      properties:
+        emergency_forecast_id: { type: string, format: uuid }
+        scenario_version: { type: string }
+        period_start: { type: string, format: date-time }
+        period_end: { type: string, format: date-time }
+        is_rough_estimate: { type: boolean }
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/ForecastLine" }
+    ForecastLine:
+      type: object
+      required: [line_id, clinic_code, component_kind, blood_group, volume_ml]
+      properties:
+        line_id: { type: string, format: uuid }
+        clinic_code: { type: string }
+        component_kind: { type: string }
+        blood_group: { type: string }
+        volume_ml: { type: integer, format: int64 }
+    Plan:
+      type: object
+      required: [replenishment_plan_id, demand_estimate_id, demand_version_no, stock_watermark, coverage_ratio, created_at, elapsed_ms, proposals, deficits, protected, notice, targets, norm_version, stock_synced_at, scenario_version, delivery_version, obligations_watermark, refdata_version, algorithm_version]
+      properties:
+        replenishment_plan_id: { type: string, format: uuid }
+        demand_estimate_id: { type: string, format: uuid }
+        demand_version_no: { type: integer }
+        stock_watermark: { type: integer, format: int64 }
+        coverage_ratio: { type: number, format: double }
+        created_at: { type: string, format: date-time }
+        elapsed_ms: { type: integer, format: int64 }
+        notice: { type: string }
+        norm_version: { type: integer, format: int64 }
+        stock_synced_at: { type: string, format: date-time }
+        emergency_forecast_id: { type: string, format: uuid }
+        scenario_version: { type: string }
+        delivery_version: { type: integer, format: int64 }
+        obligations_watermark: { type: integer, format: int64 }
+        refdata_version: { type: integer }
+        algorithm_version: { type: string }
+        targets: { type: array, items: { $ref: "#/components/schemas/Target" } }
+        proposals: { type: array, items: { $ref: "#/components/schemas/Proposal" } }
+        deficits: { type: array, items: { $ref: "#/components/schemas/Deficit" } }
+        protected: { type: array, items: { $ref: "#/components/schemas/Protected" } }
+    Target:
+      type: object
+      required: [clinic_id, component_kind, blood_group, norm_ml, background_ml, emergency_ml, target_ml, stock_ml, inbound_ml, proposed_ml, uncovered_ml, is_rough_estimate]
+      properties:
+        clinic_id: { type: integer, format: int64 }
+        component_kind: { type: string }
+        blood_group: { type: string }
+        norm_ml: { type: integer, format: int64 }
+        background_ml: { type: integer, format: int64 }
+        emergency_ml: { type: integer, format: int64 }
+        target_ml: { type: integer, format: int64 }
+        stock_ml: { type: integer, format: int64 }
+        inbound_ml: { type: integer, format: int64 }
+        proposed_ml: { type: integer, format: int64 }
+        uncovered_ml: { type: integer, format: int64 }
+        is_rough_estimate: { type: boolean }
+    Proposal:
+      type: object
+      required: [proposal_id, source_clinic_id, target_clinic_id, component_kind, blood_group, units, volume_ml, delivery_minutes, explanation]
+      properties:
+        proposal_id: { type: string, format: uuid }
+        source_clinic_id: { type: integer, format: int64 }
+        target_clinic_id: { type: integer, format: int64 }
+        component_kind: { type: string }
+        blood_group: { type: string }
+        units: { type: integer }
+        volume_ml: { type: integer, format: int64 }
+        delivery_minutes: { type: integer }
+        explanation: { type: string }
+    Deficit:
+      type: object
+      required: [clinic_id, component_kind, blood_group, uncovered_ml, reason, detail]
+      properties:
+        clinic_id: { type: integer, format: int64 }
+        component_kind: { type: string }
+        blood_group: { type: string }
+        uncovered_ml: { type: integer, format: int64 }
+        reason: { type: string }
+        detail: { type: string }
+    Protected:
+      type: object
+      required: [clinic_id, component_kind, protected_units, remaining_units, protected_ml, remaining_ml]
+      properties:
+        clinic_id: { type: integer, format: int64 }
+        component_kind: { type: string }
+        protected_units: { type: integer, format: int64 }
+        remaining_units: { type: integer, format: int64 }
+        protected_ml: { type: integer, format: int64 }
+        remaining_ml: { type: integer, format: int64 }
     Problem:
       type: object
       required: [title, status]

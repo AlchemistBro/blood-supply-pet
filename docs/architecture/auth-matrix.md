@@ -51,6 +51,19 @@
 | --- | --- | :---: | :---: | :---: | :---: | :---: | :---: |
 | `GET /notifications` | READ_AUDIT | 403 | 2xx | 2xx | 403 | 403 | 403 |
 
+## planning
+
+| Метод и путь | Операция | CLINIC_OPERATOR | DUTY_OFFICER | IT_SERVICE | PHYSICIAN | SERVICE | TERRITORIAL_ANALYST |
+| --- | --- | :---: | :---: | :---: | :---: | :---: | :---: |
+| `GET /deficits` | VIEW_PLAN | 2xx | 2xx | 403 | 403 | 403 | 2xx |
+| `GET /forecasts` | VIEW_PLAN | 2xx | 2xx | 403 | 403 | 403 | 2xx |
+| `GET /forecasts/{id}` | VIEW_PLAN | 2xx | 2xx | 403 | 403 | 403 | 2xx |
+| `PATCH /forecasts/{id}/lines/{lineId}` | ADJUST_FORECAST | 2xx | 403 | 403 | 403 | 403 | 403 |
+| `POST /int/forecast` | RECEIVE_FORECAST | 403 | 403 | 403 | 403 | 2xx | 403 |
+| `GET /plans` | VIEW_PLAN | 2xx | 2xx | 403 | 403 | 403 | 2xx |
+| `POST /plans` | BUILD_PLAN | 403 | 2xx | 403 | 403 | 403 | 2xx |
+| `GET /plans/{id}` | VIEW_PLAN | 2xx | 2xx | 403 | 403 | 403 | 2xx |
+
 ## transfer
 
 | Метод и путь | Операция | CLINIC_OPERATOR | DUTY_OFFICER | IT_SERVICE | PHYSICIAN | SERVICE | TERRITORIAL_ANALYST |
@@ -68,12 +81,18 @@
 
 | Метод и путь | Операция | CLINIC_OPERATOR | DUTY_OFFICER | IT_SERVICE | PHYSICIAN | SERVICE | TERRITORIAL_ANALYST |
 | --- | --- | :---: | :---: | :---: | :---: | :---: | :---: |
+| `GET /deficits` | VIEW_PLAN | 2xx | 2xx | 403 | 403 | 403 | 2xx |
 | `GET /demand` | VIEW_DEMAND | 403 | 2xx | 403 | 403 | 403 | 2xx |
 | `POST /demand/estimates` | PUBLISH_ESTIMATE | 403 | 403 | 403 | 403 | 403 | 2xx |
 | `GET /demand/estimates/{id}` | VIEW_DEMAND | 403 | 2xx | 403 | 403 | 403 | 2xx |
 | `POST /demand/estimates/{id}/publish` | PUBLISH_ESTIMATE | 403 | 403 | 403 | 403 | 403 | 2xx |
 | `POST /demand/files` | UPLOAD_STATISTICS | 403 | 403 | 403 | 403 | 403 | 2xx |
 | `GET /events/obligations` | VIEW_OBLIGATION | 2xx | 2xx | 2xx | 2xx | 2xx | 403 |
+| `GET /forecasts/{id}` | VIEW_PLAN | 2xx | 2xx | 403 | 403 | 403 | 2xx |
+| `POST /forecasts/{id}/lines/{lineId}` | ADJUST_FORECAST | 2xx | 403 | 403 | 403 | 403 | 403 |
+| `GET /plans` | VIEW_PLAN | 2xx | 2xx | 403 | 403 | 403 | 2xx |
+| `POST /plans` | BUILD_PLAN | 403 | 2xx | 403 | 403 | 403 | 2xx |
+| `GET /plans/{id}` | VIEW_PLAN | 2xx | 2xx | 403 | 403 | 403 | 2xx |
 | `GET /stock` | VIEW_STOCK | 2xx | 2xx | 2xx | 2xx | 403 | 403 |
 | `POST /stock/annual-consumption` | ENTER_ANNUAL_CONSUMPTION | 2xx | 403 | 403 | 403 | 403 | 403 |
 | `POST /stock/sync` | SYNC_ON_DEMAND | 2xx | 403 | 403 | 403 | 403 | 403 |

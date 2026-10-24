@@ -11,6 +11,7 @@ import (
 
 	"github.com/AlchemistBro/blood-supply-pet/libs/clock"
 	"github.com/AlchemistBro/blood-supply-pet/libs/httpx"
+	"github.com/AlchemistBro/blood-supply-pet/libs/httpx/auth"
 	"github.com/AlchemistBro/blood-supply-pet/libs/refdata"
 	"github.com/AlchemistBro/blood-supply-pet/services/sim-emergency/internal/api"
 	"github.com/AlchemistBro/blood-supply-pet/services/sim-emergency/internal/config"
@@ -34,10 +35,17 @@ func run() int {
 		return 1
 	}
 	var tokens sender.TokenSource = sender.Unconfigured{}
-	if cfg.NoAuth {
+	switch {
+	case cfg.NoAuth:
 		tokens = sender.NoAuth{}
 		log.Warn("прогноз отправляется без служебного токена (BS_SIM_NO_AUTH): только для локальной разработки")
-	} else {
+	case cfg.ServiceTokenURL != "":
+		tokens, err = auth.NewServiceToken(auth.ClientCredentialsConfig{TokenURL: cfg.ServiceTokenURL, ClientID: cfg.ServiceClientID, ClientSecret: cfg.ServiceClientSecret, Clock: clock.System{}})
+		if err != nil {
+			log.Error("конфигурация служебного токена C02", "err", err)
+			return 1
+		}
+	default:
 		log.Warn("служебный токен не настроен: отправка прогноза вернёт 503; для локальной разработки BS_SIM_NO_AUTH=true")
 	}
 	snd := sender.New(cfg.PlanningURL, tokens, cfg.SendTimeout)

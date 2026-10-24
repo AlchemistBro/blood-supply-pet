@@ -10,6 +10,48 @@ info:
 servers:
   - url: http://localhost:8080
 paths:
+  /deficits:
+    get:
+      operationId: deficitsPage
+      x-bs-operation: VIEW_PLAN
+      responses:
+        "200": { description: Реестр дефицита с фильтрами }
+  /forecasts/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: forecastDetail
+      x-bs-operation: VIEW_PLAN
+      responses:
+        "200": { description: Агрегированный прогноз }
+  /forecasts/{id}/lines/{lineId}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: lineId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: adjustForecast
+      x-bs-operation: ADJUST_FORECAST
+      responses:
+        "303": { description: Новая версия прогноза после коррекции }
+  /plans:
+    get:
+      operationId: planList
+      x-bs-operation: VIEW_PLAN
+      responses:
+        "200": { description: Последние планы пополнения }
+    post:
+      operationId: buildPlan
+      x-bs-operation: BUILD_PLAN
+      responses:
+        "303": { description: Переход к результату расчёта }
+  /plans/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: planDetail
+      x-bs-operation: VIEW_PLAN
+      responses:
+        "200": { description: Покрытие, дефицит, предложения и объяснения }
   /demand:
     get:
       operationId: demandPage
