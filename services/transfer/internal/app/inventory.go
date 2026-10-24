@@ -47,7 +47,7 @@ func (s *Service) OnUnitRegistered(ctx context.Context, msg *messaging.Message, 
 			return err // устаревшая версия ничего не меняет
 		}
 		for _, k := range scope.keys {
-			if err := s.store.RecountAvailable(ctx, tx, k.clinicID, k.kind); err != nil {
+			if err := s.store.RecountAvailable(ctx, tx, k.clinicID, k.kind, now); err != nil {
 				return err
 			}
 		}
@@ -56,19 +56,40 @@ func (s *Service) OnUnitRegistered(ctx context.Context, msg *messaging.Message, 
 		if breakReason, breaks := domain.BreakReasonFor(status); breaks {
 			return s.breakHolding(ctx, tx, e.UnitID, breakReason, string(e.Status), now)
 		}
-		return nil
+		return s.reviewHoldingUnit(ctx, tx, e.UnitID, now)
 	})
 	return deliveryErr(msg, err)
 }
 
-// OnUnitUpdated — изменился статус единицы. Карантин закреплённой единицы равен выбытию:
+// OnUnitUpdated — изменились статус, клиника или срок годности единицы. Карантин закреплённой единицы равен выбытию:
 // отправлять её нельзя (ПП РФ № 641, п. 62 а), обязательство сразу BROKEN с причиной UNIT_QUARANTINED.
 func (s *Service) OnUnitUpdated(ctx context.Context, msg *messaging.Message, e UnitUpdated) error {
+	if e.UnitID == uuid.Nil || e.ClinicID <= 0 || e.ComponentKind == "" || (e.ExpiresAt != nil && e.ExpiresAt.IsZero()) {
+		return deliveryErr(msg, ErrInvalidEvent)
+	}
 	status, err := domain.ParseUnitStatus(string(e.Status))
 	if err != nil {
 		return deliveryErr(msg, fmt.Errorf("%w: %w", ErrInvalidEvent, err))
 	}
-	return s.applyUnitStatus(ctx, msg, e.UnitID, e.ClinicID, e.ComponentKind, status, string(e.Status), e.Version)
+	e.Status = status
+	err = s.inTx(ctx, msg, func(ctx context.Context, tx pgx.Tx) error {
+		now := s.clock.Now()
+		scope, err := s.lockUnitScope(ctx, tx, e.UnitID, stockKey{clinicID: e.ClinicID, kind: e.ComponentKind})
+		if err != nil {
+			return err
+		}
+		applied, err := s.store.UpdateUnitCopy(ctx, tx, e, now)
+		if err != nil || !applied {
+			return err
+		}
+		for _, key := range scope.keys {
+			if err := s.store.RecountAvailable(ctx, tx, key.clinicID, key.kind, now); err != nil {
+				return err
+			}
+		}
+		return s.reviewHoldingUnit(ctx, tx, e.UnitID, now)
+	})
+	return deliveryErr(msg, err)
 }
 
 // OnUnitWithdrawn — единица выбыла. Выбытие закреплённой единицы сразу переводит O07 в BROKEN
@@ -100,7 +121,7 @@ func (s *Service) applyUnitStatus(ctx context.Context, msg *messaging.Message, u
 		if err != nil || !applied {
 			return err // дубль или устаревшая версия
 		}
-		if err := s.store.RecountAvailable(ctx, tx, scope.copyKey.clinicID, scope.copyKey.kind); err != nil {
+		if err := s.store.RecountAvailable(ctx, tx, scope.copyKey.clinicID, scope.copyKey.kind, now); err != nil {
 			return err
 		}
 		if breakReason, breaks := domain.BreakReasonFor(status); breaks {

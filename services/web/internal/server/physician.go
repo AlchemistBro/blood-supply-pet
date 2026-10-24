@@ -131,7 +131,7 @@ func (s *Server) requestDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data.CanSelect = data.Request.Status == "OFFERS_READY" && auth.Allowed(auth.OpSelectVariant, p.Roles)
-	data.CanCancel = data.Request.Status != "CANCELLED" && data.Request.Status != "DISPATCHED" && data.Request.Status != "DELIVERED" && auth.Allowed(auth.OpCancelRequest, p.Roles)
+	data.CanCancel = data.Request.Status != "CANCELLED" && data.Request.Status != "CANCELLATION_REQUESTED" && data.Request.Status != "CANCELLATION_REJECTED" && data.Request.Status != "DISPATCHED" && data.Request.Status != "DELIVERED" && auth.Allowed(auth.OpCancelRequest, p.Roles)
 	s.renderScreen(w, r, 200, "request.html", "Заявка и варианты", data)
 }
 func (s *Server) selectRequestVariant(w http.ResponseWriter, r *http.Request) {

@@ -2,6 +2,8 @@
 <div id="request-live" hx-get="/requests/{{.Content.Request.ID}}" hx-trigger="every 15s" hx-select="#request-live" hx-swap="outerHTML">
 <p><a href="/requests">← Заявки врача</a></p>
 <p role="status">{{.Content.Request.PatientDeliveryLabel}}</p>
+{{if eq .Content.Request.Status "CANCELLATION_REQUESTED"}}<p role="status">Запрошена отмена. Ожидается результат источников; закрепление пока не считается снятым.</p>{{end}}
+{{if eq .Content.Request.Status "CANCELLATION_REJECTED"}}<p role="alert">Отмена не завершена: часть поставок уже отправлена или доставлена. Новые источники по этой заявке не открываются; проверьте задания ниже.</p>{{end}}
 {{if .Content.Request.ClinicalUseBlocked}}<div role="alert" class="alert alert--danger">По одной из перевозок нарушены условия. Компоненты этой поставки использовать нельзя; проблемная поставка отмечена в таблице.</div>{{end}}
 {{with .Content.Request.Obligations}}<table class="data-table"><caption>Передачи по заявке</caption><thead><tr><th>Задание</th><th>Источник</th><th>Единиц</th><th>Статус</th><th>Использование запрещено</th></tr></thead><tbody>{{range .}}<tr><td><a href="/tasks/{{.ID}}">{{.ID}}</a></td><td>{{.Source}}</td><td>{{.Units}}</td><td>{{.Status}}</td><td>{{if .Blocked}}Да{{else}}Нет{{end}}</td></tr>{{end}}</tbody></table>{{end}}
 {{with .Content.Request}}<dl><dt>Заявка</dt><dd>{{.ID}}</dd><dt>Статус</dt><dd>{{.Status}}</dd><dt>Компонент</dt><dd>{{.Kind}} {{.Group}} — {{.Requested}} ед.</dd><dt>Срочность</dt><dd>{{.Urgency}}</dd><dt>Запас обновлён</dt><dd>{{datetime .Synced}}; водяной знак {{.Watermark}}</dd></dl>{{end}}

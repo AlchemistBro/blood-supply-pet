@@ -688,18 +688,19 @@ func (q *Queries) PendingDueBy(ctx context.Context, arg PendingDueByParams) ([]u
 const recountAvailable = `-- name: RecountAvailable :exec
 UPDATE source_stock SET available_units = (
     SELECT count(*) FROM unit_copy u JOIN ref_unit_status s USING (unit_status_code)
-    WHERE u.clinic_id = $1 AND u.component_kind_code = $2 AND s.is_available AND u.local_dispatch_obligation_id IS NULL AND NOT u.clinical_use_blocked)
+    WHERE u.clinic_id = $1 AND u.component_kind_code = $2 AND s.is_available AND u.expires_at>$3 AND u.local_dispatch_obligation_id IS NULL AND NOT u.clinical_use_blocked)
 WHERE source_stock.clinic_id = $1 AND source_stock.component_kind_code = $2
 `
 
 type RecountAvailableParams struct {
 	ClinicID          int64
 	ComponentKindCode string
+	Now               time.Time
 }
 
 // Пересчёт по копии вместо инкремента: проекция переживает дубли и перестановку событий.
 func (q *Queries) RecountAvailable(ctx context.Context, arg RecountAvailableParams) error {
-	_, err := q.db.Exec(ctx, recountAvailable, arg.ClinicID, arg.ComponentKindCode)
+	_, err := q.db.Exec(ctx, recountAvailable, arg.ClinicID, arg.ComponentKindCode, arg.Now)
 	return err
 }
 

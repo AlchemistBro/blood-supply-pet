@@ -46,6 +46,9 @@ type obligationProjection struct {
 }
 
 func (s *Service) Handle(ctx context.Context, msg messaging.Message) error {
+	if msg.Type == "RequestCancellationProcessed" {
+		return s.cancellationProcessed(ctx, msg)
+	}
 	if msg.Type == "TransferShortfallRecorded" {
 		return s.shortfall(ctx, msg)
 	}
@@ -171,7 +174,7 @@ func (s *Service) Handle(ctx context.Context, msg messaging.Message) error {
 			if err != nil {
 				return err
 			}
-			if n.Status == "CANCELLED" {
+			if cancellationRequested(n.Status) {
 				return nil
 			}
 			status, remaining, err := s.requestProgress(ctx, tx, n.Request)

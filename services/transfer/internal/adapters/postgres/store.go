@@ -242,8 +242,8 @@ func (Store) AddReserved(ctx context.Context, db app.DB, clinicID int64, kind st
 }
 
 // RecountAvailable пересчитывает наличие по копии.
-func (Store) RecountAvailable(ctx context.Context, db app.DB, clinicID int64, kind string) error {
-	if err := q(db).RecountAvailable(ctx, gen.RecountAvailableParams{ClinicID: clinicID, ComponentKindCode: kind}); err != nil {
+func (Store) RecountAvailable(ctx context.Context, db app.DB, clinicID int64, kind string, now time.Time) error {
+	if err := q(db).RecountAvailable(ctx, gen.RecountAvailableParams{ClinicID: clinicID, ComponentKindCode: kind, Now: now}); err != nil {
 		return fmt.Errorf("пересчёт наличия %d/%s: %w", clinicID, kind, err)
 	}
 	return nil
@@ -297,7 +297,8 @@ func (Store) UnitCopies(ctx context.Context, db app.DB, ids []uuid.UUID) (map[uu
 	out := make(map[uuid.UUID]domain.UnitCopy, len(rows))
 	for _, r := range rows {
 		out[r.UnitID] = domain.UnitCopy{
-			UnitID: r.UnitID, ClinicID: r.ClinicID, ComponentKind: r.ComponentKindCode, BloodGroup: r.BloodGroupCode,
+			SourceStatus: domain.UnitStatus(r.UnitStatusCode),
+			UnitID:       r.UnitID, ClinicID: r.ClinicID, ComponentKind: r.ComponentKindCode, BloodGroup: r.BloodGroupCode,
 			RhPositive: r.RhPositive, Phenotype: r.Phenotype, VolumeML: r.VolumeMl, ExpiresAt: r.ExpiresAt,
 			Status: domain.UnitStatus(r.UnitStatusCode), Version: r.Version,
 		}

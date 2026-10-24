@@ -79,7 +79,7 @@ WHERE clinic_id = sqlc.arg('clinic_id') AND component_kind_code = sqlc.arg('comp
 -- Пересчёт по копии вместо инкремента: проекция переживает дубли и перестановку событий.
 UPDATE source_stock SET available_units = (
     SELECT count(*) FROM unit_copy u JOIN ref_unit_status s USING (unit_status_code)
-    WHERE u.clinic_id = sqlc.arg('clinic_id') AND u.component_kind_code = sqlc.arg('component_kind_code') AND s.is_available AND u.local_dispatch_obligation_id IS NULL AND NOT u.clinical_use_blocked)
+    WHERE u.clinic_id = sqlc.arg('clinic_id') AND u.component_kind_code = sqlc.arg('component_kind_code') AND s.is_available AND u.expires_at>sqlc.arg('now') AND u.local_dispatch_obligation_id IS NULL AND NOT u.clinical_use_blocked)
 WHERE source_stock.clinic_id = sqlc.arg('clinic_id') AND source_stock.component_kind_code = sqlc.arg('component_kind_code');
 
 -- name: SetProtectedVolume :execrows

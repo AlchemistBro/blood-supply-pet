@@ -80,7 +80,8 @@ func (h *Handlers) Inventory(ctx context.Context, msg messaging.Message) error {
 			return err
 		}
 		return h.svc.OnUnitUpdated(ctx, &msg, app.UnitUpdated{
-			UnitID: e.UnitID, ClinicID: e.ClinicID, ComponentKind: e.ComponentKind,
+			ExpiresAt: e.ExpiresAt,
+			UnitID:    e.UnitID, ClinicID: e.ClinicID, ComponentKind: e.ComponentKind,
 			Status: domain.UnitStatus(e.Status), Version: e.Version,
 		})
 	case (inventory.UnitWithdrawn{}).MessageType():

@@ -254,11 +254,20 @@ func (s *Service) Cancel(ctx context.Context, id uuid.UUID, actor Actor) error {
 		if !allowed(actor, n) || !slices.Contains(actor.Roles, "PHYSICIAN") {
 			return ErrForbidden
 		}
-		if n.Status == "CANCELLED" {
+		if n.Status == "CANCELLED" || n.Status == "CANCELLATION_REQUESTED" {
 			return nil
 		}
-		if n.Status == "DISPATCHED" || n.Status == "DELIVERED" {
+		if n.Status == "DISPATCHED" || n.Status == "DELIVERED" || n.Status == "CANCELLATION_REJECTED" {
 			return ErrConflict
+		}
+		if n.Selection != nil && n.Status != "LOCAL_SELECTED" {
+			if err := s.store.SetStatus(ctx, tx, id, "CANCELLATION_REQUESTED", s.clock.Now()); err != nil {
+				return err
+			}
+			if _, err := s.journal.Publish(ctx, tx, contracts.TopicTransferCommands, id.String(), transfer.CancelRequestObligations{RequestID: id, Reason: transfer.CancelRequestCancelled}); err != nil {
+				return err
+			}
+			return s.audit(ctx, tx, actor, id, "CLINICAL_REQUEST_CANCEL_REQUESTED", auditc.ResultSuccess)
 		}
 		if err := s.store.SetStatus(ctx, tx, id, "CANCELLED", s.clock.Now()); err != nil {
 			return err

@@ -11,6 +11,7 @@ import (
 	auditc "github.com/AlchemistBro/blood-supply-pet/libs/contracts/audit"
 	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/transfer"
 	"github.com/AlchemistBro/blood-supply-pet/libs/messaging"
+	"github.com/AlchemistBro/blood-supply-pet/services/transfer/internal/domain"
 )
 
 func (s *Service) CancelRequest(ctx context.Context, msg *messaging.Message, c transfer.CancelRequestObligations) error {
@@ -41,6 +42,21 @@ func (s *Service) CancelRequest(ctx context.Context, msg *messaging.Message, c t
 		}
 		for _, o := range items {
 			if _, err := s.cancelLocked(ctx, tx, o, CancelObligation{ObligationID: o.ID, Reason: c.Reason, OnlyPending: c.OnlyPending, Actor: actorSystem}); err != nil {
+				return err
+			}
+		}
+		if c.Reason == transfer.CancelRequestCancelled {
+			current, err := s.store.ObligationsByRequest(ctx, tx, c.RequestID)
+			if err != nil {
+				return err
+			}
+			blocked := make([]uuid.UUID, 0)
+			for _, o := range current {
+				if o.Status == domain.StatusDispatched || o.Status == domain.StatusDelivered {
+					blocked = append(blocked, o.ID)
+				}
+			}
+			if err := s.event(ctx, tx, c.RequestID, transfer.RequestCancellationProcessed{RequestID: c.RequestID, NonCancellableObligationIDs: blocked, At: s.clock.Now()}); err != nil {
 				return err
 			}
 		}

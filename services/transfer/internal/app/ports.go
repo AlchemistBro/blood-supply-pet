@@ -86,10 +86,11 @@ type Store interface {
 	// LockStock блокирует строку Остатка (создаёт пустую, если её нет). Всегда первая блокировка.
 	LockStock(ctx context.Context, db DB, clinicID int64, kind string) (domain.Stock, error)
 	AddReserved(ctx context.Context, db DB, clinicID int64, kind string, delta int) error
-	RecountAvailable(ctx context.Context, db DB, clinicID int64, kind string) error
+	RecountAvailable(ctx context.Context, db DB, clinicID int64, kind string, now time.Time) error
 	SetProtectedVolume(ctx context.Context, db DB, clinicID int64, kind string, volume int, version int64, reason string) (bool, error)
 
 	UpsertUnitCopy(ctx context.Context, db DB, u domain.UnitCopy, now time.Time) (bool, error)
+	UpdateUnitCopy(ctx context.Context, db DB, e UnitUpdated, now time.Time) (bool, error)
 	SetUnitCopyStatus(ctx context.Context, db DB, unitID uuid.UUID, s domain.UnitStatus, reason string, version int64, now time.Time) (bool, error)
 	UnitCopies(ctx context.Context, db DB, ids []uuid.UUID) (map[uuid.UUID]domain.UnitCopy, error)
 	NotInStockAmong(ctx context.Context, db DB, ids []uuid.UUID) ([]uuid.UUID, error)
