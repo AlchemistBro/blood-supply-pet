@@ -211,7 +211,7 @@ erDiagram
         varchar component_kind_code
         varchar blood_group_code
         numeric uncovered_volume_ml
-        varchar deficit_reason "NO_SOURCE | NO_ALLOWED_VARIANT | SOURCE_REJECTED | NOT_CONFIRMED_IN_TIME | UNIT_WITHDRAWN"
+        varchar deficit_reason "NO_SOURCE | BELOW_UNIT_REMAINDER (ADR-0019) | NO_ALLOWED_VARIANT | SOURCE_REJECTED | NOT_CONFIRMED_IN_TIME | UNIT_WITHDRAWN"
         timestamptz recorded_at
     }
 ```

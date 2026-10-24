@@ -24,8 +24,7 @@
 | [0016](0016-test-infrastructure.md) | Тестовая инфраструктура: Testcontainers, общие контейнеры, база на тест | принят |
 | [0017](0017-web-audit-over-http.md) | Сервис web пишет аудит по HTTP | принят |
 | [0018](0018-web-stateless-session.md) | Сервис web без базы: сессия в cookie (AES-GCM), CSRF, CSP | принят |
-
-| 0019 | Защищённый объём: planning → inventory, единицы против мл | запланирован (этап 5) |
+| [0019](0019-protected-volume-planning-transfer.md) | Защищённый объём: planning → inventory → transfer, единицы против мл | принят |
 | [0020](0020-k1-patient-case-encryption.md) | Шифрование номера случая пациента на уровне приложения (`libs/k1seal`, AES-256-GCM, ключ только у matching и inventory) | принят |
 | 0021 | Адресаты уведомлений — статический справочник | запланирован (этап 7) |
 | [0022](0022-transport-carrier-and-conditions.md) | Перевозка: кто перевозит и что фиксируется | предложен (реализация — этап 7) |
