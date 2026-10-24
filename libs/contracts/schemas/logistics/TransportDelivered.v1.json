@@ -7,6 +7,7 @@
   "additionalProperties": false,
   "required": ["obligation_id", "delivered_at"],
   "properties": {
+    "shipment_ref": { "type": "string", "minLength": 1, "maxLength": 64 },
     "obligation_id": { "type": "string", "format": "uuid" },
     "delivered_at": { "type": "string", "format": "date-time" },
     "temperature_at_dispatch_c": { "type": "number", "minimum": -80, "maximum": 60 },

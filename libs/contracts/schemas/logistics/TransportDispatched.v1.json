@@ -11,6 +11,8 @@
     "courier_ref"
   ],
   "properties": {
+    "temperature_at_dispatch_c": { "type": "number", "minimum": -100, "maximum": 100 },
+    "container_intact": { "type": "boolean" },
     "obligation_id": {
       "type": "string",
       "format": "uuid"
