@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/demand"
 	"github.com/AlchemistBro/blood-supply-pet/libs/refdata"
 	"github.com/AlchemistBro/blood-supply-pet/services/demand/internal/domain"
 )
@@ -107,6 +108,7 @@ type ShareLine struct {
 
 // Store — порт хранилища demand. Методы с tx работают внутри транзакции приложения.
 type Store interface {
+	SharesEvent(ctx context.Context, tx pgx.Tx, fileID uuid.UUID) (demand.ClinicSharesPublished, error)
 	LoadEstimateInput(ctx context.Context, tx pgx.Tx, in EstimateSelection) (domain.EstimateInput, error)
 	SaveEstimate(ctx context.Context, tx pgx.Tx, record *EstimateRecord, result domain.Estimate) error
 	ReadEstimate(ctx context.Context, tx pgx.Tx, id uuid.UUID, lock bool) (EstimateRecord, error)

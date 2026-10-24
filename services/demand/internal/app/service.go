@@ -166,6 +166,15 @@ func (s *Service) Upload(ctx context.Context, in UploadInput) (UploadResult, err
 		if _, err := s.journal.Publish(ctx, tx, contracts.TopicDemandEvents, id.String(), payload); err != nil {
 			return err
 		}
+		if res.ShareVersionNo > 0 {
+			event, err := s.store.SharesEvent(ctx, tx, id)
+			if err != nil {
+				return err
+			}
+			if _, err := s.journal.Publish(ctx, tx, contracts.TopicDemandEvents, event.ClinicShareVersionID.String(), event); err != nil {
+				return err
+			}
+		}
 		return s.journal.Audit(ctx, tx, messaging.AuditEntry{
 			UserID: in.Actor.UserID, Role: in.Actor.Role, Action: action, ObjectType: objectTypeFile,
 			ObjectID: id.String(), Result: auditc.ResultSuccess, Details: details,

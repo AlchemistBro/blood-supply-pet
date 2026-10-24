@@ -104,6 +104,26 @@ type estimateDB interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }
 
+func (s *Store) SharesEvent(ctx context.Context, tx pgx.Tx, fileID uuid.UUID) (demand.ClinicSharesPublished, error) {
+	var event demand.ClinicSharesPublished
+	if err := tx.QueryRow(ctx, `SELECT clinic_share_version_id,version_no FROM clinic_share_version WHERE statistics_file_id=$1`, fileID).Scan(&event.ClinicShareVersionID, &event.VersionNo); err != nil {
+		return event, err
+	}
+	rows, err := tx.Query(ctx, `SELECT district_id,clinic_id,clinic_share::float8 FROM clinic_share WHERE clinic_share_version_id=$1 ORDER BY district_id,clinic_id`, event.ClinicShareVersionID)
+	if err != nil {
+		return event, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var line demand.ClinicShare
+		if err := rows.Scan(&line.DistrictID, &line.ClinicID, &line.Share); err != nil {
+			return event, err
+		}
+		event.Shares = append(event.Shares, line)
+	}
+	return event, rows.Err()
+}
+
 func (s *Store) ReadEstimate(ctx context.Context, tx pgx.Tx, id uuid.UUID, lock bool) (app.EstimateRecord, error) {
 	var db estimateDB = s.pool
 	if tx != nil {
