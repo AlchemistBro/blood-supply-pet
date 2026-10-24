@@ -13,6 +13,13 @@ snake_case, суррогатные ключи агрегатов — `uuid` v7, 
 - Внешних ключей между базами нет; ссылки на чужие агрегаты — `uuid` без FK, целостность через проекции с версией.
 - Объёмы в мл — `bigint`, расчётные доли и объёмы — `numeric`, время — `timestamptz`.
 
+Автоматически сверяемые схемы физических таблиц: [inventory](er/inventory.md), [demand](er/demand.md),
+[planning](er/planning.md), [matching](er/matching.md), [transfer](er/transfer.md),
+[logistics-gateway](er/logistics-gateway.md), [notification](er/notification.md), [audit](er/audit.md).
+`task docs:er` статически читает Up-миграции, `task docs:er:check` обнаруживает расхождения в CI.
+Подключение к PostgreSQL и выполнение миграций для генерации не нужны. Это проверка исходников схемы;
+она не подтверждает применение миграций в работающей базе. Схемы ниже поясняют предметную модель.
+
 ## inventory
 
 ```mermaid

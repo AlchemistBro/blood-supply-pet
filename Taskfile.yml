@@ -167,6 +167,14 @@ tasks:
       - go run ./services/{{.SVC}}/cmd/{{.SVC}}
 
   # ---------------------------------------------------------------- прочее
+  docs:er:
+    desc: Обновить ER восьми баз из Up-миграций без подключения к PostgreSQL
+    cmds: [python tools/docs-er/generate.py]
+
+  docs:er:check:
+    desc: Сверить сохранённые ER с миграциями без исполнения SQL
+    cmds: [python tools/docs-er/generate.py --check]
+
   audit:verify:
     desc: Проверить цепочку хешей журнала аудита на поднятом стенде
     cmds:

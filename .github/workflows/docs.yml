@@ -2,10 +2,10 @@ name: Документация
 
 on:
   pull_request:
-    paths: ["docs/**", "README.md", "CONTRIBUTING.md"]
+    paths: ["docs/**", "README*.md", "CONTRIBUTING.md", "services/*/migrations/**", "libs/*/migrations/**", "tools/docs-er/**", "Taskfile.yml", ".github/workflows/docs.yml"]
   push:
     branches: [main]
-    paths: ["docs/**", "README.md", "CONTRIBUTING.md"]
+    paths: ["docs/**", "README*.md", "CONTRIBUTING.md", "services/*/migrations/**", "libs/*/migrations/**", "tools/docs-er/**", "Taskfile.yml", ".github/workflows/docs.yml"]
 
 permissions:
   contents: read
@@ -16,6 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Сверка ER с Up-миграциями без подключения к БД
+        run: python3 tools/docs-er/generate.py --check
       - uses: actions/setup-node@v4
         with:
           node-version: "22"

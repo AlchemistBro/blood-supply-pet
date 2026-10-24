@@ -16,6 +16,7 @@
 | UML, последовательность | Сага подтверждения и компенсации | [saga-confirmation.md](../saga-confirmation.md) | Mermaid `sequenceDiagram` |
 | UML, последовательность | Сверка шлюза при потерянном ответе C03 | [uml.md](../uml.md#сверка-шлюза-при-потерянном-ответе-c03) | Mermaid `sequenceDiagram` |
 | ER | Модель данных по базам сервисов | [data-model.md](../data-model.md) | Mermaid `erDiagram` |
+| ER физических таблиц | Восемь баз, включая платформенные таблицы и новые столбцы | [описание генерации](../../../tools/docs-er/README.md) | Mermaid `erDiagram`, генерация из Up-миграций |
 | Развёртывание | Сетевые сегменты и namespace | [deployment.md](../deployment.md) | Mermaid `flowchart` |
 | BPMN | Подтверждение передачи | [bpmn/confirm-transfer.bpmn](bpmn/confirm-transfer.bpmn) | BPMN 2.0 XML + DI |
 | BPMN | Планирование пополнения по прогнозу ЧС | [bpmn/replenishment-plan.bpmn](bpmn/replenishment-plan.bpmn) | BPMN 2.0 XML + DI |
