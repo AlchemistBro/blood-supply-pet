@@ -2,7 +2,7 @@
 <p>Демонстрационные правила подбора. Решение о выборе варианта принимает врач.</p>
 <form method="post" action="/requests" autocomplete="off"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><input type="hidden" name="idempotency_key" value="{{.Content.Key}}">
 <label>Номер случая пациента<input name="patient_case_no" maxlength="128" required autocomplete="off"></label>
-<label>Вид компонента<select name="component_kind"><option>RBC</option><option>FFP</option><option>PLT</option><option>CRYO</option></select></label>
+<label>Вид компонента<select name="component_kind"><option value="RBC">Эритроцитная масса (RBC)</option><option value="FFP">Свежезамороженная плазма (FFP)</option><option value="PLT">Тромбоцитный концентрат (PLT)</option><option value="CRYO">Криопреципитат (CRYO)</option></select></label>
 <label>Количество единиц<input name="requested_units" type="number" min="1" max="10000" value="1" required></label>
 <label>Срочность<select name="urgency"><option value="PLANNED">Плановая</option><option value="URGENT">Срочная</option><option value="EMERGENCY">Экстренная</option></select></label>
 <label>Подтверждённая группа пациента<select name="blood_group"><option>O+</option><option>O-</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option></select></label>

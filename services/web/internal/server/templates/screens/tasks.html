@@ -1,7 +1,7 @@
 {{define "content"}}
 <form method="get" action="/tasks" class="filter-bar">
 <label>Клиника-источник <input type="number" name="clinic" min="1" value="{{.Content.Clinic}}" required></label>
-<label>Статус <select name="status"><option value="">Все статусы</option>{{range .Content.Statuses}}<option value="{{.}}"{{if eq (printf "%s" .) $.Content.Status}} selected{{end}}>{{.}}</option>{{end}}</select></label>
+<label>Статус <select name="status"><option value="">Все статусы</option>{{range .Content.Statuses}}<option value="{{.}}"{{if eq (printf "%s" .) $.Content.Status}} selected{{end}}>{{statusLabel .}}</option>{{end}}</select></label>
 <button class="btn btn--primary" type="submit">Показать</button>
 </form>
 <div hx-get="/tasks?clinic={{.Content.Clinic}}&amp;status={{.Content.Status}}" hx-trigger="every 15s" hx-select="#task-list" hx-target="#task-list" hx-swap="outerHTML">

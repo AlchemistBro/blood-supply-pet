@@ -1407,3 +1407,9 @@ th[aria-sort] .sort-arrow {
 .content .data-table + h2 {
   margin-top: 24px;
 }
+
+/* Страницы без боковой панели (вход, ошибка). */
+.content--plain {
+  margin: 0 auto;
+  min-height: calc(100vh - var(--bs-header-h) - 44px);
+}

@@ -5,30 +5,34 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{.Title}} — АС распределения компонентов донорской крови</title>
+<link rel="icon" href="/static/img/emblem.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/static/css/app.css">
 </head>
 <body>
-<header>
-  <p><strong>АС распределения компонентов донорской крови</strong></p>
+<header class="topbar">
+  <a class="topbar__brand" href="/">
+    <img class="topbar__emblem" src="/static/img/emblem.svg" alt="" width="30" height="30">
+    <span class="topbar__title">АС распределения компонентов донорской крови</span>
+  </a>
   {{- with .User}}
-  <p>
-    <span>{{.Role}}</span> ·
-    <span>{{.Clinic}}</span> ·
-    <span>{{.Login}}</span>
-  </p>
-  <form method="post" action="/logout">
-    <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
-    <button type="submit">Выйти</button>
-  </form>
+  <div class="topbar__user">
+    <span class="topbar__role">{{.Role}}</span>
+    <span class="topbar__clinic">{{.Clinic}}</span>
+    <span class="topbar__login">{{.Login}}</span>
+    <form class="topbar__logout" method="post" action="/logout">
+      <input type="hidden" name="csrf_token" value="{{$.CSRF}}">
+      <button type="submit" class="btn btn--topbar">Выйти</button>
+    </form>
+  </div>
   {{- end}}
 </header>
-<main>
+<main class="content content--plain">
 {{if .User}}<nav aria-label="Разделы"><a href="/">Главная</a></nav>{{end}}
 {{template "content" .}}
 </main>
-<footer>
-  <p>Демонстрационная система. Данные и правила синтетические. Клиническое решение принимает врач.</p>
-  <p>Версия {{.Version}}</p>
+<footer class="footer">
+  <span class="footer__demo">Демонстрационная система. Данные и правила синтетические. Клиническое решение принимает врач.</span>
+  <span>Версия {{.Version}}</span>
 </footer>
 </body>
 </html>

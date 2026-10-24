@@ -17,8 +17,10 @@ import (
 var demoUsers = []demoUser{
 	{Login: "physician1", Label: "Войти как врач"},
 	{Login: "operator-c001", Label: "Войти как оператор клиники № 1"},
+	{Login: "operator-c002", Label: "Войти как оператор клиники № 2"},
 	{Login: "analyst1", Label: "Войти как аналитик"},
 	{Login: "duty1", Label: "Войти как дежурный"},
+	{Login: "it1", Label: "Войти как ИТ-служба"},
 }
 
 // loginHintPattern — допустимый login_hint: логины realm, ничего больше в Keycloak не передаётся.
