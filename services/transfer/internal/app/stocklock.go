@@ -24,7 +24,7 @@ func compareStockKeys(a, b stockKey) int {
 	return cmp.Compare(a.kind, b.kind)
 }
 
-// errUnitMovedConcurrently — пока событие ждало блокировки, единица сменила Остаток или закрепление.
+// errUnitMovedConcurrently — пока событие ждало блокировки, изменилась область затронутых Остатков.
 // Ошибка временная: consumer повторит событие, и оно возьмёт уже верные строки.
 var errUnitMovedConcurrently = errors.New("единица сменила Остаток или закрепление во время обработки события")
 
@@ -37,7 +37,7 @@ type unitScope struct {
 
 // lockUnitScope блокирует все затронутые строки Остатка до строки обязательства, по возрастанию ключа:
 // обработчики, которым нужна одна строка, и обработчики, которым нужны две, не ждут друг друга по кругу.
-// Затем перечитывает копию и закрепление: если они изменились, пока шло ожидание, — повтор.
+// Затем перечитывает копию и закрепление: изменение набора нужных строк требует повтора.
 func (s *Service) lockUnitScope(ctx context.Context, tx pgx.Tx, unitID uuid.UUID, event stockKey) (unitScope, error) {
 	before, err := s.readUnitScope(ctx, tx, unitID, event)
 	if err != nil {
