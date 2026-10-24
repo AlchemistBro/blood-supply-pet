@@ -74,6 +74,7 @@ type Plan struct {
 	EmergencyForecastId  *openapi_types.UUID `json:"emergency_forecast_id,omitempty"`
 	NormVersion          int64               `json:"norm_version"`
 	Notice               string              `json:"notice"`
+	Obligations          *[]PlanObligation   `json:"obligations,omitempty"`
 	ObligationsWatermark int64               `json:"obligations_watermark"`
 	Proposals            []Proposal          `json:"proposals"`
 	Protected            []Protected         `json:"protected"`
@@ -83,6 +84,17 @@ type Plan struct {
 	StockSyncedAt        time.Time           `json:"stock_synced_at"`
 	StockWatermark       int64               `json:"stock_watermark"`
 	Targets              []Target            `json:"targets"`
+}
+
+// PlanObligation defines model for PlanObligation.
+type PlanObligation struct {
+	ClinicalUseBlocked bool               `json:"clinical_use_blocked"`
+	ComponentKind      string             `json:"component_kind"`
+	ConfirmedUnits     int                `json:"confirmed_units"`
+	ObligationId       openapi_types.UUID `json:"obligation_id"`
+	SourceClinicId     int64              `json:"source_clinic_id"`
+	Status             string             `json:"status"`
+	TargetClinicId     int64              `json:"target_clinic_id"`
 }
 
 // Proposal defines model for Proposal.

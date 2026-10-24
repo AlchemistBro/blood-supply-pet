@@ -45,6 +45,9 @@ func (s *Service) Handle(ctx context.Context, msg messaging.Message) error {
 		return nil
 	}
 	return bspgx.WithTx(ctx, s.pool, func(ctx context.Context, tx pgx.Tx) error {
+		if err := s.store.LockBuild(ctx, tx); err != nil {
+			return err
+		}
 		first, err := messaging.FirstTime(ctx, tx, msg, s.clock.Now())
 		if err != nil || !first {
 			return err

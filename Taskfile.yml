@@ -156,6 +156,11 @@ tasks:
     cmds:
       - go test ./services/planning/internal/domain -run '^$' -bench '^BenchmarkBuildPlanNFR002$' -benchmem -count=1
 
+  planning:rebuild:
+    desc: Восстановить проекции planning из локального журнала (BS_DB_URL базы planning)
+    cmds:
+      - go run ./services/planning/cmd/planning-rebuild
+
   authmatrix:
     desc: Проверить x-bs-operation в контрактах и актуальность docs/architecture/auth-matrix.md (NFR011)
     cmds:
