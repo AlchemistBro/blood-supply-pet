@@ -125,7 +125,7 @@ components:
         value: { type: string }
     Request:
       type: object
-      required: [clinical_request_id, clinic_id, created_by, status, component_kind, requested_units, urgency, blood_group, created_at, stock_watermark, stock_synced_at, variants, notes, patient_allocation_status]
+      required: [clinical_request_id, clinic_id, created_by, status, component_kind, requested_units, urgency, blood_group, created_at, stock_watermark, stock_synced_at, variants, notes, patient_allocation_status, clinical_use_blocked, obligations]
       properties:
         clinical_request_id: { type: string, format: uuid }
         clinic_id: { type: integer, format: int64 }
@@ -142,6 +142,17 @@ components:
         notes: { type: array, items: { type: string } }
         selected_variant_id: { type: string, format: uuid }
         patient_allocation_status: { type: string }
+        clinical_use_blocked: { type: boolean }
+        obligations: { type: array, items: { $ref: "#/components/schemas/RequestObligation" } }
+    RequestObligation:
+      type: object
+      required: [obligation_id, source_clinic_id, status, units, clinical_use_blocked]
+      properties:
+        obligation_id: { type: string, format: uuid }
+        source_clinic_id: { type: integer, format: int64 }
+        status: { type: string }
+        units: { type: integer }
+        clinical_use_blocked: { type: boolean }
     Variant:
       type: object
       required: [variant_offer_id, rank_no, source_clinic_id, is_local, component_kind, blood_group, available_units, offered_units, delivery_minutes, delivery_status, is_deficit_stock_used, protected_known, explanation, rule_code, rule_version, unit_ids]

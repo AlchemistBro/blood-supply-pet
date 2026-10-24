@@ -35,3 +35,14 @@ type AuditRecord struct {
 	PrevHash        []byte
 	Hash            []byte
 }
+
+type SecurityIncident struct {
+	IncidentID    uuid.UUID
+	Rule          string
+	UserID        string
+	Count         int32
+	WindowSeconds int32
+	FirstSeenAt   pgtype.Timestamptz
+	DetectedAt    pgtype.Timestamptz
+	AuditSeq      int64
+}

@@ -23,10 +23,13 @@ func main() {
 		OpenAPI:    apispec.Spec,
 		Setup: func(ctx context.Context, rt *runtime.Runtime) ([]runtime.Worker, error) {
 			svc := app.New(rt.Pool, postgres.New(rt.Pool), rt.Clock, rt.Log)
+			if err := svc.ConfigureSecurity(); err != nil {
+				return nil, err
+			}
 			api.Mount(rt.Mux, svc, rt.Deny())
-			var workers []runtime.Worker
+			workers := []runtime.Worker{svc.RunVerification}
 			if len(rt.Cfg.KafkaBrokers) > 0 {
-				if err := messaging.EnsureTopics(ctx, rt.Cfg.KafkaBrokers, 1, messaging.WithDLT(contracts.TopicAuditEvents)...); err != nil {
+				if err := messaging.EnsureTopics(ctx, rt.Cfg.KafkaBrokers, 1, messaging.WithDLT(contracts.TopicAuditEvents, contracts.TopicSecurityEvents)...); err != nil {
 					return nil, err
 				}
 				consumer, err := messaging.NewConsumer(messaging.ConsumerConfig{

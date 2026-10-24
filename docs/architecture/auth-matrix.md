@@ -82,26 +82,39 @@
 
 | Метод и путь | Операция | CLINIC_OPERATOR | DUTY_OFFICER | IT_SERVICE | PHYSICIAN | SERVICE | TERRITORIAL_ANALYST |
 | --- | --- | :---: | :---: | :---: | :---: | :---: | :---: |
+| `GET /duty/obligations` | HANDLE_ESCALATION | 403 | 2xx | 403 | 403 | 403 | 403 |
+| `GET /escalations` | HANDLE_ESCALATION | 403 | 2xx | 403 | 403 | 403 | 403 |
+| `POST /escalations/{id}/close` | HANDLE_ESCALATION | 403 | 2xx | 403 | 403 | 403 | 403 |
 | `GET /obligations` | VIEW_OBLIGATION | 2xx | 2xx | 2xx | 2xx | 2xx | 403 |
 | `POST /obligations` | OPEN_OBLIGATION | 403 | 403 | 403 | 403 | 2xx | 403 |
 | `GET /obligations/{id}` | VIEW_OBLIGATION | 2xx | 2xx | 2xx | 2xx | 2xx | 403 |
 | `POST /obligations/{id}/cancel` | CANCEL_OBLIGATION | 403 | 2xx | 403 | 403 | 2xx | 403 |
 | `GET /obligations/{id}/candidates` | CONFIRM_TRANSFER | 2xx | 2xx | 403 | 403 | 403 | 403 |
 | `POST /obligations/{id}/confirm` | CONFIRM_TRANSFER | 2xx | 2xx | 403 | 403 | 403 | 403 |
+| `POST /obligations/{id}/dispatch` | DISPATCH_TRANSFER | 2xx | 2xx | 403 | 403 | 403 | 403 |
 | `GET /obligations/{id}/history` | VIEW_OBLIGATION | 2xx | 2xx | 2xx | 2xx | 2xx | 403 |
+| `POST /obligations/{id}/manual-transport` | HANDLE_ESCALATION | 403 | 2xx | 403 | 403 | 403 | 403 |
+| `POST /obligations/{id}/receive` | RECEIVE_TRANSFER | 2xx | 2xx | 403 | 403 | 403 | 403 |
 | `POST /obligations/{id}/reject` | REJECT_TRANSFER | 2xx | 2xx | 403 | 403 | 403 | 403 |
 | `POST /obligations/{id}/replace` | REPLACE_UNIT | 2xx | 2xx | 403 | 403 | 403 | 403 |
+| `GET /obligations/{id}/transport` | VIEW_OBLIGATION | 2xx | 2xx | 2xx | 2xx | 2xx | 403 |
 
 ## web
 
 | Метод и путь | Операция | CLINIC_OPERATOR | DUTY_OFFICER | IT_SERVICE | PHYSICIAN | SERVICE | TERRITORIAL_ANALYST |
 | --- | --- | :---: | :---: | :---: | :---: | :---: | :---: |
+| `GET /audit` | READ_AUDIT | 403 | 2xx | 2xx | 403 | 403 | 403 |
+| `GET /audit/export.csv` | READ_AUDIT | 403 | 2xx | 2xx | 403 | 403 | 403 |
+| `POST /audit/verify` | READ_AUDIT | 403 | 2xx | 2xx | 403 | 403 | 403 |
 | `GET /deficits` | VIEW_PLAN | 2xx | 2xx | 403 | 403 | 403 | 2xx |
 | `GET /demand` | VIEW_DEMAND | 403 | 2xx | 403 | 403 | 403 | 2xx |
 | `POST /demand/estimates` | PUBLISH_ESTIMATE | 403 | 403 | 403 | 403 | 403 | 2xx |
 | `GET /demand/estimates/{id}` | VIEW_DEMAND | 403 | 2xx | 403 | 403 | 403 | 2xx |
 | `POST /demand/estimates/{id}/publish` | PUBLISH_ESTIMATE | 403 | 403 | 403 | 403 | 403 | 2xx |
 | `POST /demand/files` | UPLOAD_STATISTICS | 403 | 403 | 403 | 403 | 403 | 2xx |
+| `GET /duty/escalations` | HANDLE_ESCALATION | 403 | 2xx | 403 | 403 | 403 | 403 |
+| `POST /duty/escalations/{id}/close` | HANDLE_ESCALATION | 403 | 2xx | 403 | 403 | 403 | 403 |
+| `GET /duty/tasks` | HANDLE_ESCALATION | 403 | 2xx | 403 | 403 | 403 | 403 |
 | `GET /events/obligations` | VIEW_OBLIGATION | 2xx | 2xx | 2xx | 2xx | 2xx | 403 |
 | `GET /forecasts/{id}` | VIEW_PLAN | 2xx | 2xx | 403 | 403 | 403 | 2xx |
 | `POST /forecasts/{id}/lines/{lineId}` | ADJUST_FORECAST | 2xx | 403 | 403 | 403 | 403 | 403 |
@@ -125,6 +138,9 @@
 | `GET /tasks` | VIEW_TASKS | 2xx | 2xx | 403 | 403 | 403 | 403 |
 | `GET /tasks/{id}` | VIEW_OBLIGATION | 2xx | 2xx | 2xx | 2xx | 2xx | 403 |
 | `POST /tasks/{id}/confirm` | CONFIRM_TRANSFER | 2xx | 2xx | 403 | 403 | 403 | 403 |
+| `POST /tasks/{id}/dispatch` | DISPATCH_TRANSFER | 2xx | 2xx | 403 | 403 | 403 | 403 |
+| `POST /tasks/{id}/manual-transport` | HANDLE_ESCALATION | 403 | 2xx | 403 | 403 | 403 | 403 |
+| `POST /tasks/{id}/receive` | RECEIVE_TRANSFER | 2xx | 2xx | 403 | 403 | 403 | 403 |
 | `POST /tasks/{id}/reject` | REJECT_TRANSFER | 2xx | 2xx | 403 | 403 | 403 | 403 |
 | `POST /tasks/{id}/replace` | REPLACE_UNIT | 2xx | 2xx | 403 | 403 | 403 | 403 |
 

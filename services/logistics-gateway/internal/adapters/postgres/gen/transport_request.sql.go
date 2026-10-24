@@ -18,7 +18,7 @@ SET lease_owner = $1::uuid, lease_until = $2::timestamptz
 WHERE obligation_id = $3
   AND (lease_until IS NULL OR lease_until < $4::timestamptz)
   AND (status IN ('REQUESTING', 'UNKNOWN') OR (status = 'ACCEPTED' AND cancel_requested))
-RETURNING obligation_id, request_id, source_clinic_id, target_clinic_id, component_kind_code, quantity, temperature_regime, status, shipment_ref, cancel_requested, attempts, next_attempt_at, lease_owner, lease_until, last_error, created_at, updated_at
+RETURNING obligation_id, request_id, source_clinic_id, target_clinic_id, component_kind_code, quantity, temperature_regime, status, shipment_ref, cancel_requested, attempts, next_attempt_at, lease_owner, lease_until, last_error, created_at, updated_at, progress_checked_at, dispatch_reported, delivery_reported, progress_payload
 `
 
 type ClaimParams struct {
@@ -58,6 +58,10 @@ func (q *Queries) Claim(ctx context.Context, arg ClaimParams) (TransportRequest,
 		&i.LastError,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ProgressCheckedAt,
+		&i.DispatchReported,
+		&i.DeliveryReported,
+		&i.ProgressPayload,
 	)
 	return i, err
 }
@@ -133,7 +137,7 @@ func (q *Queries) FailAttempt(ctx context.Context, arg FailAttemptParams) (int64
 }
 
 const find = `-- name: Find :one
-SELECT obligation_id, request_id, source_clinic_id, target_clinic_id, component_kind_code, quantity, temperature_regime, status, shipment_ref, cancel_requested, attempts, next_attempt_at, lease_owner, lease_until, last_error, created_at, updated_at FROM transport_request WHERE obligation_id = $1
+SELECT obligation_id, request_id, source_clinic_id, target_clinic_id, component_kind_code, quantity, temperature_regime, status, shipment_ref, cancel_requested, attempts, next_attempt_at, lease_owner, lease_until, last_error, created_at, updated_at, progress_checked_at, dispatch_reported, delivery_reported, progress_payload FROM transport_request WHERE obligation_id = $1
 `
 
 func (q *Queries) Find(ctx context.Context, obligationID uuid.UUID) (TransportRequest, error) {
@@ -157,6 +161,10 @@ func (q *Queries) Find(ctx context.Context, obligationID uuid.UUID) (TransportRe
 		&i.LastError,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ProgressCheckedAt,
+		&i.DispatchReported,
+		&i.DeliveryReported,
+		&i.ProgressPayload,
 	)
 	return i, err
 }

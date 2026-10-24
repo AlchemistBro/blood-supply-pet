@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -140,6 +141,17 @@ func (s *Service) Request(ctx context.Context, id uuid.UUID, actor Actor) (Reque
 	if err != nil {
 		return RequestRecord{}, err
 	}
+	for _, row := range rows {
+		if strings.HasPrefix(row.Key, "obligation:") {
+			var o obligationProjection
+			if err := json.Unmarshal(row.Payload, &o); err != nil {
+				return RequestRecord{}, err
+			}
+			blocked := o.ConditionsViolated != nil && *o.ConditionsViolated
+			n.ClinicalUseBlocked = n.ClinicalUseBlocked || blocked
+			n.Obligations = append(n.Obligations, RequestObligation{ID: o.ID, Source: o.Source, Status: o.Status, Units: len(o.Units), ClinicalUseBlocked: blocked})
+		}
+	}
 	return n, nil
 }
 func (s *Service) Requests(ctx context.Context, actor Actor) ([]RequestRecord, error) {
@@ -265,7 +277,7 @@ func (s *Service) event(ctx context.Context, tx pgx.Tx, id uuid.UUID, p contract
 	_, err := s.journal.Publish(ctx, tx, contracts.TopicMatchingEvents, id.String(), p)
 	return err
 }
-func (s *Service) audit(ctx context.Context, tx pgx.Tx, actor Actor, id uuid.UUID, action, result string) error {
+func (s *Service) audit(ctx context.Context, tx pgx.Tx, actor Actor, id uuid.UUID, action, result string, details ...map[string]any) error {
 	role := "SERVICE"
 	if len(actor.Roles) > 0 {
 		role = actor.Roles[0]
@@ -274,7 +286,11 @@ func (s *Service) audit(ctx context.Context, tx pgx.Tx, actor Actor, id uuid.UUI
 	if actor.ClinicID > 0 {
 		clinic = &actor.ClinicID
 	}
-	return s.journal.Audit(ctx, tx, messaging.AuditEntry{UserID: actor.User, Role: role, ClinicID: clinic, Action: action, ObjectType: "clinical_request", ObjectID: id.String(), Result: result})
+	var metadata map[string]any
+	if len(details) > 0 {
+		metadata = details[0]
+	}
+	return s.journal.Audit(ctx, tx, messaging.AuditEntry{UserID: actor.User, Role: role, ClinicID: clinic, Action: action, ObjectType: "clinical_request", ObjectID: id.String(), Result: result, Details: metadata})
 }
 
 func (s *Service) publishOffers(ctx context.Context, tx pgx.Tx, n RequestRecord) error {

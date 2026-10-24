@@ -9,7 +9,7 @@ import (
 )
 
 func (Store) Candidates(ctx context.Context, db app.DB, o domain.Obligation, at time.Time, limit int) ([]domain.UnitCopy, error) {
-	rows, err := db.Query(ctx, `SELECT u.unit_id,u.clinic_id,u.component_kind_code,u.blood_group_code,u.rh_positive,u.phenotype,u.volume_ml,u.expires_at FROM unit_copy u WHERE u.clinic_id=$1 AND u.component_kind_code=$2 AND u.unit_status_code='IN_STOCK' AND u.expires_at>$3 AND NOT EXISTS(SELECT 1 FROM allocation a WHERE a.unit_id=u.unit_id AND a.status='CONFIRMED') ORDER BY u.expires_at,u.unit_id`, o.SourceClinicID, o.ComponentKind, at)
+	rows, err := db.Query(ctx, `SELECT u.unit_id,u.clinic_id,u.component_kind_code,u.blood_group_code,u.rh_positive,u.phenotype,u.volume_ml,u.expires_at FROM unit_copy u WHERE u.clinic_id=$1 AND u.component_kind_code=$2 AND u.unit_status_code='IN_STOCK' AND u.expires_at>$3 AND u.local_dispatch_obligation_id IS NULL AND NOT u.clinical_use_blocked AND NOT EXISTS(SELECT 1 FROM allocation a WHERE a.unit_id=u.unit_id AND a.status='CONFIRMED') ORDER BY u.expires_at,u.unit_id`, o.SourceClinicID, o.ComponentKind, at)
 	if err != nil {
 		return nil, err
 	}

@@ -108,6 +108,11 @@ type BreakReport struct {
 	Reason string
 }
 
+// ChainBreakError передаёт обнаруженный разрыв из хранилища снимка журнала.
+type ChainBreakError struct{ Report BreakReport }
+
+func (e *ChainBreakError) Error() string { return e.Report.Reason }
+
 // Verifier проверяет записи, поступающие по порядку seq.
 type Verifier struct {
 	expectedSeq int64

@@ -28,19 +28,28 @@ type requestVariantView struct {
 	RuleVersion    int64     `json:"rule_version"`
 }
 type clinicalRequestView struct {
-	PatientStatus string               `json:"patient_allocation_status"`
-	ID            uuid.UUID            `json:"clinical_request_id"`
-	Clinic        int64                `json:"clinic_id"`
-	Status        string               `json:"status"`
-	Kind          string               `json:"component_kind"`
-	Requested     int                  `json:"requested_units"`
-	Urgency       string               `json:"urgency"`
-	Group         string               `json:"blood_group"`
-	Created       time.Time            `json:"created_at"`
-	Watermark     int64                `json:"stock_watermark"`
-	Synced        time.Time            `json:"stock_synced_at"`
-	Variants      []requestVariantView `json:"variants"`
-	Notes         []string             `json:"notes"`
+	ClinicalUseBlocked bool                    `json:"clinical_use_blocked"`
+	Obligations        []requestObligationView `json:"obligations"`
+	PatientStatus      string                  `json:"patient_allocation_status"`
+	ID                 uuid.UUID               `json:"clinical_request_id"`
+	Clinic             int64                   `json:"clinic_id"`
+	Status             string                  `json:"status"`
+	Kind               string                  `json:"component_kind"`
+	Requested          int                     `json:"requested_units"`
+	Urgency            string                  `json:"urgency"`
+	Group              string                  `json:"blood_group"`
+	Created            time.Time               `json:"created_at"`
+	Watermark          int64                   `json:"stock_watermark"`
+	Synced             time.Time               `json:"stock_synced_at"`
+	Variants           []requestVariantView    `json:"variants"`
+	Notes              []string                `json:"notes"`
+}
+type requestObligationView struct {
+	ID      uuid.UUID `json:"obligation_id"`
+	Source  int64     `json:"source_clinic_id"`
+	Status  string    `json:"status"`
+	Units   int       `json:"units"`
+	Blocked bool      `json:"clinical_use_blocked"`
 }
 
 func (r clinicalRequestView) PatientDeliveryLabel() string {

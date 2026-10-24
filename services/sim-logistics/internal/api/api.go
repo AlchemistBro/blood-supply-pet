@@ -60,16 +60,17 @@ type Deps struct {
 
 // Shipment — заказ в ответах API. Номеров единиц крови нет (ADR-0011).
 type Shipment struct {
-	ShipmentRef       string     `json:"shipmentRef"`
-	ClientRef         string     `json:"clientRef"`
-	SourceClinicID    int64      `json:"sourceClinicId"`
-	TargetClinicID    int64      `json:"targetClinicId"`
-	ComponentKind     string     `json:"componentKind"`
-	Containers        int        `json:"containers"`
-	TemperatureRegime string     `json:"temperatureRegime"`
-	Cancelled         bool       `json:"cancelled"`
-	CreatedAt         time.Time  `json:"createdAt"`
-	CancelledAt       *time.Time `json:"cancelledAt,omitempty"`
+	Progress          carrier.Progress `json:"progress"`
+	ShipmentRef       string           `json:"shipmentRef"`
+	ClientRef         string           `json:"clientRef"`
+	SourceClinicID    int64            `json:"sourceClinicId"`
+	TargetClinicID    int64            `json:"targetClinicId"`
+	ComponentKind     string           `json:"componentKind"`
+	Containers        int              `json:"containers"`
+	TemperatureRegime string           `json:"temperatureRegime"`
+	Cancelled         bool             `json:"cancelled"`
+	CreatedAt         time.Time        `json:"createdAt"`
+	CancelledAt       *time.Time       `json:"cancelledAt,omitempty"`
 }
 
 // ShipmentList — список заказов.
@@ -138,6 +139,7 @@ func NewHandler(d Deps) http.Handler {
 	mux.HandleFunc("GET /estimates", h.estimates)
 	mux.HandleFunc("POST /dev/faults", h.setFaults)
 	mux.HandleFunc("GET /dev/shipments", h.devShipments)
+	mux.HandleFunc("POST /dev/shipments/{shipmentRef}/progress", h.setProgress)
 	mux.HandleFunc("POST /dev/reset", h.reset)
 	mws := append([]httpx.Middleware{keepRawWriter()}, httpx.Standard(d.Log)...)
 	return httpx.Chain(mux, mws...)
@@ -381,6 +383,7 @@ func parseClinicID(s string, required bool) (int64, error) {
 
 func toShipment(s carrier.Shipment) Shipment {
 	return Shipment{
+		Progress:          s.Progress,
 		ShipmentRef:       s.ShipmentRef,
 		ClientRef:         s.ClientRef,
 		SourceClinicID:    s.SourceClinicID,

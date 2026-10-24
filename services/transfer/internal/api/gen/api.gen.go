@@ -201,6 +201,24 @@ func (e ReplacementResultCode) Valid() bool {
 	}
 }
 
+// Defines values for CloseEscalationJSONBodyResolution.
+const (
+	NOACTIONREQUIRED CloseEscalationJSONBodyResolution = "NO_ACTION_REQUIRED"
+	RESOLVED         CloseEscalationJSONBodyResolution = "RESOLVED"
+)
+
+// Valid indicates whether the value is a known member of the CloseEscalationJSONBodyResolution enum.
+func (e CloseEscalationJSONBodyResolution) Valid() bool {
+	switch e {
+	case NOACTIONREQUIRED:
+		return true
+	case RESOLVED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RejectObligationJSONBodyReason.
 const (
 	SOURCEREFUSED RejectObligationJSONBodyReason = "SOURCE_REFUSED"
@@ -272,6 +290,18 @@ type ConfirmationResult struct {
 // ConfirmationResultCode defines model for ConfirmationResult.Code.
 type ConfirmationResultCode string
 
+// Escalation defines model for Escalation.
+type Escalation struct {
+	ClosedAt     *time.Time         `json:"closed_at,omitempty"`
+	ClosedBy     string             `json:"closed_by"`
+	Comment      string             `json:"comment"`
+	EscalationId openapi_types.UUID `json:"escalation_id"`
+	ObligationId openapi_types.UUID `json:"obligation_id"`
+	RaisedAt     time.Time          `json:"raised_at"`
+	Reason       string             `json:"reason"`
+	Resolution   string             `json:"resolution"`
+}
+
 // HistoryEntry defines model for HistoryEntry.
 type HistoryEntry struct {
 	Action     string    `json:"action"`
@@ -284,6 +314,7 @@ type HistoryEntry struct {
 type Obligation struct {
 	BloodGroup                      *string            `json:"blood_group,omitempty"`
 	ChoiceId                        openapi_types.UUID `json:"choice_id"`
+	ClinicalUseBlocked              bool               `json:"clinical_use_blocked"`
 	ComponentKind                   string             `json:"component_kind"`
 	ConfirmedQty                    int                `json:"confirmed_qty"`
 	CreatedAt                       time.Time          `json:"created_at"`
@@ -298,11 +329,12 @@ type Obligation struct {
 	SourceClinicId                  int64              `json:"source_clinic_id"`
 
 	// Spec Спецификация замены без фенотипа
-	Spec           SpecView         `json:"spec"`
-	Status         ObligationStatus `json:"status"`
-	StatusReason   *string          `json:"status_reason,omitempty"`
-	TargetClinicId int64            `json:"target_clinic_id"`
-	TransportRef   *string          `json:"transport_ref,omitempty"`
+	Spec                SpecView         `json:"spec"`
+	Status              ObligationStatus `json:"status"`
+	StatusReason        *string          `json:"status_reason,omitempty"`
+	TargetClinicId      int64            `json:"target_clinic_id"`
+	TransportRef        *string          `json:"transport_ref,omitempty"`
+	TransportViolations []string         `json:"transport_violations"`
 
 	// Units Действующие закрепления
 	Units     []openapi_types.UUID `json:"units"`
@@ -397,6 +429,24 @@ type SpecView struct {
 	RuleVersion       string `json:"rule_version"`
 }
 
+// Transport defines model for Transport.
+type Transport struct {
+	ArrivalContainerIntact   bool               `json:"arrival_container_intact"`
+	ArrivedAt                *time.Time         `json:"arrived_at,omitempty"`
+	AssignedAt               time.Time          `json:"assigned_at"`
+	AssignedBy               string             `json:"assigned_by"`
+	ConditionsViolated       bool               `json:"conditions_violated"`
+	CourierRef               string             `json:"courier_ref"`
+	DepartedAt               *time.Time         `json:"departed_at,omitempty"`
+	DepartureContainerIntact bool               `json:"departure_container_intact"`
+	Manual                   bool               `json:"manual"`
+	ObligationId             openapi_types.UUID `json:"obligation_id"`
+	TemperatureAtArrivalC    *float64           `json:"temperature_at_arrival_c,omitempty"`
+	TemperatureAtDispatchC   *float64           `json:"temperature_at_dispatch_c,omitempty"`
+	TransportRef             string             `json:"transport_ref"`
+	Violations               []string           `json:"violations"`
+}
+
 // ObligationId defines model for ObligationId.
 type ObligationId = openapi_types.UUID
 
@@ -418,6 +468,26 @@ type Replacement = ReplacementResult
 // Unauthorized defines model for Unauthorized.
 type Unauthorized = Problem
 
+// ListAllObligationsParams defines parameters for ListAllObligations.
+type ListAllObligationsParams struct {
+	Status *string `form:"status,omitempty" json:"status,omitempty"`
+	Offset *int    `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// ListEscalationsParams defines parameters for ListEscalations.
+type ListEscalationsParams struct {
+	IncludeClosed *bool `form:"include_closed,omitempty" json:"include_closed,omitempty"`
+}
+
+// CloseEscalationJSONBody defines parameters for CloseEscalation.
+type CloseEscalationJSONBody struct {
+	Comment    string                            `json:"comment"`
+	Resolution CloseEscalationJSONBodyResolution `json:"resolution"`
+}
+
+// CloseEscalationJSONBodyResolution defines parameters for CloseEscalation.
+type CloseEscalationJSONBodyResolution string
+
 // ListObligationsParams defines parameters for ListObligations.
 type ListObligationsParams struct {
 	RequestId      *openapi_types.UUID `form:"requestId,omitempty" json:"requestId,omitempty"`
@@ -425,10 +495,32 @@ type ListObligationsParams struct {
 	Status         *ObligationStatus   `form:"status,omitempty" json:"status,omitempty"`
 }
 
+// DispatchTransferJSONBody defines parameters for DispatchTransfer.
+type DispatchTransferJSONBody struct {
+	At              *time.Time `json:"at,omitempty"`
+	ContainerIntact bool       `json:"container_intact"`
+	CourierRef      string     `json:"courier_ref"`
+	TemperatureC    *float64   `json:"temperature_c,omitempty"`
+}
+
 // GetObligationHistoryParams defines parameters for GetObligationHistory.
 type GetObligationHistoryParams struct {
 	Limit  *int `form:"limit,omitempty" json:"limit,omitempty"`
 	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// AssignManualTransportJSONBody defines parameters for AssignManualTransport.
+type AssignManualTransportJSONBody struct {
+	CourierRef   string `json:"courier_ref"`
+	TransportRef string `json:"transport_ref"`
+}
+
+// ReceiveTransferJSONBody defines parameters for ReceiveTransfer.
+type ReceiveTransferJSONBody struct {
+	At                   *time.Time `json:"at,omitempty"`
+	ContainerIntact      bool       `json:"container_intact"`
+	TemperatureC         *float64   `json:"temperature_c,omitempty"`
+	TemperatureExcursion bool       `json:"temperature_excursion"`
 }
 
 // RejectObligationJSONBody defines parameters for RejectObligation.
@@ -439,6 +531,9 @@ type RejectObligationJSONBody struct {
 // RejectObligationJSONBodyReason defines parameters for RejectObligation.
 type RejectObligationJSONBodyReason string
 
+// CloseEscalationJSONRequestBody defines body for CloseEscalation for application/json ContentType.
+type CloseEscalationJSONRequestBody CloseEscalationJSONBody
+
 // OpenObligationJSONRequestBody defines body for OpenObligation for application/json ContentType.
 type OpenObligationJSONRequestBody = OpenObligationInput
 
@@ -448,6 +543,15 @@ type CancelObligationJSONRequestBody = CancelInput
 // ConfirmTransferJSONRequestBody defines body for ConfirmTransfer for application/json ContentType.
 type ConfirmTransferJSONRequestBody = ConfirmInput
 
+// DispatchTransferJSONRequestBody defines body for DispatchTransfer for application/json ContentType.
+type DispatchTransferJSONRequestBody DispatchTransferJSONBody
+
+// AssignManualTransportJSONRequestBody defines body for AssignManualTransport for application/json ContentType.
+type AssignManualTransportJSONRequestBody AssignManualTransportJSONBody
+
+// ReceiveTransferJSONRequestBody defines body for ReceiveTransfer for application/json ContentType.
+type ReceiveTransferJSONRequestBody ReceiveTransferJSONBody
+
 // RejectObligationJSONRequestBody defines body for RejectObligation for application/json ContentType.
 type RejectObligationJSONRequestBody RejectObligationJSONBody
 
@@ -456,6 +560,15 @@ type ReplaceUnitJSONRequestBody = ReplaceInput
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+
+	// (GET /duty/obligations)
+	ListAllObligations(w http.ResponseWriter, r *http.Request, params ListAllObligationsParams)
+
+	// (GET /escalations)
+	ListEscalations(w http.ResponseWriter, r *http.Request, params ListEscalationsParams)
+
+	// (POST /escalations/{id}/close)
+	CloseEscalation(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// ListObligations Задания по заявке или по клинике-источнику. Нужен хотя бы один из параметров requestId, sourceClinicId.
 	// (GET /obligations)
 	ListObligations(w http.ResponseWriter, r *http.Request, params ListObligationsParams)
@@ -474,15 +587,27 @@ type ServerInterface interface {
 	// ConfirmTransfer Подтвердить задание единицами (оператор клиники-источника). Ответ — в том же запросе.
 	// (POST /obligations/{id}/confirm)
 	ConfirmTransfer(w http.ResponseWriter, r *http.Request, id ObligationId)
+
+	// (POST /obligations/{id}/dispatch)
+	DispatchTransfer(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// GetObligationHistory История задания без содержимого details
 	// (GET /obligations/{id}/history)
 	GetObligationHistory(w http.ResponseWriter, r *http.Request, id ObligationId, params GetObligationHistoryParams)
+
+	// (POST /obligations/{id}/manual-transport)
+	AssignManualTransport(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+
+	// (POST /obligations/{id}/receive)
+	ReceiveTransfer(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// RejectObligation Отказ клиники-источника (PENDING → REJECTED, SOURCE_REFUSED)
 	// (POST /obligations/{id}/reject)
 	RejectObligation(w http.ResponseWriter, r *http.Request, id ObligationId)
 	// ReplaceUnit Заменить закреплённую единицу равноценной до отправки (ADR-0011)
 	// (POST /obligations/{id}/replace)
 	ReplaceUnit(w http.ResponseWriter, r *http.Request, id ObligationId)
+
+	// (GET /obligations/{id}/transport)
+	GetTransport(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -493,6 +618,111 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListAllObligations operation middleware
+func (siw *ServerInterfaceWrapper) ListAllObligations(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAllObligationsParams
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", r.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAllObligations(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListEscalations operation middleware
+func (siw *ServerInterfaceWrapper) ListEscalations(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListEscalationsParams
+
+	// ------------- Optional query parameter "include_closed" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "include_closed", r.URL.Query(), &params.IncludeClosed, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "include_closed"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "include_closed", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListEscalations(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CloseEscalation operation middleware
+func (siw *ServerInterfaceWrapper) CloseEscalation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CloseEscalation(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListObligations operation middleware
 func (siw *ServerInterfaceWrapper) ListObligations(w http.ResponseWriter, r *http.Request) {
@@ -671,6 +901,32 @@ func (siw *ServerInterfaceWrapper) ConfirmTransfer(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// DispatchTransfer operation middleware
+func (siw *ServerInterfaceWrapper) DispatchTransfer(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DispatchTransfer(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetObligationHistory operation middleware
 func (siw *ServerInterfaceWrapper) GetObligationHistory(w http.ResponseWriter, r *http.Request) {
 
@@ -726,6 +982,58 @@ func (siw *ServerInterfaceWrapper) GetObligationHistory(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// AssignManualTransport operation middleware
+func (siw *ServerInterfaceWrapper) AssignManualTransport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AssignManualTransport(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReceiveTransfer operation middleware
+func (siw *ServerInterfaceWrapper) ReceiveTransfer(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReceiveTransfer(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RejectObligation operation middleware
 func (siw *ServerInterfaceWrapper) RejectObligation(w http.ResponseWriter, r *http.Request) {
 
@@ -769,6 +1077,32 @@ func (siw *ServerInterfaceWrapper) ReplaceUnit(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReplaceUnit(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetTransport operation middleware
+func (siw *ServerInterfaceWrapper) GetTransport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTransport(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -898,6 +1232,13 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/escalations", wrapper.ListEscalations)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/escalations/{id}/close", wrapper.CloseEscalation)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/duty/obligations", wrapper.ListAllObligations)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/obligations/{id}/manual-transport", wrapper.AssignManualTransport)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/obligations/{id}/transport", wrapper.GetTransport)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/obligations/{id}/dispatch", wrapper.DispatchTransfer)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/obligations/{id}/receive", wrapper.ReceiveTransfer)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/obligations/{id}/candidates", wrapper.GetCandidates)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/obligations", wrapper.ListObligations)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/obligations", wrapper.OpenObligation)
@@ -922,6 +1263,67 @@ type NotFoundApplicationProblemPlusJSONResponse Problem
 type ReplacementJSONResponse ReplacementResult
 
 type UnauthorizedApplicationProblemPlusJSONResponse Problem
+
+type ListAllObligationsRequestObject struct {
+	Params ListAllObligationsParams
+}
+
+type ListAllObligationsResponseObject interface {
+	VisitListAllObligationsResponse(w http.ResponseWriter) error
+}
+
+type ListAllObligations200JSONResponse ObligationList
+
+func (response ListAllObligations200JSONResponse) VisitListAllObligationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEscalationsRequestObject struct {
+	Params ListEscalationsParams
+}
+
+type ListEscalationsResponseObject interface {
+	VisitListEscalationsResponse(w http.ResponseWriter) error
+}
+
+type ListEscalations200JSONResponse []Escalation
+
+func (response ListEscalations200JSONResponse) VisitListEscalationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CloseEscalationRequestObject struct {
+	Id   openapi_types.UUID `json:"id"`
+	Body *CloseEscalationJSONRequestBody
+}
+
+type CloseEscalationResponseObject interface {
+	VisitCloseEscalationResponse(w http.ResponseWriter) error
+}
+
+type CloseEscalation204Response struct {
+}
+
+func (response CloseEscalation204Response) VisitCloseEscalationResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
 
 type ListObligationsRequestObject struct {
 	Params ListObligationsParams
@@ -1389,6 +1791,23 @@ func (response ConfirmTransfer503JSONResponse) VisitConfirmTransferResponse(w ht
 	return err
 }
 
+type DispatchTransferRequestObject struct {
+	Id   openapi_types.UUID `json:"id"`
+	Body *DispatchTransferJSONRequestBody
+}
+
+type DispatchTransferResponseObject interface {
+	VisitDispatchTransferResponse(w http.ResponseWriter) error
+}
+
+type DispatchTransfer204Response struct {
+}
+
+func (response DispatchTransfer204Response) VisitDispatchTransferResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
 type GetObligationHistoryRequestObject struct {
 	Id     ObligationId `json:"id"`
 	Params GetObligationHistoryParams
@@ -1476,6 +1895,40 @@ func (response GetObligationHistory404ApplicationProblemPlusJSONResponse) VisitG
 	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
 	return err
+}
+
+type AssignManualTransportRequestObject struct {
+	Id   openapi_types.UUID `json:"id"`
+	Body *AssignManualTransportJSONRequestBody
+}
+
+type AssignManualTransportResponseObject interface {
+	VisitAssignManualTransportResponse(w http.ResponseWriter) error
+}
+
+type AssignManualTransport204Response struct {
+}
+
+func (response AssignManualTransport204Response) VisitAssignManualTransportResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ReceiveTransferRequestObject struct {
+	Id   openapi_types.UUID `json:"id"`
+	Body *ReceiveTransferJSONRequestBody
+}
+
+type ReceiveTransferResponseObject interface {
+	VisitReceiveTransferResponse(w http.ResponseWriter) error
+}
+
+type ReceiveTransfer204Response struct {
+}
+
+func (response ReceiveTransfer204Response) VisitReceiveTransferResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
 }
 
 type RejectObligationRequestObject struct {
@@ -1697,8 +2150,39 @@ func (response ReplaceUnit503JSONResponse) VisitReplaceUnitResponse(w http.Respo
 	return err
 }
 
+type GetTransportRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type GetTransportResponseObject interface {
+	VisitGetTransportResponse(w http.ResponseWriter) error
+}
+
+type GetTransport200JSONResponse Transport
+
+func (response GetTransport200JSONResponse) VisitGetTransportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+
+	// (GET /duty/obligations)
+	ListAllObligations(ctx context.Context, request ListAllObligationsRequestObject) (ListAllObligationsResponseObject, error)
+
+	// (GET /escalations)
+	ListEscalations(ctx context.Context, request ListEscalationsRequestObject) (ListEscalationsResponseObject, error)
+
+	// (POST /escalations/{id}/close)
+	CloseEscalation(ctx context.Context, request CloseEscalationRequestObject) (CloseEscalationResponseObject, error)
 	// ListObligations Задания по заявке или по клинике-источнику. Нужен хотя бы один из параметров requestId, sourceClinicId.
 	// (GET /obligations)
 	ListObligations(ctx context.Context, request ListObligationsRequestObject) (ListObligationsResponseObject, error)
@@ -1717,15 +2201,27 @@ type StrictServerInterface interface {
 	// ConfirmTransfer Подтвердить задание единицами (оператор клиники-источника). Ответ — в том же запросе.
 	// (POST /obligations/{id}/confirm)
 	ConfirmTransfer(ctx context.Context, request ConfirmTransferRequestObject) (ConfirmTransferResponseObject, error)
+
+	// (POST /obligations/{id}/dispatch)
+	DispatchTransfer(ctx context.Context, request DispatchTransferRequestObject) (DispatchTransferResponseObject, error)
 	// GetObligationHistory История задания без содержимого details
 	// (GET /obligations/{id}/history)
 	GetObligationHistory(ctx context.Context, request GetObligationHistoryRequestObject) (GetObligationHistoryResponseObject, error)
+
+	// (POST /obligations/{id}/manual-transport)
+	AssignManualTransport(ctx context.Context, request AssignManualTransportRequestObject) (AssignManualTransportResponseObject, error)
+
+	// (POST /obligations/{id}/receive)
+	ReceiveTransfer(ctx context.Context, request ReceiveTransferRequestObject) (ReceiveTransferResponseObject, error)
 	// RejectObligation Отказ клиники-источника (PENDING → REJECTED, SOURCE_REFUSED)
 	// (POST /obligations/{id}/reject)
 	RejectObligation(ctx context.Context, request RejectObligationRequestObject) (RejectObligationResponseObject, error)
 	// ReplaceUnit Заменить закреплённую единицу равноценной до отправки (ADR-0011)
 	// (POST /obligations/{id}/replace)
 	ReplaceUnit(ctx context.Context, request ReplaceUnitRequestObject) (ReplaceUnitResponseObject, error)
+
+	// (GET /obligations/{id}/transport)
+	GetTransport(ctx context.Context, request GetTransportRequestObject) (GetTransportResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -1765,6 +2261,91 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// ListAllObligations operation middleware
+func (sh *strictHandler) ListAllObligations(w http.ResponseWriter, r *http.Request, params ListAllObligationsParams) {
+	var request ListAllObligationsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAllObligations(ctx, request.(ListAllObligationsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAllObligations")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAllObligationsResponseObject); ok {
+		if err := validResponse.VisitListAllObligationsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListEscalations operation middleware
+func (sh *strictHandler) ListEscalations(w http.ResponseWriter, r *http.Request, params ListEscalationsParams) {
+	var request ListEscalationsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListEscalations(ctx, request.(ListEscalationsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListEscalations")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListEscalationsResponseObject); ok {
+		if err := validResponse.VisitListEscalationsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CloseEscalation operation middleware
+func (sh *strictHandler) CloseEscalation(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request CloseEscalationRequestObject
+
+	request.Id = id
+
+	var body CloseEscalationJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CloseEscalation(ctx, request.(CloseEscalationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CloseEscalation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CloseEscalationResponseObject); ok {
+		if err := validResponse.VisitCloseEscalationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // ListObligations operation middleware
@@ -1942,6 +2523,39 @@ func (sh *strictHandler) ConfirmTransfer(w http.ResponseWriter, r *http.Request,
 	}
 }
 
+// DispatchTransfer operation middleware
+func (sh *strictHandler) DispatchTransfer(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request DispatchTransferRequestObject
+
+	request.Id = id
+
+	var body DispatchTransferJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DispatchTransfer(ctx, request.(DispatchTransferRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DispatchTransfer")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DispatchTransferResponseObject); ok {
+		if err := validResponse.VisitDispatchTransferResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetObligationHistory operation middleware
 func (sh *strictHandler) GetObligationHistory(w http.ResponseWriter, r *http.Request, id ObligationId, params GetObligationHistoryParams) {
 	var request GetObligationHistoryRequestObject
@@ -1962,6 +2576,72 @@ func (sh *strictHandler) GetObligationHistory(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetObligationHistoryResponseObject); ok {
 		if err := validResponse.VisitGetObligationHistoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AssignManualTransport operation middleware
+func (sh *strictHandler) AssignManualTransport(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request AssignManualTransportRequestObject
+
+	request.Id = id
+
+	var body AssignManualTransportJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AssignManualTransport(ctx, request.(AssignManualTransportRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AssignManualTransport")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AssignManualTransportResponseObject); ok {
+		if err := validResponse.VisitAssignManualTransportResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReceiveTransfer operation middleware
+func (sh *strictHandler) ReceiveTransfer(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request ReceiveTransferRequestObject
+
+	request.Id = id
+
+	var body ReceiveTransferJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReceiveTransfer(ctx, request.(ReceiveTransferRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReceiveTransfer")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReceiveTransferResponseObject); ok {
+		if err := validResponse.VisitReceiveTransferResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -2028,6 +2708,32 @@ func (sh *strictHandler) ReplaceUnit(w http.ResponseWriter, r *http.Request, id 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ReplaceUnitResponseObject); ok {
 		if err := validResponse.VisitReplaceUnitResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetTransport operation middleware
+func (sh *strictHandler) GetTransport(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request GetTransportRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetTransport(ctx, request.(GetTransportRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetTransport")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetTransportResponseObject); ok {
+		if err := validResponse.VisitGetTransportResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

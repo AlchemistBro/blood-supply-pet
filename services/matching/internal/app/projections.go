@@ -31,17 +31,18 @@ type unitProjection struct {
 	Status    string     `json:"status"`
 }
 type obligationProjection struct {
-	RequestedQty      int         `json:"requested_qty,omitempty"`
-	AllocationVersion int64       `json:"allocation_version,omitempty"`
-	ID                uuid.UUID   `json:"obligation_id"`
-	Request           uuid.UUID   `json:"request_id,omitempty"`
-	Source            int64       `json:"source_clinic_id,omitempty"`
-	Target            int64       `json:"target_clinic_id,omitempty"`
-	Kind              string      `json:"component_kind,omitempty"`
-	Status            string      `json:"status,omitempty"`
-	Units             []uuid.UUID `json:"units,omitempty"`
-	Version           int64       `json:"obligation_version,omitempty"`
-	Next              *uuid.UUID  `json:"next_obligation_id,omitempty"`
+	ConditionsViolated *bool       `json:"conditions_violated,omitempty"`
+	RequestedQty       int         `json:"requested_qty,omitempty"`
+	AllocationVersion  int64       `json:"allocation_version,omitempty"`
+	ID                 uuid.UUID   `json:"obligation_id"`
+	Request            uuid.UUID   `json:"request_id,omitempty"`
+	Source             int64       `json:"source_clinic_id,omitempty"`
+	Target             int64       `json:"target_clinic_id,omitempty"`
+	Kind               string      `json:"component_kind,omitempty"`
+	Status             string      `json:"status,omitempty"`
+	Units              []uuid.UUID `json:"units,omitempty"`
+	Version            int64       `json:"obligation_version,omitempty"`
+	Next               *uuid.UUID  `json:"next_obligation_id,omitempty"`
 }
 
 func (s *Service) Handle(ctx context.Context, msg messaging.Message) error {
@@ -180,9 +181,9 @@ func (s *Service) Handle(ctx context.Context, msg messaging.Message) error {
 			if err := s.store.SetStatus(ctx, tx, o.Request, status, s.clock.Now()); err != nil {
 				return err
 			}
-			if o.Status == "REJECTED" || o.Status == "BROKEN" || (o.Status == "EXPIRED" && o.Next == nil) {
+			if o.Status == "REJECTED" || o.Status == "BROKEN" || (o.Status == "EXPIRED" && o.Next == nil) || (o.Status == "DELIVERED" && o.ConditionsViolated != nil && *o.ConditionsViolated) {
 				reason := matching.DeficitSourceRejected
-				if o.Status == "BROKEN" {
+				if o.Status == "BROKEN" || o.Status == "DELIVERED" {
 					reason = matching.DeficitUnitWithdrawn
 				}
 				if o.Status == "EXPIRED" {
@@ -228,7 +229,9 @@ func (s *Service) requestProgress(ctx context.Context, tx pgx.Tx, request domain
 		}
 		switch o.Status {
 		case "DELIVERED":
-			delivered += len(o.Units)
+			if o.ConditionsViolated == nil || !*o.ConditionsViolated {
+				delivered += len(o.Units)
+			}
 		case "DISPATCHED":
 			dispatched += len(o.Units)
 		case "TRANSPORT_REQUESTED":
@@ -329,10 +332,21 @@ func (s *Service) matchInput(ctx context.Context, tx pgx.Tx, request domain.Requ
 			obligations = append(obligations, o)
 		}
 	}
+	unitClinics := make(map[uuid.UUID]int64, len(in.Units))
+	for _, u := range in.Units {
+		unitClinics[u.UnitID] = u.ClinicID
+	}
 	for _, o := range obligations {
 		if o.Status == "CONFIRMED" || o.Status == "TRANSPORT_REQUESTED" || o.Status == "DISPATCHED" {
 			for _, id := range o.Units {
 				reserved[id] = true
+			}
+		}
+		if o.Status == "DELIVERED" {
+			for _, id := range o.Units {
+				if clinic, ok := unitClinics[id]; ok && (clinic == o.Source || (o.ConditionsViolated != nil && *o.ConditionsViolated)) {
+					reserved[id] = true
+				}
 			}
 		}
 	}

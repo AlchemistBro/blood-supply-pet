@@ -20,9 +20,12 @@ import (
 
 // Defines values for NotificationKind.
 const (
-	ESCALATION     NotificationKind = "ESCALATION"
-	TRANSFERBROKEN NotificationKind = "TRANSFER_BROKEN"
-	URGENTTASK     NotificationKind = "URGENT_TASK"
+	ESCALATION       NotificationKind = "ESCALATION"
+	SECURITYINCIDENT NotificationKind = "SECURITY_INCIDENT"
+	STOCKBELOWNORM   NotificationKind = "STOCK_BELOW_NORM"
+	TRANSFERBROKEN   NotificationKind = "TRANSFER_BROKEN"
+	TRANSFERTERMINAL NotificationKind = "TRANSFER_TERMINAL"
+	URGENTTASK       NotificationKind = "URGENT_TASK"
 )
 
 // Valid indicates whether the value is a known member of the NotificationKind enum.
@@ -30,7 +33,13 @@ func (e NotificationKind) Valid() bool {
 	switch e {
 	case ESCALATION:
 		return true
+	case SECURITYINCIDENT:
+		return true
+	case STOCKBELOWNORM:
+		return true
 	case TRANSFERBROKEN:
+		return true
+	case TRANSFERTERMINAL:
 		return true
 	case URGENTTASK:
 		return true
@@ -43,6 +52,8 @@ func (e NotificationKind) Valid() bool {
 const (
 	CLINICOPERATOR NotificationRecipientRole = "CLINIC_OPERATOR"
 	DUTYOFFICER    NotificationRecipientRole = "DUTY_OFFICER"
+	ITSERVICE      NotificationRecipientRole = "IT_SERVICE"
+	PHYSICIAN      NotificationRecipientRole = "PHYSICIAN"
 )
 
 // Valid indicates whether the value is a known member of the NotificationRecipientRole enum.
@@ -51,6 +62,10 @@ func (e NotificationRecipientRole) Valid() bool {
 	case CLINICOPERATOR:
 		return true
 	case DUTYOFFICER:
+		return true
+	case ITSERVICE:
+		return true
+	case PHYSICIAN:
 		return true
 	default:
 		return false

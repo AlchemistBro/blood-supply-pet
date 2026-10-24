@@ -37,6 +37,8 @@ const (
 // Obligation — обязательство на передачу O07 в том виде, в котором оно хранится в базе transfer.
 // Номера случая пациента здесь нет: заявку представляет только request_id.
 type Obligation struct {
+	ClinicalUseBlocked      bool
+	TransportViolations     []string
 	PatientAllocationKey    *uuid.UUID
 	PatientAllocationStatus string
 	PatientAllocationAt     *time.Time

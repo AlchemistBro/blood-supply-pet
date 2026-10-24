@@ -77,11 +77,12 @@ func setup(ctx context.Context, rt *runtime.Runtime) ([]runtime.Worker, error) {
 
 	workers := []runtime.Worker{svc.RunSender}
 	if len(rt.Cfg.KafkaBrokers) > 0 {
-		if err := messaging.EnsureTopics(ctx, rt.Cfg.KafkaBrokers, 1, messaging.WithDLT(contracts.TopicTransferEvents)...); err != nil {
+		topics := []string{contracts.TopicTransferEvents, contracts.TopicInventoryEvents, contracts.TopicSecurityEvents}
+		if err := messaging.EnsureTopics(ctx, rt.Cfg.KafkaBrokers, 1, messaging.WithDLT(topics...)...); err != nil {
 			return nil, err
 		}
 		consumer, err := messaging.NewConsumer(messaging.ConsumerConfig{
-			Brokers: rt.Cfg.KafkaBrokers, Group: "notification", Topics: []string{contracts.TopicTransferEvents},
+			Brokers: rt.Cfg.KafkaBrokers, Group: "notification", Topics: topics,
 		}, svc.HandleMessage, rt.Log)
 		if err != nil {
 			return nil, err

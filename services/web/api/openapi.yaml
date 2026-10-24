@@ -10,6 +10,68 @@ info:
 servers:
   - url: http://localhost:8080
 paths:
+  /audit:
+    get:
+      operationId: auditPage
+      x-bs-operation: READ_AUDIT
+      responses:
+        "200": { description: Журнал аудита с фильтрами }
+  /audit/export.csv:
+    get:
+      operationId: auditCSV
+      x-bs-operation: READ_AUDIT
+      responses:
+        "200": { description: Текущая страница журнала в CSV }
+  /audit/verify:
+    post:
+      operationId: auditVerify
+      x-bs-operation: READ_AUDIT
+      responses:
+        "200": { description: Результат проверки цепочки хешей }
+  /duty/escalations:
+    get:
+      operationId: escalationsPage
+      x-bs-operation: HANDLE_ESCALATION
+      responses:
+        "200": { description: Обращения дежурного }
+  /duty/escalations/{id}/close:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: closeEscalation
+      x-bs-operation: HANDLE_ESCALATION
+      responses:
+        "303": { description: Обращение закрыто }
+  /duty/tasks:
+    get:
+      operationId: allTasks
+      x-bs-operation: HANDLE_ESCALATION
+      responses:
+        "200": { description: Задания всех клиник с фильтром и страницами }
+  /tasks/{id}/manual-transport:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: manualTransport
+      x-bs-operation: HANDLE_ESCALATION
+      responses:
+        "303": { description: Ручная перевозка назначена }
+  /tasks/{id}/dispatch:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: dispatchTransfer
+      x-bs-operation: DISPATCH_TRANSFER
+      responses:
+        "303": { description: Отправка зарегистрирована }
+  /tasks/{id}/receive:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: receiveTransfer
+      x-bs-operation: RECEIVE_TRANSFER
+      responses:
+        "303": { description: Приёмка зарегистрирована }
   /rules:
     get:
       operationId: rulesPage

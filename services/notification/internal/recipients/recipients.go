@@ -37,19 +37,23 @@ var demo []byte
 const clinicCodeVar = "{clinic_code}"
 
 type file struct {
-	Version         int               `json:"version"`
-	Note            string            `json:"note,omitempty"`
-	Duty            string            `json:"duty"`
-	OperatorPattern string            `json:"operator_pattern,omitempty"`
-	Operators       map[string]string `json:"operators,omitempty"`
+	ITService        string            `json:"it_service,omitempty"`
+	PhysicianPattern string            `json:"physician_pattern,omitempty"`
+	Version          int               `json:"version"`
+	Note             string            `json:"note,omitempty"`
+	Duty             string            `json:"duty"`
+	OperatorPattern  string            `json:"operator_pattern,omitempty"`
+	Operators        map[string]string `json:"operators,omitempty"`
 }
 
 // Directory — загруженный справочник. Неизменяем после загрузки, безопасен для параллельного чтения.
 type Directory struct {
-	duty      string
-	operators map[int64]string
-	pattern   string
-	codes     map[int64]string
+	itService        string
+	physicianPattern string
+	duty             string
+	operators        map[int64]string
+	pattern          string
+	codes            map[int64]string
 }
 
 // Default — встроенный демо-справочник.
@@ -90,6 +94,23 @@ func Load(r io.Reader, clinics []refdata.Clinic) (*Directory, error) {
 		return nil, fmt.Errorf("справочник адресатов: duty: %w", err)
 	}
 	d.duty = f.Duty
+	if f.ITService != "" {
+		if err := checkAddress(f.ITService); err != nil {
+			return nil, err
+		}
+		d.itService = f.ITService
+	}
+	if f.PhysicianPattern != "" {
+		if !strings.Contains(f.PhysicianPattern, clinicCodeVar) {
+			return nil, errors.New("physician_pattern должен содержать {clinic_code}")
+		}
+		for _, code := range d.codes {
+			if err := checkAddress(strings.ReplaceAll(f.PhysicianPattern, clinicCodeVar, code)); err != nil {
+				return nil, err
+			}
+		}
+		d.physicianPattern = f.PhysicianPattern
+	}
 	for key, addr := range f.Operators {
 		id, err := strconv.ParseInt(key, 10, 64)
 		if err != nil {
@@ -120,6 +141,17 @@ func Load(r io.Reader, clinics []refdata.Clinic) (*Directory, error) {
 // Address возвращает ящик адресата; false — адресат не настроен.
 func (d *Directory) Address(r domain.Recipient) (string, bool) {
 	switch r.Role {
+	case domain.RoleIT:
+		return d.itService, d.itService != ""
+	case domain.RolePhysician:
+		if r.ClinicID == nil || d.physicianPattern == "" {
+			return "", false
+		}
+		code, ok := d.codes[*r.ClinicID]
+		if !ok {
+			return "", false
+		}
+		return strings.ReplaceAll(d.physicianPattern, clinicCodeVar, code), true
 	case domain.RoleDuty:
 		return d.duty, d.duty != ""
 	case domain.RoleOperator:

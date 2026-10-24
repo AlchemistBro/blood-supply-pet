@@ -2,5 +2,7 @@
   "obligation_id": "0192f3a1-7b2c-7d4e-8f90-300000000001",
   "shipment_ref": "C03-000123",
   "dispatched_at": "2026-10-23T11:02:00Z",
-  "courier_ref": "courier-0042"
+  "courier_ref": "courier-0042",
+  "temperature_at_dispatch_c": 4.2,
+  "container_intact": true
 }

@@ -79,7 +79,7 @@ WHERE clinic_id = sqlc.arg('clinic_id') AND component_kind_code = sqlc.arg('comp
 -- Пересчёт по копии вместо инкремента: проекция переживает дубли и перестановку событий.
 UPDATE source_stock SET available_units = (
     SELECT count(*) FROM unit_copy u JOIN ref_unit_status s USING (unit_status_code)
-    WHERE u.clinic_id = sqlc.arg('clinic_id') AND u.component_kind_code = sqlc.arg('component_kind_code') AND s.is_available)
+    WHERE u.clinic_id = sqlc.arg('clinic_id') AND u.component_kind_code = sqlc.arg('component_kind_code') AND s.is_available AND u.local_dispatch_obligation_id IS NULL AND NOT u.clinical_use_blocked)
 WHERE source_stock.clinic_id = sqlc.arg('clinic_id') AND source_stock.component_kind_code = sqlc.arg('component_kind_code');
 
 -- name: SetProtectedVolume :execrows
@@ -98,7 +98,8 @@ ON CONFLICT (unit_id) DO UPDATE
 SET clinic_id = excluded.clinic_id, component_kind_code = excluded.component_kind_code,
     blood_group_code = excluded.blood_group_code, rh_positive = excluded.rh_positive, phenotype = excluded.phenotype,
     volume_ml = excluded.volume_ml, expires_at = excluded.expires_at, unit_status_code = excluded.unit_status_code,
-    status_reason = NULL, version = excluded.version, updated_at = excluded.updated_at
+    status_reason = NULL, version = excluded.version, updated_at = excluded.updated_at,
+    local_dispatch_obligation_id = CASE WHEN unit_copy.clinic_id<>excluded.clinic_id THEN NULL ELSE unit_copy.local_dispatch_obligation_id END
 WHERE unit_copy.version < excluded.version;
 
 -- name: SetUnitCopyStatus :execrows
@@ -114,7 +115,7 @@ SELECT * FROM unit_copy WHERE unit_id = ANY(sqlc.arg('unit_ids')::uuid[]);
 -- name: NotInStockAmong :many
 -- Недоступные по справочнику ref_unit_status: карантин и выбывшие.
 SELECT u.unit_id FROM unit_copy u JOIN ref_unit_status s USING (unit_status_code)
-WHERE u.unit_id = ANY(sqlc.arg('unit_ids')::uuid[]) AND NOT s.is_available;
+WHERE u.unit_id = ANY(sqlc.arg('unit_ids')::uuid[]) AND (NOT s.is_available OR u.local_dispatch_obligation_id IS NOT NULL OR u.clinical_use_blocked);
 
 
 -- name: InsertAllocation :exec

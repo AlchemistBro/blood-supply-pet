@@ -94,6 +94,12 @@ func New(ref *refdata.Set, webBaseURL string) (*Renderer, error) {
 func (r *Renderer) Subject(kind domain.Kind, f domain.Facts) string {
 	short := f.ObligationID.String()[:8]
 	switch kind {
+	case domain.KindTransferTerminal:
+		return "[демо] Изменение задания на передачу № " + short
+	case domain.KindStockBelowNorm:
+		return "[демо] Запас ниже норматива"
+	case domain.KindSecurityIncident:
+		return "[демо] Подозрение на инцидент безопасности"
 	case domain.KindUrgentTask:
 		return "[демо] Срочное задание на передачу № " + short
 	case domain.KindEscalation:
@@ -128,6 +134,12 @@ func (r *Renderer) view(kind domain.Kind, f domain.Facts) (view, error) {
 	id := f.ObligationID.String()
 	var v view
 	switch kind {
+	case domain.KindTransferTerminal:
+		v = view{Title: "Изменение задания на передачу", Lead: "Передача отклонена, отменена, просрочена или нарушена. Проверьте текущий статус и предложения по заявке.", Action: "Откройте задание в системе.", Link: r.baseURL + "/tasks/" + url.PathEscape(id)}
+	case domain.KindStockBelowNorm:
+		v = view{Title: "Запас ниже норматива", Lead: "Доступный запас клиники пересёк нижнюю границу демонстрационного норматива.", Action: "Проверьте запас и план пополнения.", Link: r.baseURL + "/stock"}
+	case domain.KindSecurityIncident:
+		v = view{Title: "Подозрение на инцидент безопасности", Lead: "Сработало правило детектора аудита. Сигнал требует проверки ИТ-службой.", Action: "Откройте журнал аудита и регламент реагирования на инцидент. Решение об уведомлении надзорного органа принимает оператор.", Link: r.baseURL + "/audit"}
 	case domain.KindUrgentTask:
 		v = view{
 			Title:  "Срочное задание на передачу",
@@ -152,7 +164,9 @@ func (r *Renderer) view(kind domain.Kind, f domain.Facts) (view, error) {
 	default:
 		return view{}, fmt.Errorf("%w: %s", ErrUnknownKind, kind)
 	}
-	v.Rows = append(v.Rows, row{"Задание", id})
+	if f.ObligationID != (domain.Facts{}).ObligationID {
+		v.Rows = append(v.Rows, row{"Задание", id})
+	}
 	if f.Reason != "" {
 		v.Rows = append(v.Rows, row{"Причина", reasonText(f.Reason)})
 	}

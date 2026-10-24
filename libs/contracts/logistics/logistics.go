@@ -135,6 +135,7 @@ func (TransportCancelled) SchemaVersion() int { return 1 }
 // обязательна при перевозке дольше 30 минут) в контракте необязательна: служба перевозки может её не сообщить,
 // и тогда пропуск показывается как нарушение данных (ADR-0022).
 type TransportDelivered struct {
+	ShipmentRef            string    `json:"shipment_ref,omitempty"`
 	ObligationID           uuid.UUID `json:"obligation_id"`
 	DeliveredAt            time.Time `json:"delivered_at"`
 	TemperatureAtDispatchC *float64  `json:"temperature_at_dispatch_c,omitempty"`

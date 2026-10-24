@@ -289,10 +289,18 @@ func TestEscalationAndBrokenGoToDutyOfficer(t *testing.T) {
 		message(t, transfer.TransferBroken{ObligationID: obligationID, RequestID: requestID, UnitID: uuid.New(), Reason: transfer.BrokenQuarantine}, nil),
 	)
 	items := list(t, e, status(domain.StatusPending))
-	if len(items) != 2 {
-		t.Fatalf("писем дежурному %d, ожидалось 2", len(items))
+	if len(items) != 3 {
+		t.Fatalf("писем дежурному и оператору %d, ожидалось 3", len(items))
 	}
+	dutyCount := 0
 	for _, n := range items {
+		if n.Kind == domain.KindTransferTerminal {
+			if n.To.Role != domain.RoleOperator || n.Email != operatorC001 {
+				t.Fatal("об исходе не уведомлён оператор источника")
+			}
+			continue
+		}
+		dutyCount++
 		if n.To.Role != domain.RoleDuty || n.Email != dutyShift {
 			t.Fatalf("%s: адресат %s %q", n.Kind, n.To.Role, n.Email)
 		}
@@ -300,8 +308,11 @@ func TestEscalationAndBrokenGoToDutyOfficer(t *testing.T) {
 			t.Fatalf("%s: сведения из проекции не перенесены: %+v", n.Kind, n.Facts)
 		}
 	}
-	if got := sendDue(t, e); got != 2 {
-		t.Fatalf("отправлено %d, ожидалось 2", got)
+	if dutyCount != 2 {
+		t.Fatal("письмо оператору вытеснило эскалацию дежурному")
+	}
+	if got := sendDue(t, e); got != 3 {
+		t.Fatalf("отправлено %d, ожидалось 3", got)
 	}
 	subjects := map[string]bool{}
 	for _, m := range e.smtp.Messages() {

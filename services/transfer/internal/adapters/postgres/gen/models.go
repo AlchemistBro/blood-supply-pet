@@ -26,6 +26,17 @@ type CancelledRequest struct {
 	CancelledAt time.Time
 }
 
+type Escalation struct {
+	EscalationID uuid.UUID
+	ObligationID uuid.UUID
+	Reason       string
+	RaisedAt     time.Time
+	ClosedAt     *time.Time
+	ClosedBy     *string
+	Resolution   *string
+	Comment      *string
+}
+
 type Obligation struct {
 	ObligationID         uuid.UUID
 	ChoiceID             uuid.UUID
@@ -62,6 +73,13 @@ type Obligation struct {
 	PatientAllocationKey    *uuid.UUID
 	PatientAllocationStatus string
 	PatientAllocationAt     *time.Time
+	ClinicalUseBlocked      bool
+	TransportViolations     []string
+}
+
+type ObligationTransport struct {
+	ObligationID uuid.UUID
+	Payload      []byte
 }
 
 type RefBloodGroup struct {
@@ -146,7 +164,9 @@ type UnitCopy struct {
 	// Статус по справочнику ref_unit_status; доступность — ref_unit_status.is_available
 	UnitStatusCode string
 	// Причина выбытия из UnitWithdrawn (EXPIRED хранится здесь при статусе DISCARDED)
-	StatusReason *string
-	Version      int64
-	UpdatedAt    time.Time
+	StatusReason              *string
+	Version                   int64
+	UpdatedAt                 time.Time
+	LocalDispatchObligationID *uuid.UUID
+	ClinicalUseBlocked        bool
 }

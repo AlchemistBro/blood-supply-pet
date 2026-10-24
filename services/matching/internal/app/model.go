@@ -27,6 +27,8 @@ type Actor struct {
 	ClinicID int64
 }
 type RequestRecord struct {
+	ClinicalUseBlocked      bool
+	Obligations             []RequestObligation
 	PatientAllocationStatus string
 	Request                 domain.Request
 	CreatedBy               string
@@ -34,6 +36,13 @@ type RequestRecord struct {
 	Result                  domain.Result
 	Selection               *Selection
 	Version                 int64
+}
+type RequestObligation struct {
+	ID                 uuid.UUID
+	Source             int64
+	Status             string
+	Units              int
+	ClinicalUseBlocked bool
 }
 type Selection struct {
 	VariantID, ChoiceID uuid.UUID
