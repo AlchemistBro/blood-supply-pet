@@ -139,10 +139,13 @@ func (s *Service) HandleMessage(ctx context.Context, msg messaging.Message) erro
 			if err != nil {
 				return err
 			}
-			return s.enqueue(ctx, tx, msg, domain.OnTransferBroken(e.ObligationID, e.RequestID, e.Reason, o))
+			if err := s.enqueue(ctx, tx, msg, domain.OnTransferBroken(e.ObligationID, e.RequestID, e.Reason, o)); err != nil {
+				return err
+			}
+			return s.enqueueTerminal(ctx, tx, msg, e.ObligationID, e.RequestID, e.Reason, o)
 		})
 	default:
-		return nil
+		return s.handleAdditional(ctx, msg)
 	}
 }
 
@@ -204,8 +207,12 @@ func (s *Service) enqueue(ctx context.Context, tx pgx.Tx, msg messaging.Message,
 }
 
 func (s *Service) audit(ctx context.Context, tx pgx.Tx, n domain.Notification, action, result string) error {
+	objectType, objectID := "obligation", n.Facts.ObligationID.String()
+	if n.Facts.ObligationID == uuid.Nil {
+		objectType, objectID = "notification", n.ID.String()
+	}
 	return s.Journal.Audit(ctx, tx, messaging.AuditEntry{
-		Action: action, ObjectType: "obligation", ObjectID: n.Facts.ObligationID.String(), Result: result,
+		Action: action, ObjectType: objectType, ObjectID: objectID, Result: result,
 		ClinicID: n.To.ClinicID,
 		Details:  map[string]any{"notification_id": n.ID.String(), "kind": string(n.Kind), "recipient_role": n.To.Role},
 	})

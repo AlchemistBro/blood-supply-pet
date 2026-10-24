@@ -19,6 +19,9 @@ type Kind string
 
 // Виды уведомлений.
 const (
+	KindTransferTerminal Kind = "TRANSFER_TERMINAL"
+	KindStockBelowNorm   Kind = "STOCK_BELOW_NORM"
+	KindSecurityIncident Kind = "SECURITY_INCIDENT"
 	// KindUrgentTask — срочное задание на передачу по выбору врача, оператору клиники-источника (FR044).
 	KindUrgentTask Kind = "URGENT_TASK"
 	// KindEscalation — эскалация дежурному смены (EscalationRaised, ADR-0027).
@@ -39,8 +42,10 @@ const (
 
 // Роли адресатов — роли realm (docs/architecture/security.md). Письмо уходит ящику подразделения, а не человеку.
 const (
-	RoleOperator = "CLINIC_OPERATOR"
-	RoleDuty     = "DUTY_OFFICER"
+	RoleOperator  = "CLINIC_OPERATOR"
+	RoleDuty      = "DUTY_OFFICER"
+	RolePhysician = "PHYSICIAN"
+	RoleIT        = "IT_SERVICE"
 )
 
 // Происхождение и срочность задания — коды контракта transfer.

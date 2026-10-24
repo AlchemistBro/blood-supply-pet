@@ -1,4 +1,6 @@
 {
+	"it_service": "security@demo.blood-supply.local",
+	"physician_pattern": "physicians.{clinic_code}@demo.blood-supply.local",
   "version": 1,
   "note": "демо: служебные ящики подразделений, не личные адреса (ADR-0021); письма видны в Mailpit",
   "duty": "duty-shift@demo.blood-supply.local",
