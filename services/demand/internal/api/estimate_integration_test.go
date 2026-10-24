@@ -78,4 +78,20 @@ func TestEstimatePublishesOnceAndFreezesHistory(t *testing.T) {
 	if n := e.count(t, `SELECT count(*) FROM audit_local WHERE action='ESTIMATE_REJECTED'`); n != 1 {
 		t.Fatalf("повтор отклонения породил %d записей", n)
 	}
+
+	before := map[string]int{}
+	for _, table := range []string{"demand_estimate", "estimate_history_link", "clinic_demand", "outbox", "audit_local"} {
+		before[table] = e.count(t, "SELECT count(*) FROM "+table)
+	}
+	if _, err := e.pool.Exec(t.Context(), `CREATE FUNCTION fail_estimate_line() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.clinic_id=2 THEN RAISE EXCEPTION 'demo failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER fail_estimate_line BEFORE INSERT ON clinic_demand FOR EACH ROW EXECUTE FUNCTION fail_estimate_line()`); err != nil {
+		t.Fatal(err)
+	}
+	if response := e.request(t, http.MethodPost, "/estimates", e.analyst, bytes.NewReader(body), "application/json"); response.StatusCode != 500 {
+		t.Fatalf("ошибка строки не отклонила расчёт: %d", response.StatusCode)
+	}
+	for table, count := range before {
+		if got := e.count(t, "SELECT count(*) FROM "+table); got != count {
+			t.Fatalf("ошибка пакета оставила изменения %s: %d → %d", table, count, got)
+		}
+	}
 }

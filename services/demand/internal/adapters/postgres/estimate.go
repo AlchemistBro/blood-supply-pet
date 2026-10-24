@@ -86,17 +86,15 @@ func (s *Store) SaveEstimate(ctx context.Context, tx pgx.Tx, n *app.EstimateReco
 	if _, err := tx.Exec(ctx, `INSERT INTO demand_estimate(demand_estimate_id,version_no,period_start,period_end,profile_file_id,clinic_share_version_id,estimate_status_code,calculated_at) VALUES($1,$2,$3,$4,$5,$6,'CALCULATED',$7)`, n.ID, n.Version, n.Selection.Period.Start, n.Selection.Period.End, n.Selection.ProfileFileID, n.Selection.ShareVersionID, n.At); err != nil {
 		return err
 	}
+	// Тысячи строк отправляются одним пакетом в той же TX: задержка сети не умножается на число клиник и групп.
+	batch := &pgx.Batch{}
 	for _, id := range n.Selection.HistoryIDs {
-		if _, err := tx.Exec(ctx, `INSERT INTO estimate_history_link VALUES($1,$2)`, n.ID, id); err != nil {
-			return err
-		}
+		batch.Queue(`INSERT INTO estimate_history_link VALUES($1,$2)`, n.ID, id)
 	}
 	for _, line := range result.Clinics {
-		if _, err := tx.Exec(ctx, `INSERT INTO clinic_demand(demand_estimate_id,clinic_id,component_kind_code,blood_group_code,demand_volume_ml) VALUES($1,$2,$3,NULLIF($4,''),$5)`, n.ID, line.ClinicID, line.KindCode, line.BloodGroup, line.VolumeML); err != nil {
-			return err
-		}
+		batch.Queue(`INSERT INTO clinic_demand(demand_estimate_id,clinic_id,component_kind_code,blood_group_code,demand_volume_ml) VALUES($1,$2,$3,NULLIF($4,''),$5)`, n.ID, line.ClinicID, line.KindCode, line.BloodGroup, line.VolumeML)
 	}
-	return nil
+	return tx.SendBatch(ctx, batch).Close()
 }
 
 type estimateDB interface {
