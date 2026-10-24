@@ -90,7 +90,9 @@ func (p Policy) normalized() Policy {
 
 // Input — всё, от чего зависит решение подбора; одинаковый вход даёт одинаковый результат (FR035, NFR009).
 type Input struct {
-	Request Request
+	// GroupApplicable задаётся справочником видов. Отсутствующий ключ сохраняет прежнюю семантику.
+	GroupApplicable map[string]bool
+	Request         Request
 	// At — момент подбора (из Clock): от него считаются прибытие и годность.
 	At    time.Time
 	Rules []Rule
@@ -247,6 +249,16 @@ func Match(in Input) (Result, error) {
 	}
 
 	permitted, notes := permittedTargets(req, active)
+	// Вид без применимости группы (CRYO в демо-справочнике) не сравнивается с AB0 пациента.
+	for key, rule := range permitted {
+		if applicable, known := in.GroupApplicable[key.kind]; known && !applicable && key.group != "" {
+			delete(permitted, key)
+			normalized := target{kind: key.kind}
+			if old, ok := permitted[normalized]; !ok || betterRule(rule, old) {
+				permitted[normalized] = rule
+			}
+		}
+	}
 	res.Notes = append(res.Notes, notes...)
 
 	eligible, notes := eligibleUnits(in, policy, permitted)
@@ -471,7 +483,7 @@ func buildVariants(in Input, policy Policy, permitted map[target]Rule, eligible 
 			IsLocal:           k.clinic == req.ClinicID,
 			ComponentKind:     k.kind,
 			BloodGroup:        k.group,
-			IsPreferred:       k.kind == req.ComponentKind && k.group == req.BloodGroup,
+			IsPreferred:       k.kind == req.ComponentKind && (k.group == req.BloodGroup || groupIndependent(in, k.kind)),
 			Rule:              rule.Ref(),
 			AvailableUnits:    len(units),
 			UnitIDs:           ids,
@@ -499,6 +511,11 @@ func buildVariants(in Input, policy Policy, permitted map[target]Rule, eligible 
 		variants = append(variants, v)
 	}
 	return variants
+}
+
+func groupIndependent(in Input, kind string) bool {
+	applicable, known := in.GroupApplicable[kind]
+	return known && !applicable
 }
 
 // rankFactor — один фактор ранжирования: имя для объяснения, сравнение и значение текстом.
