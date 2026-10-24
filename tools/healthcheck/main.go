@@ -33,7 +33,7 @@ func run(args []string) int {
 func check(url string, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil) //nolint:gosec // адрес задаёт healthcheck в compose, пользовательского ввода нет
 	if err != nil {
 		return fmt.Errorf("запрос %s: %w", url, err)
 	}

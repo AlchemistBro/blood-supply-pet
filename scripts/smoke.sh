@@ -16,7 +16,15 @@ AIST=${AIST:-http://localhost:8201}
 C03=${C03:-http://localhost:8203}
 TOKEN_URL="$KEYCLOAK/realms/blood-supply/protocol/openid-connect/token"
 
-uuid() { cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen | tr 'A-Z' 'a-z'; }
+uuid() {
+  if [ -r /proc/sys/kernel/random/uuid ]; then
+    cat /proc/sys/kernel/random/uuid
+  elif command -v uuidgen >/dev/null 2>&1; then
+    uuidgen | tr 'A-Z' 'a-z'
+  else
+    powershell.exe -NoProfile -Command '[guid]::NewGuid().ToString()' | tr -d '\r'
+  fi
+}
 post() { curl -sf -X POST -H 'Content-Type: application/json' "${@:3}" -d "$2" "$1"; }
 
 service_token() {
@@ -43,6 +51,12 @@ sql() { # база запрос — только чтение, суперпол�
   "${COMPOSE[@]}" exec -T postgres psql -U postgres -d "$1" -tAc "$2"
 }
 
+has_unit() { [ -n "$(sql inventory "SELECT unit_id FROM unit WHERE aist_unit_code = '$1'")" ] && echo ok; }
+unit_in_stock() { [ "$(sql transfer "SELECT unit_status_code FROM unit_copy WHERE unit_id = '$1'")" = IN_STOCK ] && echo ok; }
+shipment_cancelled() { shipments "$1" | jq -e 'length == 1 and .[0].cancelled' >/dev/null && echo ok; }
+gateway_leased() { [ "$(sql logistics "SELECT status FROM transport_request WHERE obligation_id = '$1' AND lease_owner IS NOT NULL")" = REQUESTING ] && echo ok; }
+gateway_healthy() { curl -sf "$GATEWAY/healthz" >/dev/null && echo ok; }
+
 status_of() { curl -sf -H "Authorization: Bearer $(service_token)" "$TRANSFER/obligations/$1" | jq -r .status; }
 is_status() { [ "$(status_of "$1")" = "$2" ] && echo ok; }
 shipments() { curl -sf "$C03/dev/shipments?clientRef=o07-$1" | jq -c .shipments; }
@@ -53,11 +67,9 @@ new_unit() {
   code="SMOKE-$(uuid | tr -d - | cut -c1-16)"
   post "$AIST/dev/units" "{\"aist_unit_code\":\"$code\",\"clinic_code\":\"C001\",\"component_kind\":\"RBC\",\
 \"blood_group\":\"O+\",\"storage_location\":\"smoke\"}" >/dev/null
-  wait_for "единица $code в inventory" sh -c "[ -n \"\$(${COMPOSE[*]} exec -T postgres psql -U postgres -d inventory -tAc \
-\"SELECT unit_id FROM unit WHERE aist_unit_code = '$code'\")\" ] && echo ok"
+  wait_for "единица $code в inventory" has_unit "$code"
   id=$(sql inventory "SELECT unit_id FROM unit WHERE aist_unit_code = '$code'")
-  wait_for "единица $id в transfer" sh -c "[ \"\$(${COMPOSE[*]} exec -T postgres psql -U postgres -d transfer -tAc \
-\"SELECT unit_status_code FROM unit_copy WHERE unit_id = '$id'\")\" = IN_STOCK ] && echo ok"
+  wait_for "единица $id в transfer" unit_in_stock "$id"
   echo "$code $id"
 }
 
@@ -90,7 +102,7 @@ echo "   O07 $O1: TRANSPORT_REQUESTED, заказы у C03: $(shipments "$O1")"
 echo "2. Единица выдана в АИСТ-М → O07 BROKEN → заказ у C03 снят"
 post "$AIST/dev/units/$A1/withdraw" '{"reason":"ISSUED"}' >/dev/null
 wait_for "O07 $O1 BROKEN" is_status "$O1" BROKEN
-wait_for "заказ снят" sh -c "curl -sf '$C03/dev/shipments?clientRef=o07-$O1' | jq -e '.shipments | length == 1 and .[0].cancelled' >/dev/null && echo ok"
+wait_for "заказ снят" shipment_cancelled "$O1"
 echo "   заказ у C03 снят: $(shipments "$O1")"
 
 echo "3. C03 создаёт заказ, но ответ теряется → сверка, второго заказа нет"
@@ -117,12 +129,11 @@ read -r _ U5 <<<"$(new_unit)"
 O4=$(open_obligation 1)
 faults '{"slowMs":10000}'
 echo "   подтверждение: $(confirm "$O4" "$U5")"
-wait_for "шлюз взял аренду" sh -c "[ \"\$(${COMPOSE[*]} exec -T postgres psql -U postgres -d logistics -tAc \
-\"SELECT status FROM transport_request WHERE obligation_id = '$O4' AND lease_owner IS NOT NULL\")\" = REQUESTING ] && echo ok"
+wait_for "шлюз взял аренду" gateway_leased "$O4"
 "${COMPOSE[@]}" kill -s KILL logistics-gateway >/dev/null 2>&1
 faults '{"slowMs":0}'
 "${COMPOSE[@]}" start logistics-gateway >/dev/null 2>&1
-wait_for "шлюз жив" sh -c "curl -sf '$GATEWAY/healthz' >/dev/null && echo ok"
+wait_for "шлюз жив" gateway_healthy
 wait_for "O07 $O4 TRANSPORT_REQUESTED (аренда убитого шлюза истекает за 30 с)" is_status "$O4" TRANSPORT_REQUESTED
 COUNT=$(curl -sf "$C03/dev/shipments?clientRef=o07-$O4" | jq '.shipments | length')
 [ "$COUNT" = 1 ] || { echo "после kill -9 у C03 $COUNT заказов вместо одного" >&2; exit 1; }
