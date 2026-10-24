@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/inventory/ReleasePatientAllocation.v1.json",
+  "title": "ReleasePatientAllocation",
+  "type": "object",
+  "description": "Команда inventory.commands: снять закрепление за пациентом в АИСТ-М (FR052).",
+  "additionalProperties": false,
+  "required": [
+    "obligation_id",
+    "idempotency_key"
+  ],
+  "properties": {
+    "obligation_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "reason": {
+      "type": "string",
+      "enum": [
+        "OBLIGATION_CANCELLED",
+        "OBLIGATION_BROKEN"
+      ]
+    }
+  }
+}

@@ -19,12 +19,18 @@ const (
 	OriginPlanProposal = "PLAN_PROPOSAL"
 )
 
+// Origins — все источники обязательства в порядке схемы.
+var Origins = []string{OriginDoctorChoice, OriginPlanProposal}
+
 // Срочность — коды справочника ref_urgency (libs/refdata).
 const (
 	UrgencyPlanned   = "PLANNED"
 	UrgencyUrgent    = "URGENT"
 	UrgencyEmergency = "EMERGENCY"
 )
+
+// Urgencies — все коды срочности в порядке схемы.
+var Urgencies = []string{UrgencyPlanned, UrgencyUrgent, UrgencyEmergency}
 
 // Причины отмены обязательства (CancelObligation, TransferCancelled).
 const (
@@ -33,15 +39,22 @@ const (
 	CancelDutyOfficerDecision = "DUTY_OFFICER_DECISION"
 )
 
+// CancelReasons — все причины отмены в порядке схемы.
+var CancelReasons = []string{CancelRequestCancelled, CancelPlanRecalculated, CancelDutyOfficerDecision}
+
 // Причины отклонения (TransferRejected): все выбранные единицы выбыли или источник отказал.
 const (
 	RejectUnitsWithdrawn = "UNITS_WITHDRAWN"
 	RejectSourceRefused  = "SOURCE_REFUSED"
 )
 
+// RejectReasons — все причины отклонения в порядке схемы.
+var RejectReasons = []string{RejectUnitsWithdrawn, RejectSourceRefused}
+
 // Причины нарушения обязательства (TransferBroken). Первые четыре повторяют причины выбытия единицы
-// (inventory.UnitWithdrawn), QUARANTINE — закреплённая единица ушла на карантин: она не выбыла, но выдавать
-// и передавать её нельзя (ПП РФ № 641, п. 62 а; ADR-0027). Поэтому перечисление своё, а не общее с UnitWithdrawn.
+// (inventory.UnitWithdrawn), QUARANTINE — закреплённая единица получила статус «на карантине» (ПП РФ № 641,
+// п. 62 а): она не выбыла, но обязательство нарушается — решение проекта (ADR-0027). Поэтому перечисление
+// своё, а не общее с UnitWithdrawn.
 const (
 	BrokenIssued      = "ISSUED"
 	BrokenDiscarded   = "DISCARDED"
@@ -59,7 +72,13 @@ const (
 	EscalationTransportRefused        = "TRANSPORT_REFUSED"
 	EscalationTransportOutcomeUnknown = "TRANSPORT_OUTCOME_UNKNOWN"
 	EscalationSourceSystemUnavailable = "SOURCE_SYSTEM_UNAVAILABLE"
+	// EscalationTemperatureExcursion — нарушены условия перевозки (ПП РФ № 641, п. 69, 98; ADR-0022), этап 7.
+	EscalationTemperatureExcursion = "TEMPERATURE_EXCURSION"
 )
+
+// EscalationReasons — все причины эскалации в порядке схемы.
+var EscalationReasons = []string{EscalationExpiredNoFallback, EscalationTransportRefused,
+	EscalationTransportOutcomeUnknown, EscalationSourceSystemUnavailable, EscalationTemperatureExcursion}
 
 // ReplacementSpec — спецификация допустимой замены единицы (ADR-0011). Её считает matching
 // (или planning) по правилам O15, transfer только проверяет кандидата. Пустое поле — «любой».
@@ -89,6 +108,10 @@ type OpenObligation struct {
 	// FallbackSources — следующие источники для эскалации по таймеру, по порядку ранжирования.
 	FallbackSources []int64         `json:"fallback_sources,omitempty"`
 	Spec            ReplacementSpec `json:"spec"`
+	// PatientCaseSealed — номер случая пациента в зашифрованном конверте v1.<kid>.<base64url> (ADR-0020, этап 6).
+	// Только для выбора врача; transfer не может его прочитать, хранит как есть и передаёт в AllocateUnitsToPatient.
+	// В события transfer не попадает, не логируется. Тип k1seal.Sealed после слияния stage6/wp1.
+	PatientCaseSealed string `json:"patient_case_sealed,omitempty"`
 }
 
 // MessageType реализует contracts.Payload.
@@ -111,14 +134,16 @@ func (CancelObligation) SchemaVersion() int { return 1 }
 
 // ObligationOpened — обязательство создано в статусе PENDING.
 type ObligationOpened struct {
-	ObligationID   uuid.UUID `json:"obligation_id"`
-	RequestID      uuid.UUID `json:"request_id"`
-	Origin         string    `json:"origin"`
-	SourceClinicID int64     `json:"source_clinic_id"`
-	TargetClinicID int64     `json:"target_clinic_id"`
-	ComponentKind  string    `json:"component_kind"`
-	RequestedQty   int       `json:"requested_qty"`
-	Deadline       time.Time `json:"deadline"`
+	ObligationID uuid.UUID `json:"obligation_id"`
+	// ObligationVersion — версия O07 после перехода: проекции применяют событие, только если версия выше сохранённой.
+	ObligationVersion *int64    `json:"obligation_version,omitempty"`
+	RequestID         uuid.UUID `json:"request_id"`
+	Origin            string    `json:"origin"`
+	SourceClinicID    int64     `json:"source_clinic_id"`
+	TargetClinicID    int64     `json:"target_clinic_id"`
+	ComponentKind     string    `json:"component_kind"`
+	RequestedQty      int       `json:"requested_qty"`
+	Deadline          time.Time `json:"deadline"`
 }
 
 // MessageType реализует contracts.Payload.
@@ -129,10 +154,16 @@ func (ObligationOpened) SchemaVersion() int { return 1 }
 
 // TransferConfirmed — оператор источника подтвердил передачу, единицы закреплены (PENDING → CONFIRMED).
 type TransferConfirmed struct {
-	ObligationID uuid.UUID   `json:"obligation_id"`
-	RequestID    uuid.UUID   `json:"request_id"`
-	Units        []uuid.UUID `json:"units"`
-	Quantity     int         `json:"quantity"`
+	ObligationID uuid.UUID `json:"obligation_id"`
+	// ObligationVersion — версия O07 после перехода: проекции применяют событие, только если версия выше сохранённой.
+	ObligationVersion *int64 `json:"obligation_version,omitempty"`
+	// SourceClinicID и TargetClinicID — клиники обязательства, необязательны: по ним web фильтрует живые статусы,
+	// не держа индекс «обязательство → клиники» в памяти.
+	SourceClinicID *int64      `json:"source_clinic_id,omitempty"`
+	TargetClinicID *int64      `json:"target_clinic_id,omitempty"`
+	RequestID      uuid.UUID   `json:"request_id"`
+	Units          []uuid.UUID `json:"units"`
+	Quantity       int         `json:"quantity"`
 	// Operator — учётная запись оператора из токена (как user_id в аудите), не ФИО.
 	Operator string `json:"operator"`
 }
@@ -145,10 +176,16 @@ func (TransferConfirmed) SchemaVersion() int { return 1 }
 
 // TransferShortfallRecorded — подтверждено меньше запрошенного; подбор или план ищет источник на остаток.
 type TransferShortfallRecorded struct {
-	ObligationID  uuid.UUID `json:"obligation_id"`
-	RequestID     uuid.UUID `json:"request_id"`
-	ComponentKind string    `json:"component_kind"`
-	Shortfall     int       `json:"shortfall"`
+	ObligationID uuid.UUID `json:"obligation_id"`
+	// ObligationVersion — версия O07 после перехода: проекции применяют событие, только если версия выше сохранённой.
+	ObligationVersion *int64 `json:"obligation_version,omitempty"`
+	// SourceClinicID и TargetClinicID — клиники обязательства, необязательны: по ним web фильтрует живые статусы,
+	// не держа индекс «обязательство → клиники» в памяти.
+	SourceClinicID *int64    `json:"source_clinic_id,omitempty"`
+	TargetClinicID *int64    `json:"target_clinic_id,omitempty"`
+	RequestID      uuid.UUID `json:"request_id"`
+	ComponentKind  string    `json:"component_kind"`
+	Shortfall      int       `json:"shortfall"`
 }
 
 // MessageType реализует contracts.Payload.
@@ -160,8 +197,14 @@ func (TransferShortfallRecorded) SchemaVersion() int { return 1 }
 // TransferRejected — обязательство отклонено (PENDING → REJECTED).
 type TransferRejected struct {
 	ObligationID uuid.UUID `json:"obligation_id"`
-	RequestID    uuid.UUID `json:"request_id"`
-	Reason       string    `json:"reason"`
+	// ObligationVersion — версия O07 после перехода: проекции применяют событие, только если версия выше сохранённой.
+	ObligationVersion *int64 `json:"obligation_version,omitempty"`
+	// SourceClinicID и TargetClinicID — клиники обязательства, необязательны: по ним web фильтрует живые статусы,
+	// не держа индекс «обязательство → клиники» в памяти.
+	SourceClinicID *int64    `json:"source_clinic_id,omitempty"`
+	TargetClinicID *int64    `json:"target_clinic_id,omitempty"`
+	RequestID      uuid.UUID `json:"request_id"`
+	Reason         string    `json:"reason"`
 }
 
 // MessageType реализует contracts.Payload.
@@ -173,7 +216,13 @@ func (TransferRejected) SchemaVersion() int { return 1 }
 // TransferExpired — срок подтверждения истёк (PENDING → EXPIRED). NextObligationID — новое обязательство
 // у следующего источника, если он был в fallback_sources.
 type TransferExpired struct {
-	ObligationID     uuid.UUID  `json:"obligation_id"`
+	ObligationID uuid.UUID `json:"obligation_id"`
+	// ObligationVersion — версия O07 после перехода: проекции применяют событие, только если версия выше сохранённой.
+	ObligationVersion *int64 `json:"obligation_version,omitempty"`
+	// SourceClinicID и TargetClinicID — клиники обязательства, необязательны: по ним web фильтрует живые статусы,
+	// не держа индекс «обязательство → клиники» в памяти.
+	SourceClinicID   *int64     `json:"source_clinic_id,omitempty"`
+	TargetClinicID   *int64     `json:"target_clinic_id,omitempty"`
 	RequestID        uuid.UUID  `json:"request_id"`
 	NextObligationID *uuid.UUID `json:"next_obligation_id,omitempty"`
 }
@@ -187,8 +236,14 @@ func (TransferExpired) SchemaVersion() int { return 1 }
 // TransferCancelled — обязательство отменено, закрепления сняты.
 type TransferCancelled struct {
 	ObligationID uuid.UUID `json:"obligation_id"`
-	RequestID    uuid.UUID `json:"request_id"`
-	Reason       string    `json:"reason"`
+	// ObligationVersion — версия O07 после перехода: проекции применяют событие, только если версия выше сохранённой.
+	ObligationVersion *int64 `json:"obligation_version,omitempty"`
+	// SourceClinicID и TargetClinicID — клиники обязательства, необязательны: по ним web фильтрует живые статусы,
+	// не держа индекс «обязательство → клиники» в памяти.
+	SourceClinicID *int64    `json:"source_clinic_id,omitempty"`
+	TargetClinicID *int64    `json:"target_clinic_id,omitempty"`
+	RequestID      uuid.UUID `json:"request_id"`
+	Reason         string    `json:"reason"`
 }
 
 // MessageType реализует contracts.Payload.
@@ -201,9 +256,15 @@ func (TransferCancelled) SchemaVersion() int { return 1 }
 // Reason — одна из BrokenReasons.
 type TransferBroken struct {
 	ObligationID uuid.UUID `json:"obligation_id"`
-	RequestID    uuid.UUID `json:"request_id"`
-	UnitID       uuid.UUID `json:"unit_id"`
-	Reason       string    `json:"reason"`
+	// ObligationVersion — версия O07 после перехода: проекции применяют событие, только если версия выше сохранённой.
+	ObligationVersion *int64 `json:"obligation_version,omitempty"`
+	// SourceClinicID и TargetClinicID — клиники обязательства, необязательны: по ним web фильтрует живые статусы,
+	// не держа индекс «обязательство → клиники» в памяти.
+	SourceClinicID *int64    `json:"source_clinic_id,omitempty"`
+	TargetClinicID *int64    `json:"target_clinic_id,omitempty"`
+	RequestID      uuid.UUID `json:"request_id"`
+	UnitID         uuid.UUID `json:"unit_id"`
+	Reason         string    `json:"reason"`
 }
 
 // MessageType реализует contracts.Payload.
@@ -215,9 +276,15 @@ func (TransferBroken) SchemaVersion() int { return 1 }
 // TransferUnitReplaced — закреплённая единица заменена равноценной до отправки (ADR-0011).
 type TransferUnitReplaced struct {
 	ObligationID uuid.UUID `json:"obligation_id"`
-	OldUnitID    uuid.UUID `json:"old_unit_id"`
-	NewUnitID    uuid.UUID `json:"new_unit_id"`
-	RuleVersion  string    `json:"rule_version"`
+	// ObligationVersion — версия O07 после перехода: проекции применяют событие, только если версия выше сохранённой.
+	ObligationVersion *int64 `json:"obligation_version,omitempty"`
+	// SourceClinicID и TargetClinicID — клиники обязательства, необязательны: по ним web фильтрует живые статусы,
+	// не держа индекс «обязательство → клиники» в памяти.
+	SourceClinicID *int64    `json:"source_clinic_id,omitempty"`
+	TargetClinicID *int64    `json:"target_clinic_id,omitempty"`
+	OldUnitID      uuid.UUID `json:"old_unit_id"`
+	NewUnitID      uuid.UUID `json:"new_unit_id"`
+	RuleVersion    string    `json:"rule_version"`
 }
 
 // MessageType реализует contracts.Payload.
@@ -229,7 +296,13 @@ func (TransferUnitReplaced) SchemaVersion() int { return 1 }
 // TransportRequested — перевозчик принял заказ (CONFIRMED → TRANSPORT_REQUESTED).
 type TransportRequested struct {
 	ObligationID uuid.UUID `json:"obligation_id"`
-	ShipmentRef  string    `json:"shipment_ref"`
+	// ObligationVersion — версия O07 после перехода: проекции применяют событие, только если версия выше сохранённой.
+	ObligationVersion *int64 `json:"obligation_version,omitempty"`
+	// SourceClinicID и TargetClinicID — клиники обязательства, необязательны: по ним web фильтрует живые статусы,
+	// не держа индекс «обязательство → клиники» в памяти.
+	SourceClinicID *int64 `json:"source_clinic_id,omitempty"`
+	TargetClinicID *int64 `json:"target_clinic_id,omitempty"`
+	ShipmentRef    string `json:"shipment_ref"`
 }
 
 // MessageType реализует contracts.Payload.
@@ -242,8 +315,14 @@ func (TransportRequested) SchemaVersion() int { return 1 }
 // Reason — причина из logistics.TransportRejected.
 type TransportRequestFailed struct {
 	ObligationID uuid.UUID `json:"obligation_id"`
-	Reason       string    `json:"reason"`
-	Details      string    `json:"details,omitempty"`
+	// ObligationVersion — версия O07 после перехода: проекции применяют событие, только если версия выше сохранённой.
+	ObligationVersion *int64 `json:"obligation_version,omitempty"`
+	// SourceClinicID и TargetClinicID — клиники обязательства, необязательны: по ним web фильтрует живые статусы,
+	// не держа индекс «обязательство → клиники» в памяти.
+	SourceClinicID *int64 `json:"source_clinic_id,omitempty"`
+	TargetClinicID *int64 `json:"target_clinic_id,omitempty"`
+	Reason         string `json:"reason"`
+	Details        string `json:"details,omitempty"`
 }
 
 // MessageType реализует contracts.Payload.
@@ -256,9 +335,15 @@ func (TransportRequestFailed) SchemaVersion() int { return 1 }
 // неизвестный исход перевозки, недоступность АИСТ-М при экстренной заявке.
 type EscalationRaised struct {
 	ObligationID uuid.UUID `json:"obligation_id"`
-	RequestID    uuid.UUID `json:"request_id"`
-	Reason       string    `json:"reason"`
-	At           time.Time `json:"at"`
+	// ObligationVersion — версия O07 после перехода: проекции применяют событие, только если версия выше сохранённой.
+	ObligationVersion *int64 `json:"obligation_version,omitempty"`
+	// SourceClinicID и TargetClinicID — клиники обязательства, необязательны: по ним web фильтрует живые статусы,
+	// не держа индекс «обязательство → клиники» в памяти.
+	SourceClinicID *int64    `json:"source_clinic_id,omitempty"`
+	TargetClinicID *int64    `json:"target_clinic_id,omitempty"`
+	RequestID      uuid.UUID `json:"request_id"`
+	Reason         string    `json:"reason"`
+	At             time.Time `json:"at"`
 }
 
 // MessageType реализует contracts.Payload.

@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/inventory/StockSnapshotPublished.v1.json",
+  "title": "StockSnapshotPublished",
+  "type": "object",
+  "description": "Событие inventory.events: снимок запаса клиники × вид × группа с водяным знаком (O02, NFR015).",
+  "additionalProperties": false,
+  "required": [
+    "clinic_id",
+    "component_kind",
+    "blood_group",
+    "unit_count",
+    "volume_ml",
+    "watermark",
+    "synced_at"
+  ],
+  "properties": {
+    "clinic_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "component_kind": {
+      "type": "string",
+      "enum": [
+        "RBC",
+        "FFP",
+        "PLT",
+        "CRYO"
+      ]
+    },
+    "blood_group": {
+      "type": "string",
+      "enum": [
+        "O+",
+        "O-",
+        "A+",
+        "A-",
+        "B+",
+        "B-",
+        "AB+",
+        "AB-"
+      ]
+    },
+    "unit_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "volume_ml": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "nearest_expiry": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Ближайший срок годности; нет, если единиц нет"
+    },
+    "watermark": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Водяной знак: растёт с каждым успешным сеансом обмена"
+    },
+    "synced_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

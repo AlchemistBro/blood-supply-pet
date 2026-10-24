@@ -83,13 +83,14 @@ erDiagram
         varchar sync_result "SUCCESS | PARTIAL | FAILED"
         integer changes_count
         text error_text
+        bigint source_version "курсор опроса изменений"
     }
     aist_outbox_message {
         uuid aist_outbox_message_id PK
         uuid idempotency_key UK
         uuid transfer_obligation_id
         varchar message_type "ALLOCATE_TO_PATIENT | RELEASE_ALLOCATION"
-        jsonb payload "id единиц, номер случая, клиника; без ФИО/СНИЛС"
+        jsonb payload "id единиц, request_id, конверт номера случая (ADR-0020), клиника; без ФИО/СНИЛС"
         timestamptz created_at
         integer attempt_count
         timestamptz next_attempt_at
@@ -98,8 +99,23 @@ erDiagram
     }
 ```
 
+Дополнения к словарю ПР6 в базе `inventory`:
+
+- `sync_run.source_version` — курсор опроса изменений ИНТ-01: последняя версия АИСТ-М (`last_version` ответа), применённая
+  сеансом. Двигается в транзакции каждой страницы вместе с единицами и outbox. Следующий сеанс продолжает от курсора
+  последнего сеанса `CHANGES` (а не от максимума): если источник сообщил `current_version` меньше курсора (перезапуск
+  имитатора), сеанс начинается с 0, в `error_text` пишется примечание. Отброшенные записи источника делают сеанс `PARTIAL`
+  с числом отброшенных в `error_text`; водяной знак двигает только `SUCCESS`.
+- `protected_volume_version_seq` — последовательность версий `ProtectedVolumePublished` для демо-публикации защищённого
+  объёма до появления `planning`: версия растёт только вперёд.
+- Строки `unit` не удаляются, строки `unit_status_history` не изменяются и не удаляются (триггеры): прослеживаемость
+  единицы до конечного использования (ПП РФ № 641).
+
 Представление `actual_stock` (O02): `clinic_id, component_kind_code, blood_group_code, unit_count, volume_ml, nearest_expiry`
 по единицам со статусом `is_available` и `expires_at > now()`. Индекс `(clinic_id, component_kind_code, blood_group_code, expires_at)`.
+Расчёт вынесен в SQL-функции с моментом годности параметром: `available_unit_at(p_at)` (единицы запаса) и
+`actual_stock_at(p_at)` (сводка); представление `actual_stock` — `actual_stock_at(now())`. Сервис передаёт время своих
+часов (`Clock`), поэтому сроки в тестах воспроизводимы. Для FEFO (FR015) — индекс `(clinic_id, expires_at, unit_id)`.
 
 Справочник статусов единицы `ref_unit_status` (в ПР6 `unit_status_dict`) создаётся миграцией `libs/refdata` `00003` и
 сидируется из `libs/refdata` во все базы (версия набора справочников 2).
@@ -114,6 +130,12 @@ erDiagram
 `estimate_status_dict`, `demand_estimate`, `estimate_history_link`, `clinic_demand`.
 Ключевые ограничения: `PUBLISHED` только с `confirmed_by` и `confirmed_at`; суммы долей по району равны 1 проверяются при загрузке;
 `UNIQUE NULLS NOT DISTINCT (demand_estimate_id, clinic_id, component_kind_code, blood_group_code)`.
+Отличия реализации от DDL ПР6 (миграция `services/demand/migrations/00100_demand.sql`): ключи агрегатов — `uuid`;
+`uploaded_by` и `confirmed_by` — идентификатор пользователя из токена (`varchar(128)`), учётных записей в АС нет;
+`consumed_volume_ml` — `bigint` (целые мл, как все объёмы); у `statistics_file` со статусом `REJECTED` источник и
+период могут быть пустыми (файл отклонён до чтения строк), ошибка всего файла хранится строкой 1 в `file_row_error`;
+`clinic_share_version.statistics_file_id` уникален (один файл — одна версия). Исправленная история расхода за тот же
+вид и период заменяет прежнюю запись, если та не вошла ни в одну версию оценки (`estimate_history_link`).
 
 ## planning
 
@@ -189,7 +211,7 @@ erDiagram
         varchar component_kind_code
         varchar blood_group_code
         numeric uncovered_volume_ml
-        varchar deficit_reason "NO_SOURCE | NO_ALLOWED_VARIANT | SOURCE_REJECTED | NOT_CONFIRMED_IN_TIME | UNIT_WITHDRAWN"
+        varchar deficit_reason "NO_SOURCE | BELOW_UNIT_REMAINDER (ADR-0019) | NO_ALLOWED_VARIANT | SOURCE_REJECTED | NOT_CONFIRMED_IN_TIME | UNIT_WITHDRAWN"
         timestamptz recorded_at
     }
 ```
@@ -203,7 +225,7 @@ erDiagram
 `request_status_dict`, `clinical_request` (O09, `patient_case_no` K1), `request_constraint` (O08), `variant_offer` (O10, `UNIQUE(clinical_request_id, rank_no)`,
 `explanation`, `stock_watermark`), `variant_offer_unit_link`, `variant_selection`.
 Проекции: `unit_projection` (единицы в наличии по клиникам из `inventory.events`), `delivery_estimate_projection`, `obligation_projection`.
-`patient_case_no` хранится в отдельной таблице `clinical_request_patient` с шифрованием на уровне колонки (`pgcrypto`, ключ из Secret)
+`patient_case_no` хранится в отдельной таблице `clinical_request_patient` в виде конверта, зашифрованного приложением (`libs/k1seal`, AES-256-GCM, AAD = id заявки, ключ из Secret; ADR-0020)
 и отдаётся отдельным эндпоинтом, каждое чтение которого пишет `READ_PATIENT_CASE` в аудит (NFR016).
 
 ## transfer
@@ -214,14 +236,16 @@ erDiagram
 | --- | --- | --- |
 | `source_stock` | Остаток источника: `clinic_id bigint, component_kind_code, available_units, reserved_units, protected_volume, protected_version, protected_reason` | PK (clinic, kind); блокируется `FOR UPDATE` первой |
 | `unit_copy` | Проекция единиц из `inventory.events` с версией: `unit_id, clinic_id bigint, component_kind_code, blood_group_code, rh_positive, phenotype, volume_ml, expires_at, unit_status_code, version` | `version` растёт только вперёд; закрепляется только `IN_STOCK` |
-| `obligation` | O07: `obligation_id, choice_id UK, request_id, origin, source_clinic_id bigint, target_clinic_id bigint, component_kind_code, blood_group_code, requested_qty, confirmed_qty, status, urgency_code, deadline, confirm_window_seconds, fallback_sources bigint[], spec_* (группа, резус, фенотип, min_expires_at, rule_version), confirm_key, transport_ref, status_reason, version, created_at, updated_at` | `CHECK (source ≠ target)`; индекс `(deadline) WHERE status='PENDING'`; индекс `(request_id)` |
+| `obligation` | O07: `obligation_id, choice_id UK, request_id, origin, source_clinic_id bigint, target_clinic_id bigint, component_kind_code, blood_group_code, requested_qty, confirmed_qty, status, urgency_code, deadline, confirm_window_seconds, fallback_sources bigint[], spec_* (группа, резус, фенотип, min_expires_at, rule_version), patient_case_sealed text NULL, confirm_key, transport_ref, status_reason, version, created_at, updated_at` | `CHECK (source ≠ target)`; индекс `(deadline) WHERE status='PENDING'`; индекс `(request_id)`. `patient_case_sealed` — конверт номера случая (ADR-0020), ключа у `transfer` нет; затирается в конечных статусах (S6-WP4) |
 | `allocation` | O18: `allocation_id, unit_id, obligation_id, status (CONFIRMED/RELEASED/CONSUMED), created_at, closed_at` | `UNIQUE (unit_id) WHERE status = 'CONFIRMED'` — NFR004; индексы `(obligation_id)` и `(unit_id, created_at)`. Строки не удаляются, `DELETE` запрещён триггером: история «куда уходила единица» (ПП РФ № 641, п. 17–18, 54; ADR-0027) |
 | `outbox`, `inbox`, `audit_local` | платформа | см. `events.md` |
 
 ## logistics
 
-`transport_request(obligation_id PK, request_id, source_clinic_id, target_clinic_id, component_kind_code, quantity, status REQUESTING/ACCEPTED/REJECTED/UNKNOWN/FAILED/CANCELLED, shipment_ref, cancel_requested, attempts, next_attempt_at, lease_owner, lease_until, last_error, created_at, updated_at)`
+`transport_request(obligation_id PK, request_id, source_clinic_id, target_clinic_id, component_kind_code, quantity, temperature_regime COLD_2_6/FROZEN_MINUS_25/ROOM_20_24, status REQUESTING/ACCEPTED/REJECTED/UNKNOWN/FAILED/CANCELLED, shipment_ref, cancel_requested, attempts, next_attempt_at, lease_owner, lease_until, last_error, created_at, updated_at)`
 плюс `delivery_estimate(source_clinic_id, target_clinic_id, minutes, estimated_at)`, `outbox`, `inbox`.
+Маршрут и груз допускают NULL только у «надгробия» (`status = CANCELLED`, отмена обогнала заказ). Режим перевозки — условие транспортировки компонентов крови по ПП РФ № 641; диапазоны демо (ADR-0010).
+Аренда строки сравнивается по часам экземпляра шлюза, как в прототипе: экземпляры синхронизируют время (NTP), расхождение часов должно быть много меньше запаса «аренда − 2 × таймаут вызова C03» (около 20 с при значениях по умолчанию).
 
 ## notification
 

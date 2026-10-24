@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://blood-supply.dev/schemas/inventory/ProtectedVolumePublished.v1.json",
   "title": "ProtectedVolumePublished",
-  "description": "Событие inventory.events: защищённый объём источника по виду компонента в единицах (норматив + фоновая потребность + обязательства), с версией и основанием.",
+  "description": "Событие inventory.events: защищённый объём источника по виду компонента в единицах (норматив + фоновая потребность, без подтверждённых обязательств — их учитывает transfer; ADR-0019), с версией и основанием. Источник — ProtectedVolumeCalculated из planning.",
   "type": "object",
   "additionalProperties": false,
   "required": ["clinic_id", "component_kind", "volume_units", "version", "reason"],

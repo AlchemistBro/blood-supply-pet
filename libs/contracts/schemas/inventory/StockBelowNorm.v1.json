@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/inventory/StockBelowNorm.v1.json",
+  "title": "StockBelowNorm",
+  "type": "object",
+  "description": "Событие inventory.events: запас клиники по виду опустился ниже норматива (FR014). Только при переходе через порог.",
+  "additionalProperties": false,
+  "required": [
+    "clinic_id",
+    "component_kind",
+    "stock_volume_ml",
+    "norm_ml",
+    "detected_at"
+  ],
+  "properties": {
+    "clinic_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "component_kind": {
+      "type": "string",
+      "enum": [
+        "RBC",
+        "FFP",
+        "PLT",
+        "CRYO"
+      ]
+    },
+    "stock_volume_ml": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Фактический запас по actual_stock"
+    },
+    "norm_ml": {
+      "type": "number",
+      "minimum": 0
+    },
+    "detected_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

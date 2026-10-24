@@ -11,6 +11,7 @@ paths:
   /records:
     get:
       operationId: listRecords
+      x-bs-operation: READ_AUDIT
       summary: Список записей аудита с фильтрами (роли DUTY_OFFICER, IT_SERVICE)
       parameters:
         - { name: module, in: query, schema: { type: string } }
@@ -32,6 +33,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
     post:
       operationId: appendRecord
+      x-bs-operation: WRITE_AUDIT
       summary: Добавить запись (служебный токен web, роль SERVICE)
       requestBody:
         required: true
@@ -50,6 +52,7 @@ paths:
   /internal/verify:
     get:
       operationId: verifyChain
+      x-bs-operation: READ_AUDIT
       summary: Проверить целостность цепочки хешей (роли DUTY_OFFICER, IT_SERVICE)
       responses:
         "200":

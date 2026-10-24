@@ -6,7 +6,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
@@ -31,6 +33,10 @@ type config struct {
 	LogLevel     string `env:"BS_LOG_LEVEL" envDefault:"info"`
 	LogFormat    string `env:"BS_LOG_FORMAT" envDefault:"json"`
 	Environment  string `env:"BS_ENV" envDefault:"local"`
+	// PrintAddr — напечатать в stdout «listening on <адрес>»: тест, запустивший имитатор на :0, узнаёт порт.
+	PrintAddr bool `env:"BS_PRINT_ADDR" envDefault:"false"`
+	// ExitOnStdinEOF — завершиться, когда закрылся stdin: тестовый процесс упал или убит, имитатор не остаётся висеть.
+	ExitOnStdinEOF bool `env:"BS_EXIT_ON_STDIN_EOF" envDefault:"false"`
 }
 
 func main() {
@@ -82,7 +88,25 @@ func run(ctx context.Context) error {
 		Metrics:   obs.MetricsHandler,
 	})
 	log.Info("запуск имитатора C03", "env", cfg.Environment, "addr", cfg.HTTPAddr, "clinics", len(clinics))
-	if err := httpx.NewServer(cfg.HTTPAddr, handler, log).Run(ctx); err != nil {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	if cfg.ExitOnStdinEOF {
+		go func() {
+			// Читаем stdin до конца: EOF значит, что запустивший процесс завершился.
+			_, _ = io.Copy(io.Discard, os.Stdin)
+			log.Info("stdin закрыт, имитатор останавливается")
+			cancel()
+		}()
+	}
+	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.HTTPAddr)
+	if err != nil {
+		return fmt.Errorf("прослушивание %s: %w", cfg.HTTPAddr, err)
+	}
+	if cfg.PrintAddr {
+		// Строка-протокол для запустившего теста: по ней он узнаёт фактический порт.
+		fmt.Printf("listening on %s\n", ln.Addr().String())
+	}
+	if err := httpx.NewServer(cfg.HTTPAddr, handler, log).Serve(ctx, ln); err != nil {
 		return fmt.Errorf("HTTP-сервер: %w", err)
 	}
 	return nil

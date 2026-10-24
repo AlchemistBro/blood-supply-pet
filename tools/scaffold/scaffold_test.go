@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/AlchemistBro/blood-supply-pet/tools/scaffold"
 )
 
@@ -34,6 +36,39 @@ func TestRenderProducesValidGoAndSubstitutes(t *testing.T) {
 	for path := range got {
 		if strings.Contains(got[path], "[[") {
 			t.Errorf("%s: остались неподставленные поля шаблона", path)
+		}
+	}
+}
+
+// Сгенерированные YAML-файлы разбираются парсером: иначе oapi-codegen падает на первом task gen
+// (двоеточие без кавычек в описании уже ломало openapi.yaml).
+func TestRenderedYAMLParses(t *testing.T) {
+	for _, noDB := range []bool{false, true} {
+		files, err := scaffold.Render(scaffold.Params{Name: "demo-svc", ModulePath: "example.com/m", Port: 8190, NoDB: noDB})
+		if err != nil {
+			t.Fatal(err)
+		}
+		checked := 0
+		for _, f := range files {
+			if !strings.HasSuffix(f.Path, ".yaml") {
+				continue
+			}
+			checked++
+			var doc map[string]any
+			if err := yaml.Unmarshal(f.Content, &doc); err != nil {
+				t.Errorf("%s (без базы=%v) не разбирается: %v\n%s", f.Path, noDB, err, f.Content)
+				continue
+			}
+			if strings.HasSuffix(f.Path, "openapi.yaml") {
+				info, _ := doc["info"].(map[string]any)
+				desc, _ := info["description"].(string)
+				if doc["openapi"] != "3.0.3" || !strings.Contains(desc, "HTTP: код") {
+					t.Errorf("openapi.yaml разобран неверно: openapi=%v description=%q", doc["openapi"], desc)
+				}
+			}
+		}
+		if checked != 2 {
+			t.Errorf("ожидали 2 YAML-файла, проверено %d", checked)
 		}
 	}
 }
