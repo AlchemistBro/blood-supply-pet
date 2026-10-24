@@ -70,7 +70,7 @@ func (s *Service) detectWindow(ctx context.Context, tx pgx.Tx, r domain.Record, 
 	var count int
 	var first time.Time
 	err := tx.QueryRow(ctx, `SELECT count(*)::int,coalesce(min(received_at),$1) FROM audit_record
- WHERE received_at >= $1 - make_interval(secs => $2) AND received_at <= $1
+ WHERE received_at >= $1::timestamptz - make_interval(secs => $2) AND received_at <= $1::timestamptz
  AND ($3='' OR user_id=$3) AND
  (($4='read' AND action='READ_PATIENT_CASE' AND result='SUCCESS') OR
  ($4='denied' AND (action='ACCESS_DENIED' OR result='DENIED')) OR
@@ -88,7 +88,7 @@ func (s *Service) detectWindow(ctx context.Context, tx pgx.Tx, r domain.Record, 
 func (s *Service) raiseIncident(ctx context.Context, tx pgx.Tx, rule, user string, count, seconds int, first time.Time, seq int64) error {
 	now := s.clock.Now()
 	var suppressed bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM security_incident WHERE rule=$1 AND user_id=$2 AND detected_at > $3 - make_interval(secs => $4))`, rule, user, now, seconds).Scan(&suppressed); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM security_incident WHERE rule=$1 AND user_id=$2 AND detected_at > $3::timestamptz - make_interval(secs => $4))`, rule, user, now, seconds).Scan(&suppressed); err != nil {
 		return err
 	}
 	if suppressed {
