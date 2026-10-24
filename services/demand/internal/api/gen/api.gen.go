@@ -110,6 +110,29 @@ type DuplicateProblem struct {
 	Type           *string             `json:"type,omitempty"`
 }
 
+// Estimate defines model for Estimate.
+type Estimate struct {
+	ClinicShareVersionId openapi_types.UUID   `json:"clinic_share_version_id"`
+	ConfirmedBy          *string              `json:"confirmed_by,omitempty"`
+	DemandEstimateId     openapi_types.UUID   `json:"demand_estimate_id"`
+	HistoryIds           []openapi_types.UUID `json:"history_ids"`
+	Lines                []EstimateLine       `json:"lines"`
+	Notice               string               `json:"notice"`
+	PeriodEnd            openapi_types.Date   `json:"period_end"`
+	PeriodStart          openapi_types.Date   `json:"period_start"`
+	ProfileFileId        openapi_types.UUID   `json:"profile_file_id"`
+	Status               string               `json:"status"`
+	VersionNo            int                  `json:"version_no"`
+}
+
+// EstimateLine defines model for EstimateLine.
+type EstimateLine struct {
+	BloodGroup     string  `json:"blood_group"`
+	ClinicId       int64   `json:"clinic_id"`
+	ComponentKind  string  `json:"component_kind"`
+	DemandVolumeMl float64 `json:"demand_volume_ml"`
+}
+
 // FileDetails defines model for FileDetails.
 type FileDetails struct {
 	AcceptedRows int         `json:"accepted_rows"`
@@ -218,6 +241,15 @@ type NotFound = Problem
 // Unauthorized defines model for Unauthorized.
 type Unauthorized = Problem
 
+// CalculateEstimateJSONBody defines parameters for CalculateEstimate.
+type CalculateEstimateJSONBody struct {
+	ClinicShareVersionId openapi_types.UUID   `json:"clinic_share_version_id"`
+	HistoryIds           []openapi_types.UUID `json:"history_ids"`
+	PeriodEnd            openapi_types.Date   `json:"period_end"`
+	PeriodStart          openapi_types.Date   `json:"period_start"`
+	ProfileFileId        openapi_types.UUID   `json:"profile_file_id"`
+}
+
 // ListFilesParams defines parameters for ListFiles.
 type ListFilesParams struct {
 	FileKind *FileKind `form:"file_kind,omitempty" json:"file_kind,omitempty"`
@@ -235,11 +267,26 @@ type ListHistoryParams struct {
 	ComponentKindCode *string `form:"component_kind_code,omitempty" json:"component_kind_code,omitempty"`
 }
 
+// CalculateEstimateJSONRequestBody defines body for CalculateEstimate for application/json ContentType.
+type CalculateEstimateJSONRequestBody CalculateEstimateJSONBody
+
 // UploadFileMultipartRequestBody defines body for UploadFile for multipart/form-data ContentType.
 type UploadFileMultipartRequestBody UploadFileMultipartBody
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// ListEstimates Версии оценки потребности, новые первыми
+	// (GET /estimates)
+	ListEstimates(w http.ResponseWriter, r *http.Request)
+	// CalculateEstimate Рассчитать версию по явно выбранным входам (демо-формулы)
+	// (POST /estimates)
+	CalculateEstimate(w http.ResponseWriter, r *http.Request)
+	// GetEstimate Оценка с версиями входов и потребностью клиник
+	// (GET /estimates/{id})
+	GetEstimate(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// PublishEstimate Подтвердить публикацию версии; повтор идемпотентен
+	// (POST /estimates/{id}/publish)
+	PublishEstimate(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// ListFiles Загруженные файлы, новые первыми
 	// (GET /files)
 	ListFiles(w http.ResponseWriter, r *http.Request, params ListFilesParams)
@@ -271,6 +318,86 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListEstimates operation middleware
+func (siw *ServerInterfaceWrapper) ListEstimates(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListEstimates(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CalculateEstimate operation middleware
+func (siw *ServerInterfaceWrapper) CalculateEstimate(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CalculateEstimate(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetEstimate operation middleware
+func (siw *ServerInterfaceWrapper) GetEstimate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetEstimate(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PublishEstimate operation middleware
+func (siw *ServerInterfaceWrapper) PublishEstimate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PublishEstimate(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListFiles operation middleware
 func (siw *ServerInterfaceWrapper) ListFiles(w http.ResponseWriter, r *http.Request) {
@@ -565,6 +692,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/estimates", wrapper.ListEstimates)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/estimates", wrapper.CalculateEstimate)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/estimates/{id}", wrapper.GetEstimate)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/estimates/{id}/publish", wrapper.PublishEstimate)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/files", wrapper.ListFiles)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/files", wrapper.UploadFile)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/files/{id}", wrapper.GetFile)
@@ -583,6 +714,139 @@ type ForbiddenApplicationProblemPlusJSONResponse Problem
 type NotFoundApplicationProblemPlusJSONResponse Problem
 
 type UnauthorizedApplicationProblemPlusJSONResponse Problem
+
+type ListEstimatesRequestObject struct {
+}
+
+type ListEstimatesResponseObject interface {
+	VisitListEstimatesResponse(w http.ResponseWriter) error
+}
+
+type ListEstimates200JSONResponse []Estimate
+
+func (response ListEstimates200JSONResponse) VisitListEstimatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CalculateEstimateRequestObject struct {
+	Body *CalculateEstimateJSONRequestBody
+}
+
+type CalculateEstimateResponseObject interface {
+	VisitCalculateEstimateResponse(w http.ResponseWriter) error
+}
+
+type CalculateEstimate200JSONResponse Estimate
+
+func (response CalculateEstimate200JSONResponse) VisitCalculateEstimateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CalculateEstimate422ApplicationProblemPlusJSONResponse Problem
+
+func (response CalculateEstimate422ApplicationProblemPlusJSONResponse) VisitCalculateEstimateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEstimateRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type GetEstimateResponseObject interface {
+	VisitGetEstimateResponse(w http.ResponseWriter) error
+}
+
+type GetEstimate200JSONResponse Estimate
+
+func (response GetEstimate200JSONResponse) VisitGetEstimateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEstimate404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetEstimate404ApplicationProblemPlusJSONResponse) VisitGetEstimateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PublishEstimateRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type PublishEstimateResponseObject interface {
+	VisitPublishEstimateResponse(w http.ResponseWriter) error
+}
+
+type PublishEstimate200JSONResponse Estimate
+
+func (response PublishEstimate200JSONResponse) VisitPublishEstimateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PublishEstimate404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response PublishEstimate404ApplicationProblemPlusJSONResponse) VisitPublishEstimateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type ListFilesRequestObject struct {
 	Params ListFilesParams
@@ -1078,6 +1342,18 @@ func (response ListShareVersions403ApplicationProblemPlusJSONResponse) VisitList
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// ListEstimates Версии оценки потребности, новые первыми
+	// (GET /estimates)
+	ListEstimates(ctx context.Context, request ListEstimatesRequestObject) (ListEstimatesResponseObject, error)
+	// CalculateEstimate Рассчитать версию по явно выбранным входам (демо-формулы)
+	// (POST /estimates)
+	CalculateEstimate(ctx context.Context, request CalculateEstimateRequestObject) (CalculateEstimateResponseObject, error)
+	// GetEstimate Оценка с версиями входов и потребностью клиник
+	// (GET /estimates/{id})
+	GetEstimate(ctx context.Context, request GetEstimateRequestObject) (GetEstimateResponseObject, error)
+	// PublishEstimate Подтвердить публикацию версии; повтор идемпотентен
+	// (POST /estimates/{id}/publish)
+	PublishEstimate(ctx context.Context, request PublishEstimateRequestObject) (PublishEstimateResponseObject, error)
 	// ListFiles Загруженные файлы, новые первыми
 	// (GET /files)
 	ListFiles(ctx context.Context, request ListFilesRequestObject) (ListFilesResponseObject, error)
@@ -1138,6 +1414,113 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// ListEstimates operation middleware
+func (sh *strictHandler) ListEstimates(w http.ResponseWriter, r *http.Request) {
+	var request ListEstimatesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListEstimates(ctx, request.(ListEstimatesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListEstimates")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListEstimatesResponseObject); ok {
+		if err := validResponse.VisitListEstimatesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CalculateEstimate operation middleware
+func (sh *strictHandler) CalculateEstimate(w http.ResponseWriter, r *http.Request) {
+	var request CalculateEstimateRequestObject
+
+	var body CalculateEstimateJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CalculateEstimate(ctx, request.(CalculateEstimateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CalculateEstimate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CalculateEstimateResponseObject); ok {
+		if err := validResponse.VisitCalculateEstimateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetEstimate operation middleware
+func (sh *strictHandler) GetEstimate(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request GetEstimateRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetEstimate(ctx, request.(GetEstimateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetEstimate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetEstimateResponseObject); ok {
+		if err := validResponse.VisitGetEstimateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PublishEstimate operation middleware
+func (sh *strictHandler) PublishEstimate(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request PublishEstimateRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PublishEstimate(ctx, request.(PublishEstimateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PublishEstimate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PublishEstimateResponseObject); ok {
+		if err := validResponse.VisitPublishEstimateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // ListFiles operation middleware

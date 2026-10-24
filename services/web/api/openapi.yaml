@@ -10,6 +10,45 @@ info:
 servers:
   - url: http://localhost:8080
 paths:
+  /demand:
+    get:
+      operationId: demandPage
+      x-bs-operation: VIEW_DEMAND
+      summary: Файлы статистики и версии потребности территории
+      responses:
+        "200": { description: Экран аналитика или просмотра дежурного }
+  /demand/files:
+    post:
+      operationId: uploadDemandFile
+      x-bs-operation: UPLOAD_STATISTICS
+      summary: Загрузка CSV с csrf_token, без JavaScript
+      responses:
+        "200": { description: Результат и построчные ошибки }
+  /demand/estimates:
+    post:
+      operationId: calculateDemand
+      x-bs-operation: PUBLISH_ESTIMATE
+      summary: Расчёт оценки по выбранным файлам и периодам
+      responses:
+        "303": { description: Переход к рассчитанной версии }
+  /demand/estimates/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: demandEstimate
+      x-bs-operation: VIEW_DEMAND
+      summary: Версия потребности с входами и строками клиник
+      responses:
+        "200": { description: Оценка }
+  /demand/estimates/{id}/publish:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: publishDemand
+      x-bs-operation: PUBLISH_ESTIMATE
+      summary: Подтверждение публикации аналитиком
+      responses:
+        "303": { description: Переход к опубликованной версии }
   /stock:
     get:
       operationId: stockPage

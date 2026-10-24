@@ -136,8 +136,18 @@ func (s *Server) checkCSRF(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-		if err := r.ParseForm(); err != nil {
+		var formErr error
+		if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+			r.Body = http.MaxBytesReader(w, r.Body, 6<<20)
+			formErr = r.ParseMultipartForm(1 << 20) //nolint:gosec // всё тело выше ограничено MaxBytesReader до 6 МиБ; файлы свыше 1 МиБ временные и удаляются
+			if r.MultipartForm != nil {
+				defer func() { _ = r.MultipartForm.RemoveAll() }()
+			}
+		} else {
+			r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+			formErr = r.ParseForm()
+		}
+		if formErr != nil {
 			s.renderError(w, r, http.StatusBadRequest, "Неверная форма", "Обновите страницу и заполните форму ещё раз.")
 			return
 		}

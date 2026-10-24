@@ -27,13 +27,17 @@ const (
 
 // operations — матрица «маршрут → операция прав»; совпадает с x-bs-operation в openapi.yaml (проверяет тест).
 var operations = map[string]auth.Operation{
-	"POST /files":            auth.OpUploadStatistics,
-	"GET /files":             auth.OpUploadStatistics,
-	"GET /files/{id}":        auth.OpUploadStatistics,
-	"GET /files/{id}/errors": auth.OpUploadStatistics,
-	"GET /history":           auth.OpUploadStatistics,
-	"GET /shares/versions":   auth.OpUploadStatistics,
-	"GET /shares/current":    auth.OpUploadStatistics,
+	"GET /estimates":               auth.OpViewDemand,
+	"POST /estimates":              auth.OpPublishEstimate,
+	"GET /estimates/{id}":          auth.OpViewDemand,
+	"POST /estimates/{id}/publish": auth.OpPublishEstimate,
+	"POST /files":                  auth.OpUploadStatistics,
+	"GET /files":                   auth.OpUploadStatistics,
+	"GET /files/{id}":              auth.OpUploadStatistics,
+	"GET /files/{id}/errors":       auth.OpUploadStatistics,
+	"GET /history":                 auth.OpUploadStatistics,
+	"GET /shares/versions":         auth.OpUploadStatistics,
+	"GET /shares/current":          auth.OpUploadStatistics,
 }
 
 // Handler реализует gen.StrictServerInterface.

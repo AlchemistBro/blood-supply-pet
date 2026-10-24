@@ -57,6 +57,7 @@ type Config struct {
 
 // Deps — зависимости сервера.
 type Deps struct {
+	Demand    *svcclient.Client
 	Transfer  *svcclient.Client
 	Inventory *svcclient.Client
 	OIDC      OIDC
@@ -68,6 +69,7 @@ type Deps struct {
 
 // Server — обработчики и middleware web.
 type Server struct {
+	demand    *svcclient.Client
 	transfer  *svcclient.Client
 	inventory *svcclient.Client
 	ui        *ui.Renderer
@@ -106,6 +108,7 @@ func New(cfg Config, d Deps) (*Server, error) {
 		return nil, err
 	}
 	s := &Server{
+		demand:   d.Demand,
 		transfer: d.Transfer, inventory: d.Inventory, ui: renderer,
 		cfg: cfg, oidc: d.OIDC, audit: d.Audit, clock: d.Clock, log: d.Log, pages: p,
 		sessions: session.NewStore(d.Codec, SessionCookie, cfg.CookieSecure),
@@ -133,6 +136,9 @@ func (s *Server) Register(mux *http.ServeMux) {
 	}
 	if s.inventory != nil {
 		s.registerStock(mux)
+	}
+	if s.demand != nil {
+		s.registerDemand(mux)
 	}
 }
 
