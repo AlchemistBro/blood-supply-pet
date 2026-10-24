@@ -1,8 +1,9 @@
 package transfer
 
 import (
-	"github.com/google/uuid"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // RequestCancellationProcessed завершает запрос отмены. Непустой список означает отправленную часть.
