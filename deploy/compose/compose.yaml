@@ -238,6 +238,72 @@ services:
       <<: *service-deps
       sim-logistics: { condition: service_healthy }
 
+  demand:
+    build: { context: ../.., dockerfile: deploy/docker/Dockerfile, args: { SERVICE: demand, VERSION: "${IMAGE_TAG:-dev}" } }
+    image: ghcr.io/alchemistbro/blood-supply-demand:${IMAGE_TAG:-dev}
+    profiles: ["services"]
+    environment:
+      <<: *service-env
+      BS_DB_URL: postgres://demand:demand@postgres:5432/demand?sslmode=disable
+    ports: ["8102:8080"]
+    healthcheck: *service-health
+    depends_on: *service-deps
+
+  planning:
+    build: { context: ../.., dockerfile: deploy/docker/Dockerfile, args: { SERVICE: planning, VERSION: "${IMAGE_TAG:-dev}" } }
+    image: ghcr.io/alchemistbro/blood-supply-planning:${IMAGE_TAG:-dev}
+    profiles: ["services"]
+    environment:
+      <<: *service-env
+      BS_DB_URL: postgres://planning:planning@postgres:5432/planning?sslmode=disable
+    ports: ["8103:8080"]
+    healthcheck: *service-health
+    depends_on: *service-deps
+
+  matching:
+    build: { context: ../.., dockerfile: deploy/docker/Dockerfile, args: { SERVICE: matching, VERSION: "${IMAGE_TAG:-dev}" } }
+    image: ghcr.io/alchemistbro/blood-supply-matching:${IMAGE_TAG:-dev}
+    profiles: ["services"]
+    environment:
+      <<: *service-env
+      BS_DB_URL: postgres://matching:matching@postgres:5432/matching?sslmode=disable
+    ports: ["8104:8080"]
+    healthcheck: *service-health
+    depends_on: *service-deps
+
+  notification:
+    build: { context: ../.., dockerfile: deploy/docker/Dockerfile, args: { SERVICE: notification, VERSION: "${IMAGE_TAG:-dev}" } }
+    image: ghcr.io/alchemistbro/blood-supply-notification:${IMAGE_TAG:-dev}
+    profiles: ["services"]
+    environment:
+      <<: *service-env
+      BS_DB_URL: postgres://notification:notification@postgres:5432/notification?sslmode=disable
+      BS_SMTP_ADDR: mailpit:1025
+      BS_WEB_BASE_URL: ${WEB_PUBLIC_URL:-https://localhost}
+    ports: ["8107:8080"]
+    healthcheck: *service-health
+    depends_on:
+      <<: *service-deps
+      mailpit: { condition: service_started }
+
+  sim-emergency:
+    build: { context: ../.., dockerfile: deploy/docker/Dockerfile, args: { SERVICE: sim-emergency, VERSION: "${IMAGE_TAG:-dev}" } }
+    image: ghcr.io/alchemistbro/blood-supply-sim-emergency:${IMAGE_TAG:-dev}
+    profiles: ["services"]
+    environment:
+      BS_HTTP_ADDR: ":8202"
+      BS_PLANNING_URL: http://planning:8080
+      BS_SERVICE_TOKEN_URL: http://keycloak:8080/realms/blood-supply/protocol/openid-connect/token
+      BS_SERVICE_CLIENT_ID: services
+      BS_SERVICE_CLIENT_SECRET: ${SERVICES_CLIENT_SECRET:-services-demo-secret}
+    ports: ["8202:8202"]
+    healthcheck:
+      <<: *service-health
+      test: ["CMD", "/healthcheck", "http://127.0.0.1:8202/healthz"]
+    depends_on:
+      planning: { condition: service_healthy }
+      keycloak: { condition: service_healthy }
+
   sim-aist:
     build: { context: ../.., dockerfile: deploy/docker/Dockerfile, args: { SERVICE: sim-aist, VERSION: "${IMAGE_TAG:-dev}" } }
     image: ghcr.io/alchemistbro/blood-supply-sim-aist:${IMAGE_TAG:-dev}

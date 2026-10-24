@@ -50,6 +50,9 @@ func (s *Service) cancelLocked(ctx context.Context, tx pgx.Tx, o domain.Obligati
 	if err != nil {
 		return CancelResult{}, err
 	}
+	if c.OnlyPending && locked.Status != domain.StatusPending {
+		return CancelResult{ObligationID: o.ID, Status: locked.Status}, nil
+	}
 	if !locked.Status.Cancellable() {
 		return CancelResult{ObligationID: o.ID, Status: locked.Status}, nil
 	}

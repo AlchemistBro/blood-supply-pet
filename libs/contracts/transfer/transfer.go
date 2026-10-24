@@ -95,14 +95,15 @@ type ReplacementSpec struct {
 // OpenObligation — команда «создать задание источнику» (O07 PENDING). Повтор с тем же choice_id
 // не создаёт второе обязательство.
 type OpenObligation struct {
-	ChoiceID       uuid.UUID `json:"choice_id"`
-	RequestID      uuid.UUID `json:"request_id"`
-	Origin         string    `json:"origin"`
-	SourceClinicID int64     `json:"source_clinic_id"`
-	TargetClinicID int64     `json:"target_clinic_id"`
-	ComponentKind  string    `json:"component_kind"`
-	RequestedQty   int       `json:"requested_qty"`
-	Urgency        string    `json:"urgency"`
+	ProtectedFloors map[int64]int `json:"protected_floors,omitempty"`
+	ChoiceID        uuid.UUID     `json:"choice_id"`
+	RequestID       uuid.UUID     `json:"request_id"`
+	Origin          string        `json:"origin"`
+	SourceClinicID  int64         `json:"source_clinic_id"`
+	TargetClinicID  int64         `json:"target_clinic_id"`
+	ComponentKind   string        `json:"component_kind"`
+	RequestedQty    int           `json:"requested_qty"`
+	Urgency         string        `json:"urgency"`
 	// ConfirmWindowSeconds — срок подтверждения оператором источника (FR049); для экстренной — минуты.
 	ConfirmWindowSeconds int64 `json:"confirm_window_seconds"`
 	// FallbackSources — следующие источники для эскалации по таймеру, по порядку ранжирования.

@@ -33,6 +33,12 @@ func New(svc *app.Service, log *slog.Logger) *Handlers {
 // Commands — transfer.commands: OpenObligation, CancelObligation.
 func (h *Handlers) Commands(ctx context.Context, msg messaging.Message) error {
 	switch msg.Type {
+	case (transfer.CancelRequestObligations{}).MessageType():
+		var c transfer.CancelRequestObligations
+		if err := decode(msg, &c); err != nil {
+			return err
+		}
+		return h.svc.CancelRequest(ctx, &msg, c)
 	case (transfer.OpenObligation{}).MessageType():
 		var c transfer.OpenObligation
 		if err := decode(msg, &c); err != nil {
@@ -147,7 +153,8 @@ func decode(msg messaging.Message, v any) error {
 // OpenObligationInput переводит команду в открытие задания. Номера случая пациента в команде нет.
 func OpenObligationInput(c transfer.OpenObligation) domain.NewObligation {
 	return domain.NewObligation{
-		ChoiceID: c.ChoiceID, RequestID: c.RequestID, Origin: domain.Origin(c.Origin),
+		ProtectedFloors: c.ProtectedFloors,
+		ChoiceID:        c.ChoiceID, RequestID: c.RequestID, Origin: domain.Origin(c.Origin),
 		SourceClinicID: c.SourceClinicID, TargetClinicID: c.TargetClinicID, ComponentKind: c.ComponentKind,
 		RequestedQty: c.RequestedQty, UrgencyCode: c.Urgency,
 		ConfirmWindow: time.Duration(c.ConfirmWindowSeconds) * time.Second, FallbackSources: c.FallbackSources,

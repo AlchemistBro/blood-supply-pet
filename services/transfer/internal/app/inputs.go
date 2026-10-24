@@ -32,6 +32,7 @@ type ReplaceUnit struct {
 
 // CancelObligation — отмена задания (заявка отменена, план пересчитан).
 type CancelObligation struct {
+	OnlyPending  bool
 	ObligationID uuid.UUID
 	Reason       string
 	Actor        string

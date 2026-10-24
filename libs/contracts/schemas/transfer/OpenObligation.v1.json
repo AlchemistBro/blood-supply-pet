@@ -7,6 +7,7 @@
   "additionalProperties": false,
   "required": ["choice_id", "request_id", "origin", "source_clinic_id", "target_clinic_id", "component_kind", "requested_qty", "urgency", "confirm_window_seconds", "spec"],
   "properties": {
+    "protected_floors": { "type": "object", "maxProperties": 1000, "propertyNames": { "pattern": "^[1-9][0-9]*$" }, "additionalProperties": { "type": "integer", "minimum": 0, "maximum": 2147483647 }, "description": "Минимальный защищённый остаток по источникам без подтверждённых обязательств, ADR-0028" },
     "choice_id": { "type": "string", "format": "uuid", "description": "Выбор врача или предложение плана: ключ идемпотентности" },
     "request_id": { "type": "string", "format": "uuid", "description": "Заявка (matching) или план (planning)" },
     "origin": { "type": "string", "enum": ["DOCTOR_CHOICE", "PLAN_PROPOSAL"] },

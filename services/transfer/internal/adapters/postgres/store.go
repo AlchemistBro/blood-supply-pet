@@ -3,6 +3,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -32,12 +33,21 @@ func q(db app.DB) *gen.Queries { return gen.New(db) }
 
 // InsertObligation вставляет O07; false — choice_id уже есть (повтор выбора).
 func (Store) InsertObligation(ctx context.Context, db app.DB, o domain.Obligation) (bool, error) {
+	floors := o.ProtectedFloors
+	if floors == nil {
+		floors = map[int64]int{}
+	}
+	rawFloors, err := json.Marshal(floors)
+	if err != nil {
+		return false, err
+	}
 	qty, err := int32Of(o.RequestedQty)
 	if err != nil {
 		return false, err
 	}
 	n, err := q(db).InsertObligation(ctx, gen.InsertObligationParams{
-		ObligationID: o.ID, ChoiceID: o.ChoiceID, RequestID: o.RequestID, Origin: string(o.Origin),
+		ProtectedFloors: rawFloors,
+		ObligationID:    o.ID, ChoiceID: o.ChoiceID, RequestID: o.RequestID, Origin: string(o.Origin),
 		SourceClinicID: o.SourceClinicID, TargetClinicID: o.TargetClinicID, ComponentKindCode: o.ComponentKind,
 		BloodGroupCode: o.BloodGroup, RequestedQty: qty, UrgencyCode: o.UrgencyCode, Deadline: o.Deadline,
 		ConfirmWindowSeconds: int64(o.ConfirmWindow / time.Second), FallbackSources: nonNil(o.FallbackSources),
@@ -404,12 +414,17 @@ func obligationOf(row gen.Obligation, err error, id uuid.UUID) (domain.Obligatio
 }
 
 func toObligation(r gen.Obligation) (domain.Obligation, error) {
+	var floors map[int64]int
+	if err := json.Unmarshal(r.ProtectedFloors, &floors); err != nil {
+		return domain.Obligation{}, fmt.Errorf("пороги источника: %w", err)
+	}
 	status, err := domain.ParseStatus(r.Status)
 	if err != nil {
 		return domain.Obligation{}, err
 	}
 	return domain.Obligation{
-		ID: r.ObligationID, ChoiceID: r.ChoiceID, RequestID: r.RequestID, Origin: domain.Origin(r.Origin),
+		ProtectedFloors: floors,
+		ID:              r.ObligationID, ChoiceID: r.ChoiceID, RequestID: r.RequestID, Origin: domain.Origin(r.Origin),
 		SourceClinicID: r.SourceClinicID, TargetClinicID: r.TargetClinicID, ComponentKind: r.ComponentKindCode,
 		BloodGroup: r.BloodGroupCode, RequestedQty: int(r.RequestedQty), ConfirmedQty: int(r.ConfirmedQty), Status: status,
 		UrgencyCode: r.UrgencyCode, Deadline: r.Deadline, ConfirmWindow: time.Duration(r.ConfirmWindowSeconds) * time.Second,

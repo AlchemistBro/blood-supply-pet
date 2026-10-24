@@ -20,6 +20,12 @@ type Allocation struct {
 	ClosedAt     *time.Time
 }
 
+type CancelledRequest struct {
+	RequestID   uuid.UUID
+	Reason      string
+	CancelledAt time.Time
+}
+
 type Obligation struct {
 	ObligationID         uuid.UUID
 	ChoiceID             uuid.UUID
@@ -47,10 +53,11 @@ type Obligation struct {
 	TransportRef     *string
 	StatusReason     *string
 	// Когда экстренное задание передано дежурному из-за недоступной АИСТ-М: одна эскалация на задание
-	EscalatedAt *time.Time
-	Version     int64
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	EscalatedAt     *time.Time
+	Version         int64
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	ProtectedFloors []byte
 }
 
 type RefBloodGroup struct {

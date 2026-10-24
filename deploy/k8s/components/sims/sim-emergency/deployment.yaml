@@ -31,6 +31,21 @@ spec:
             - name: http
               containerPort: 8202
           env:
+            - name: BS_SERVICE_TOKEN_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: sims-env
+                  key: BS_SERVICE_TOKEN_URL
+            - name: BS_SERVICE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: sim-emergency-client
+                  key: BS_SERVICE_CLIENT_ID
+            - name: BS_SERVICE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: sim-emergency-client
+                  key: BS_SERVICE_CLIENT_SECRET
             - name: BS_HTTP_ADDR
               value: ":8202"
             - name: BS_LOG_LEVEL

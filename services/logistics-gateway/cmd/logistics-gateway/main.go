@@ -29,21 +29,23 @@ func main() {
 			if err != nil {
 				return nil, err
 			}
-			gw := app.New(rt.Pool, postgres.New(rt.Pool), c03.New(cfg.C03URL, cfg.C03Timeout),
+			carrier := c03.New(cfg.C03URL, cfg.C03Timeout)
+			estimates := app.Estimates{Pool: rt.Pool, Source: carrier, Journal: rt.Journal, Ref: rt.Refdata, Log: rt.Log}
+			gw := app.New(rt.Pool, postgres.New(rt.Pool), carrier,
 				kafka.Outbox{Journal: rt.Journal, Topic: contracts.TopicLogisticsReplies}, rt.Clock, rt.Log, cfg.settings())
-			var workers []runtime.Worker
+			workers := []runtime.Worker{estimates.Run}
 			if cfg.ReconcilerEnabled {
 				workers = append(workers, gw.RunReconciler)
 			}
 			if len(rt.Cfg.KafkaBrokers) > 0 {
-				topics := append(messaging.WithDLT(contracts.TopicLogisticsCommands), contracts.TopicLogisticsReplies)
+				topics := append(messaging.WithDLT(contracts.TopicLogisticsCommands), contracts.TopicLogisticsReplies, contracts.TopicLogisticsEvents)
 				if err := messaging.EnsureTopics(ctx, rt.Cfg.KafkaBrokers, 1, topics...); err != nil {
 					return nil, err
 				}
 				consumer, err := messaging.NewConsumer(messaging.ConsumerConfig{
 					Brokers: rt.Cfg.KafkaBrokers, Group: "logistics-gateway",
 					Topics: []string{contracts.TopicLogisticsCommands},
-				}, kafka.Handler(gw), rt.Log)
+				}, estimates.Handle(kafka.Handler(gw)), rt.Log)
 				if err != nil {
 					return nil, err
 				}

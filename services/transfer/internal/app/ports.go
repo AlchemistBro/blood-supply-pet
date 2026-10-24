@@ -47,6 +47,9 @@ type DB interface {
 
 // Store — порт хранилища transfer. Каждый переход статуса — CAS по ожидаемому статусу и версии из o.
 type Store interface {
+	LockRequest(context.Context, DB, uuid.UUID) error
+	RequestCancelled(context.Context, DB, uuid.UUID) (bool, error)
+	CancelRequest(context.Context, DB, uuid.UUID, string, time.Time) error
 	History(ctx context.Context, db DB, id uuid.UUID, limit, offset int) ([]HistoryEntry, error)
 	InsertObligation(ctx context.Context, db DB, o domain.Obligation) (bool, error)
 	Obligation(ctx context.Context, db DB, id uuid.UUID) (domain.Obligation, error)

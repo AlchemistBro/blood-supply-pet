@@ -126,17 +126,34 @@ func (s *Service) Open(ctx context.Context, msg *messaging.Message, n domain.New
 		return uuid.Nil, deliveryErr(msg, err)
 	}
 	err := s.inTx(ctx, msg, func(ctx context.Context, tx pgx.Tx) error {
+		if err := s.store.LockRequest(ctx, tx, n.RequestID); err != nil {
+			return err
+		}
 		_, _, err := s.openTx(ctx, tx, n, actorSystem)
 		return err
 	})
 	if err != nil {
 		return uuid.Nil, deliveryErr(msg, err)
 	}
-	return s.store.ObligationIDByChoice(ctx, s.pool, n.ChoiceID)
+	id, err := s.store.ObligationIDByChoice(ctx, s.pool, n.ChoiceID)
+	if errors.Is(err, ErrNotFound) {
+		cancelled, checkErr := s.store.RequestCancelled(ctx, s.pool, n.RequestID)
+		if checkErr != nil {
+			return uuid.Nil, checkErr
+		}
+		if cancelled {
+			return uuid.Nil, nil
+		}
+	}
+	return id, err
 }
 
 // openTx вставляет задание и пишет ObligationOpened и аудит, только если вставка была первой.
 func (s *Service) openTx(ctx context.Context, tx pgx.Tx, n domain.NewObligation, actor string) (uuid.UUID, bool, error) {
+	cancelled, err := s.store.RequestCancelled(ctx, tx, n.RequestID)
+	if err != nil || cancelled {
+		return uuid.Nil, false, err
+	}
 	now := s.clock.Now()
 	// Клиники проверяются по справочнику до вставки: неизвестный запасной источник иначе всплыл бы только
 	// при эскалации нарушением FK.
@@ -164,7 +181,7 @@ func (s *Service) openTx(ctx context.Context, tx pgx.Tx, n domain.NewObligation,
 		ID: id, ChoiceID: n.ChoiceID, RequestID: n.RequestID, Origin: n.Origin, SourceClinicID: n.SourceClinicID,
 		TargetClinicID: n.TargetClinicID, ComponentKind: n.ComponentKind, BloodGroup: n.Spec.BloodGroup,
 		RequestedQty: n.RequestedQty, Status: domain.StatusPending, UrgencyCode: n.UrgencyCode,
-		Deadline: domain.Deadline(now, window), ConfirmWindow: window, FallbackSources: n.FallbackSources,
+		Deadline: domain.Deadline(now, window), ConfirmWindow: window, FallbackSources: n.FallbackSources, ProtectedFloors: n.ProtectedFloors,
 		Spec: n.Spec, CreatedAt: now, UpdatedAt: now,
 	}
 	inserted, err := s.store.InsertObligation(ctx, tx, o)

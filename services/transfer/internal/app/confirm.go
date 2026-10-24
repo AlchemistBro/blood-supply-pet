@@ -107,6 +107,7 @@ func (s *Service) confirmLocked(ctx context.Context, tx pgx.Tx, o domain.Obligat
 	}
 
 	k := len(present)
+	stock.Protected = max(stock.Protected, locked.ProtectedFloors[locked.SourceClinicID])
 	if exceeded := stock.CheckProtected(k); exceeded != nil {
 		return *exceeded, nil
 	}

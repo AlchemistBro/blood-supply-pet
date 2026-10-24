@@ -114,6 +114,7 @@ web фильтрует живые статусы без запроса к `trans
 | --- | --- |
 | команда `OpenObligation` | `choice_id` (идемпотентность), `request_id` (заявка или план), `origin`(DOCTOR_CHOICE/PLAN_PROPOSAL), `source_clinic_id`, `target_clinic_id`, `component_kind`, `requested_qty`, `urgency`, `confirm_window_seconds`, `fallback_sources[]?`, `spec{blood_group?, rh_positive?, phenotype?, min_expires_at?, rule_version}`, `patient_case_sealed?` (этап 6: конверт номера случая, ADR-0020). Открытого номера случая нет: обязательство ссылается на заявку через `request_id` |
 | команда `CancelObligation` | `obligation_id`, `reason`(REQUEST_CANCELLED/PLAN_RECALCULATED/DUTY_OFFICER_DECISION) |
+| команда `CancelRequestObligations` | `request_id`, `reason`(PLAN_RECALCULATED/REQUEST_CANCELLED), `only_pending`; надгробие запрещает позднее открытие заданий заявки, ADR-0030 |
 | `ObligationOpened` | `obligation_id`, `request_id`, `origin`, `source_clinic_id`, `target_clinic_id`, `component_kind`, `requested_qty`, `deadline` |
 | `TransferConfirmed` | `obligation_id`, `request_id`, `units[]`, `quantity`, `operator` |
 | `TransferShortfallRecorded` | `obligation_id`, `request_id`, `component_kind`, `shortfall` |

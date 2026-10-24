@@ -109,11 +109,19 @@ func (c *Client) PostJSON(ctx context.Context, path string, in, out any) error {
 }
 
 func (c *Client) PutJSON(ctx context.Context, path string, in, out any) error {
+	return c.writeJSON(ctx, http.MethodPut, path, in, out)
+}
+
+func (c *Client) PatchJSON(ctx context.Context, path string, in, out any) error {
+	return c.writeJSON(ctx, http.MethodPatch, path, in, out)
+}
+
+func (c *Client) writeJSON(ctx context.Context, method, path string, in, out any) error {
 	b, err := json.Marshal(in)
 	if err != nil {
 		return fmt.Errorf("%s: %w", c.name, err)
 	}
-	resp, err := c.Do(ctx, http.MethodPut, path, bytes.NewReader(b), "application/json") //nolint:bodyclose // тело закрывает decode
+	resp, err := c.Do(ctx, method, path, bytes.NewReader(b), "application/json") //nolint:bodyclose // тело закрывает decode
 	if err != nil {
 		return err
 	}
