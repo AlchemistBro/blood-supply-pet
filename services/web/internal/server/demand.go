@@ -98,6 +98,14 @@ func (d demandScreen) MissingInputs() []demandMissingInput {
 	return missing
 }
 
+// UploadKind выбирает первый недостающий вид, чтобы после дубля не предлагать загрузить его снова.
+func (d demandScreen) UploadKind() string {
+	if missing := d.MissingInputs(); len(missing) > 0 {
+		return missing[0].Kind
+	}
+	return "DISTRICT_PROFILE"
+}
+
 func (s *Server) registerDemand(mux *http.ServeMux) {
 	mux.Handle("GET /demand/templates/{kind}", s.guard.Require(auth.OpUploadStatistics)(http.HandlerFunc(s.demandCSVTemplate)))
 	mux.Handle("GET /demand/files/{id}", s.guard.Require(auth.OpUploadStatistics)(http.HandlerFunc(s.demandFile)))
@@ -194,9 +202,14 @@ func (s *Server) uploadDemandFile(w http.ResponseWriter, r *http.Request) {
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != 201 {
 		var problem struct {
-			Detail string `json:"detail"`
+			Detail         string    `json:"detail"`
+			ExistingFileID uuid.UUID `json:"existing_file_id"`
 		}
 		_ = json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&problem)
+		if resp.StatusCode == http.StatusConflict && problem.ExistingFileID != uuid.Nil {
+			s.showDemand(w, r, "Этот файл уже есть в истории загрузок; повторно загружать его не нужно. Ниже показано, каких входов ещё не хватает для расчёта.", nil)
+			return
+		}
 		s.renderError(w, r, resp.StatusCode, "Файл не принят", problem.Detail)
 		return
 	}

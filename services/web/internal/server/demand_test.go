@@ -170,3 +170,60 @@ func TestDemandCalculationExplainsMissingInputs(t *testing.T) {
 		})
 	}
 }
+
+func TestDuplicateUploadKeepsTheFormAndSuggestsMissingKind(t *testing.T) {
+	e := newEnv(t)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodPost {
+			w.WriteHeader(http.StatusConflict)
+			_, _ = io.WriteString(w, `{"detail":"Файл уже загружен","existing_file_id":"`+taskID+`"}`)
+			return
+		}
+		switch r.URL.Path {
+		case "/estimates":
+			_, _ = io.WriteString(w, `[]`)
+		case "/files":
+			_, _ = io.WriteString(w, `{"items":[{"id":"`+taskID+`","file_name":"profile.csv","file_kind":"DISTRICT_PROFILE","check_status":"ACCEPTED"}]}`)
+		case "/history":
+			_, _ = io.WriteString(w, `{"items":[{"id":"`+unitID+`","component_kind_code":"RBC"}]}`)
+		default:
+			_, _ = io.WriteString(w, `{"items":[]}`)
+		}
+	}))
+	t.Cleanup(upstream.Close)
+	e.srv.demand = svcclient.New("demand", upstream.URL)
+	mux := http.NewServeMux()
+	e.srv.Register(mux)
+	e.handler = httpx.Chain(mux, e.srv.Middleware()...)
+	j := e.login(oidctest.User{Username: "analyst1", Roles: []auth.Role{auth.RoleAnalyst}}, "/demand")
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	if err := mw.WriteField("csrf_token", csrfOf(t, e, j)); err != nil {
+		t.Fatal(err)
+	}
+	if err := mw.WriteField("file_kind", "CONSUMPTION_HISTORY"); err != nil {
+		t.Fatal(err)
+	}
+	part, err := mw.CreateFormFile("file", "history.csv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.WriteString(part, "existing history"); err != nil {
+		t.Fatal(err)
+	}
+	if err := mw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	rec := e.do(http.MethodPost, "/demand/files", j, func(r *http.Request) {
+		r.Header.Set("Content-Type", mw.FormDataContentType())
+		r.Body = io.NopCloser(bytes.NewReader(buf.Bytes()))
+	})
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK || !strings.Contains(body, "повторно загружать его не нужно") || !strings.Contains(body, `enctype="multipart/form-data"`) {
+		t.Fatalf("дубль убрал форму: HTTP %d", rec.Code)
+	}
+	if !strings.Contains(body, `value="CLINIC_SHARE" selected`) {
+		t.Fatal("не выбран недостающий вид долей")
+	}
+}
