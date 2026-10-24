@@ -85,25 +85,35 @@ func (s *Server) requireSession(next http.Handler) http.Handler {
 			return
 		}
 		if !d.AccessExpiry.After(s.clock.Now().Add(refreshBefore)) {
-			ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+			budget := 10 * time.Second
+			if d.AccessExpiry.After(s.clock.Now()) {
+				budget = time.Second
+			}
+			ctx, cancel := context.WithTimeout(r.Context(), budget)
 			res, err := s.oidc.Refresh(ctx, d.RefreshToken)
 			cancel()
-			if err == nil && (res.Principal.Subject == "" || res.Principal.Subject != d.Subject) {
+			changedSubject := err == nil && (res.Principal.Subject == "" || res.Principal.Subject != d.Subject)
+			if changedSubject {
 				err = errors.New("участник сессии изменился при обновлении токена")
 			}
 			if err != nil {
-				s.log.InfoContext(r.Context(), "токен не обновлён, нужен вход", "err", err)
-				s.sessions.Clear(w, r)
-				svcclient.RedirectToLogin(w, r)
-				return
+				s.log.InfoContext(r.Context(), "токен не обновлён", "err", err)
+				// Сбой refresh не отзывает ещё действующий access token. Срок и участник не продлеваются.
+				if changedSubject || !d.AccessExpiry.After(s.clock.Now()) {
+					s.sessions.Clear(w, r)
+					svcclient.RedirectToLogin(w, r)
+					return
+				}
 			}
-			d = applyResult(d, res)
-			// Перевыпуск cookie (ротация); абсолютный срок сессии не продлевается.
-			if err := s.saveSession(w, r, d, expires); err != nil {
-				s.log.ErrorContext(r.Context(), "сессия не сохранена", "err", err)
-				s.sessions.Clear(w, r)
-				svcclient.RedirectToLogin(w, r)
-				return
+			if err == nil {
+				d = applyResult(d, res)
+				// Перевыпуск cookie (ротация); абсолютный срок сессии не продлевается.
+				if err := s.saveSession(w, r, d, expires); err != nil {
+					s.log.ErrorContext(r.Context(), "сессия не сохранена", "err", err)
+					s.sessions.Clear(w, r)
+					svcclient.RedirectToLogin(w, r)
+					return
+				}
 			}
 		}
 		ctx := auth.WithPrincipal(r.Context(), d.Principal())

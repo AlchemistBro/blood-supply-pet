@@ -2,10 +2,10 @@ name: Документация
 
 on:
   pull_request:
-    paths: ["docs/**", "README*.md", "CONTRIBUTING.md", "services/*/migrations/**", "libs/*/migrations/**", "tools/docs-er/**", "deploy/railway/**", "deploy/compose/keycloak/**", "Taskfile.yml", ".github/workflows/docs.yml"]
+    paths: ["docs/**", "README*.md", "CONTRIBUTING.md", "services/*/migrations/**", "libs/*/migrations/**", "tools/docs-*/**", "deploy/railway/**", "deploy/compose/keycloak/**", "Taskfile.yml", ".github/workflows/docs.yml"]
   push:
     branches: [main]
-    paths: ["docs/**", "README*.md", "CONTRIBUTING.md", "services/*/migrations/**", "libs/*/migrations/**", "tools/docs-er/**", "deploy/railway/**", "deploy/compose/keycloak/**", "Taskfile.yml", ".github/workflows/docs.yml"]
+    paths: ["docs/**", "README*.md", "CONTRIBUTING.md", "services/*/migrations/**", "libs/*/migrations/**", "tools/docs-*/**", "deploy/railway/**", "deploy/compose/keycloak/**", "Taskfile.yml", ".github/workflows/docs.yml"]
 
 permissions:
   contents: read
@@ -20,6 +20,8 @@ jobs:
         run: python3 tools/docs-er/generate.py --check
       - name: Сверка несекретных шаблонов Railway
         run: python3 deploy/railway/generate.py --check
+      - name: Статическая сверка BPMN XML, ссылок и DI
+        run: python3 tools/docs-diagrams/check-bpmn.py
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -38,21 +40,16 @@ jobs:
           print('\n'.join(bad) or 'ссылки в порядке')
           sys.exit(1 if bad else 0)
           PY
-      - name: Рендер Mermaid-диаграмм (проверка синтаксиса)
+      - name: Экспорт Mermaid и BPMN в SVG
         run: |
-          npm install --no-save @mermaid-js/mermaid-cli@11
-          mkdir -p /tmp/mmd
-          python3 - <<'PY'
-          import re, pathlib
-          n = 0
-          for md in list(pathlib.Path('docs').rglob('*.md')) + [pathlib.Path('README.md')]:
-              for i, block in enumerate(re.findall(r'```mermaid\n(.*?)```', md.read_text(encoding='utf-8'), re.S)):
-                  pathlib.Path(f'/tmp/mmd/{n:03d}.mmd').write_text(block, encoding='utf-8'); n += 1
-          print('диаграмм:', n)
-          PY
-          echo '{"args":["--no-sandbox"]}' > /tmp/puppeteer.json
-          for f in /tmp/mmd/*.mmd; do npx mmdc -p /tmp/puppeteer.json -i "$f" -o "${f%.mmd}.svg" || { echo "ошибка в $f"; cat "$f" | head -5; exit 1; }; done
-      - name: Валидность BPMN XML
-        run: |
-          shopt -s nullglob
-          for f in docs/architecture/diagrams/bpmn/*.bpmn; do python3 -c "import sys,xml.dom.minidom as m; m.parse(sys.argv[1])" "$f" && echo "ok $f"; done
+          npm install --no-save --package-lock=false @mermaid-js/mermaid-cli@11 bpmn-js@18.9.1
+          python3 tools/docs-diagrams/extract.py
+          node tools/docs-diagrams/render.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: architecture-svg
+          path: |
+            dist/diagrams/*.svg
+            dist/diagrams/index.md
+            dist/diagrams/manifest.json
+          if-no-files-found: error

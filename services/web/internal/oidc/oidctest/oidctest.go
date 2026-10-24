@@ -15,6 +15,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -47,7 +48,8 @@ type grant struct {
 
 // Provider — фальшивый провайдер на httptest.Server.
 type Provider struct {
-	URL string // он же issuer
+	unavailable atomic.Bool
+	URL         string // он же issuer
 
 	key    *rsa.PrivateKey
 	kid    string
@@ -98,11 +100,20 @@ func New(t testing.TB) *Provider {
 	mux.HandleFunc("GET /authorize", p.authorize)
 	mux.HandleFunc("POST /token", p.token)
 	mux.HandleFunc("GET /logout", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
-	p.server = httptest.NewServer(mux)
+	p.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if p.unavailable.Load() {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		mux.ServeHTTP(w, r)
+	}))
 	p.URL = p.server.URL
 	t.Cleanup(p.server.Close)
 	return p
 }
+
+// SetUnavailable имитирует отказ провайдера после уже состоявшегося входа.
+func (p *Provider) SetUnavailable(on bool) { p.unavailable.Store(on) }
 
 // SetPersonalClaims включает или выключает ФИО и email (name, given_name, family_name, email) в токенах.
 func (p *Provider) SetPersonalClaims(on bool) {

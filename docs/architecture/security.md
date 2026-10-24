@@ -7,6 +7,7 @@
 - Атрибут пользователя `clinic_id` → claim `clinic_id`; роли → claim `realm_access.roles`; `preferred_username` используется как `user_id` в аудите.
 - Дополнительная проверка OTP настраивается политикой входа Keycloak; в демонстрационном realm она не включена.
 - `web` хранит сессию в зашифрованной cookie (`SameSite=Lax`, `Secure`, `HttpOnly`), обновляет access token по refresh token, при выходе вызывает end-session Keycloak.
+- Отказ раннего refresh не отзывает ещё действующий access token и не продлевает его срок. При истечении токена или смене участника нужен новый вход. Перед новым входом web проверяет discovery с бюджетом 1,5 с; отказ показывает страницу 503 с Retry-After, без перенаправления на недоступный провайдер.
 - Сервисы проверяют JWT (подпись по JWKS с кэшем, `iss`, `aud`, `exp`) в middleware `libs/httpx/auth`; внутренние вызовы (`transfer → inventory`) идут с сервисным токеном (client credentials) и помечены `X-Internal-Call`.
 
 ## Авторизация
