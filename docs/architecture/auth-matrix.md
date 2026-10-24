@@ -65,6 +65,10 @@
 | Метод и путь | Операция | CLINIC_OPERATOR | DUTY_OFFICER | IT_SERVICE | PHYSICIAN | SERVICE | TERRITORIAL_ANALYST |
 | --- | --- | :---: | :---: | :---: | :---: | :---: | :---: |
 | `GET /events/obligations` | VIEW_OBLIGATION | 2xx | 2xx | 2xx | 2xx | 2xx | 403 |
+| `GET /stock` | VIEW_STOCK | 2xx | 2xx | 2xx | 2xx | 403 | 403 |
+| `POST /stock/annual-consumption` | ENTER_ANNUAL_CONSUMPTION | 2xx | 403 | 403 | 403 | 403 | 403 |
+| `POST /stock/sync` | SYNC_ON_DEMAND | 2xx | 403 | 403 | 403 | 403 | 403 |
+| `GET /stock/units` | VIEW_STOCK | 2xx | 2xx | 2xx | 2xx | 403 | 403 |
 | `GET /tasks` | VIEW_TASKS | 2xx | 2xx | 403 | 403 | 403 | 403 |
 | `GET /tasks/{id}` | VIEW_OBLIGATION | 2xx | 2xx | 2xx | 2xx | 2xx | 403 |
 | `POST /tasks/{id}/confirm` | CONFIRM_TRANSFER | 2xx | 2xx | 403 | 403 | 403 | 403 |
