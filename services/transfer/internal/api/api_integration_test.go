@@ -150,8 +150,9 @@ func (s *server) registerUnit(clinic int64) uuid.UUID {
 	s.aist.statuses[id] = domain.UnitInStock
 	s.aist.mu.Unlock()
 	s.version++
+	phenotype := "CcDee"
 	if err := s.svc.OnUnitRegistered(s.ctx, nil, app.UnitRegistered{UnitID: id, ClinicID: clinic, ComponentKind: "RBC",
-		BloodGroup: "A", RhPositive: true, VolumeML: 300, ExpiresAt: time.Date(2026, 11, 20, 0, 0, 0, 0, time.UTC), Version: s.version}); err != nil {
+		BloodGroup: "A", RhPositive: true, Phenotype: &phenotype, VolumeML: 300, ExpiresAt: time.Date(2026, 11, 20, 0, 0, 0, 0, time.UTC), Version: s.version}); err != nil {
 		s.t.Fatal(err)
 	}
 	return id

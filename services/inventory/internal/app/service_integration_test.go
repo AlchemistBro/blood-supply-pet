@@ -48,6 +48,10 @@ func setup(t *testing.T, pageLimit int) env {
 // setupWith собирает сервис с заданной конфигурацией и логгером (например, буфером для проверки логов).
 func setupWith(t *testing.T, cfg app.Config, log *slog.Logger) env {
 	t.Helper()
+	// Внешняя БД имеет дополнительную задержку. Явные дедлайны отдельных сценариев не меняются.
+	if cfg.DBTimeout <= 0 {
+		cfg.DBTimeout = 2 * time.Second
+	}
 	ctx := context.Background()
 	pool, err := bspgx.Connect(ctx, testinfra.Postgres(t))
 	if err != nil {
@@ -526,7 +530,7 @@ func TestProtectedVolumeIsPublishedWithGrowingVersion(t *testing.T) {
 	if second.Version <= first.Version {
 		t.Fatalf("версия не растёт: %d, %d", first.Version, second.Version)
 	}
-	msgs := unitEvents(t, e.pool)
+	msgs := outbox(t, e.pool)
 	if len(msgs) != 2 || msgs[1].Type != "ProtectedVolumePublished" || msgs[1].Key != "1:RBC" ||
 		msgs[1].Payload["volume_units"] != float64(6) || msgs[1].Payload["reason"] != "учения" {
 		t.Fatalf("outbox: %+v", msgs)

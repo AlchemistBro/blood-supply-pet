@@ -89,6 +89,8 @@ func setup(t *testing.T, dev bool) env {
 		Pool: pool, Store: postgres.New(pool), Aist: aistclient.New(aist.URL, aistclient.Options{}),
 		Publisher: events.New(journal), Journal: journal, Ref: ref, Clock: clk,
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		// Здесь проверяются права и контракт HTTP, а не задержка БД в локальном кластере.
+		Config: app.Config{DBTimeout: 2 * time.Second},
 	})
 	idp := authtest.New(t)
 	denied := &denials{}
@@ -181,7 +183,8 @@ func TestUnitStatusRequiresServiceRole(t *testing.T) {
 	resp = e.do(t, http.MethodGet, path, e.token(t, auth.RoleService), nil)
 	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("роль SERVICE: %d, ожидали 200", resp.StatusCode)
+		_, serviceErr := e.svc.UnitStatuses(t.Context(), []uuid.UUID{id})
+		t.Fatalf("роль SERVICE: %d, ожидали 200; ошибка сценария: %v", resp.StatusCode, serviceErr)
 	}
 }
 

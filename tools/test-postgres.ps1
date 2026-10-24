@@ -1,7 +1,8 @@
 ﻿# Проверки отдельного PostgreSQL без Docker и развёртывания стенда. Секреты не выводятся.
 param(
     [string]$EnvFile = '.env',
-    [string[]]$Packages = @('./libs/...', './services/...')
+    [string[]]$Packages = @('./libs/...', './services/...'),
+    [string]$Run = '.'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -26,12 +27,15 @@ if (-not $connection) {
     throw 'В файле окружения нет URL PostgreSQL'
 }
 $previousURL, $previousGuard = $env:BS_TEST_DB_URL, $env:BS_TEST_NO_DOCKER
+$previousEncoding = [Console]::OutputEncoding
 try {
+    [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
     $env:BS_TEST_DB_URL = $connection
     $env:BS_TEST_NO_DOCKER = 'true'
-    & go test -tags integration -count=1 -p 2 -parallel 2 -timeout 25m @Packages
+    & go test -tags integration -count=1 -p 2 -parallel 2 -timeout 25m -run $Run @Packages
     $testExit = $LASTEXITCODE
 } finally {
+    [Console]::OutputEncoding = $previousEncoding
     $env:BS_TEST_DB_URL = $previousURL
     $env:BS_TEST_NO_DOCKER = $previousGuard
 }

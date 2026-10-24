@@ -31,9 +31,8 @@ var errUnitMovedConcurrently = errors.New("единица сменила Ост�
 // unitScope — какие строки Остатка затрагивает событие единицы: Остаток из события, Остаток копии
 // (единица могла сменить клинику или вид) и Остаток источника обязательства, за которым единица закреплена.
 type unitScope struct {
-	copyKey    *stockKey
-	obligation uuid.UUID
-	keys       []stockKey
+	copyKey *stockKey
+	keys    []stockKey
 }
 
 // lockUnitScope блокирует все затронутые строки Остатка до строки обязательства, по возрастанию ключа:
@@ -53,9 +52,11 @@ func (s *Service) lockUnitScope(ctx context.Context, tx pgx.Tx, unitID uuid.UUID
 	if err != nil {
 		return unitScope{}, err
 	}
-	if !slices.Equal(before.keys, after.keys) || before.obligation != after.obligation {
+	if !slices.Equal(before.keys, after.keys) {
 		return unitScope{}, fmt.Errorf("единица %s: %w", unitID, errUnitMovedConcurrently)
 	}
+	// Новое закрепление в том же Остатке уже защищено взятой блокировкой. Обрабатываем актуального
+	// владельца; повтор нужен лишь тогда, когда для новой области не хватает заблокированных строк.
 	if after.copyKey != nil && *after.copyKey != event {
 		s.log.WarnContext(ctx, "клиника или вид в событии расходятся с копией; заблокированы оба остатка",
 			"unit_id", unitID, "event_clinic_id", event.clinicID, "copy_clinic_id", after.copyKey.clinicID)
@@ -83,7 +84,6 @@ func (s *Service) readUnitScope(ctx context.Context, tx pgx.Tx, unitID uuid.UUID
 		if err != nil {
 			return unitScope{}, err
 		}
-		sc.obligation = obligationID
 		sc.keys = append(sc.keys, stockKey{clinicID: o.SourceClinicID, kind: o.ComponentKind})
 	}
 	slices.SortFunc(sc.keys, compareStockKeys)
