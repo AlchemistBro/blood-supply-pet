@@ -60,6 +60,9 @@ type DemandEstimate struct {
 	CalculatedAt         pgtype.Timestamptz
 	ConfirmedBy          *string
 	ConfirmedAt          pgtype.Timestamptz
+	RejectionReason      string
+	RejectedBy           *string
+	RejectedAt           pgtype.Timestamptz
 }
 
 // Доля группы AB0/Rh в районе s(r, g); сумма по району 1 +- 0,0001 проверяется при приёме файла (FR017)

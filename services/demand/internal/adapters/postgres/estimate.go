@@ -129,12 +129,12 @@ func (s *Store) ReadEstimate(ctx context.Context, tx pgx.Tx, id uuid.UUID, lock 
 	if tx != nil {
 		db = tx
 	}
-	query := `SELECT demand_estimate_id,version_no,period_start,period_end,profile_file_id,clinic_share_version_id,estimate_status_code,calculated_at,COALESCE(confirmed_by,'') FROM demand_estimate WHERE demand_estimate_id=$1`
+	query := `SELECT demand_estimate_id,version_no,period_start,period_end,profile_file_id,clinic_share_version_id,estimate_status_code,calculated_at,COALESCE(confirmed_by,''),rejection_reason FROM demand_estimate WHERE demand_estimate_id=$1`
 	if lock {
 		query += " FOR UPDATE"
 	}
 	var n app.EstimateRecord
-	err := db.QueryRow(ctx, query, id).Scan(&n.ID, &n.Version, &n.Selection.Period.Start, &n.Selection.Period.End, &n.Selection.ProfileFileID, &n.Selection.ShareVersionID, &n.Status, &n.At, &n.ConfirmedBy)
+	err := db.QueryRow(ctx, query, id).Scan(&n.ID, &n.Version, &n.Selection.Period.Start, &n.Selection.Period.End, &n.Selection.ProfileFileID, &n.Selection.ShareVersionID, &n.Status, &n.At, &n.ConfirmedBy, &n.RejectionReason)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return n, app.ErrNotFound
 	}
@@ -206,5 +206,10 @@ func (s *Store) ListEstimates(ctx context.Context) ([]app.EstimateRecord, error)
 
 func (s *Store) MarkEstimatePublished(ctx context.Context, tx pgx.Tx, id uuid.UUID, actor string, at time.Time) error {
 	_, err := tx.Exec(ctx, `UPDATE demand_estimate SET estimate_status_code='PUBLISHED',confirmed_by=$2,confirmed_at=$3 WHERE demand_estimate_id=$1 AND estimate_status_code='CALCULATED'`, id, actor, at)
+	return err
+}
+
+func (s *Store) MarkEstimateRejected(ctx context.Context, tx pgx.Tx, id uuid.UUID, actor, reason string, at time.Time) error {
+	_, err := tx.Exec(ctx, `UPDATE demand_estimate SET estimate_status_code='REJECTED',rejection_reason=$2,rejected_by=$3,rejected_at=$4 WHERE demand_estimate_id=$1 AND estimate_status_code='CALCULATED'`, id, reason, actor, at)
 	return err
 }

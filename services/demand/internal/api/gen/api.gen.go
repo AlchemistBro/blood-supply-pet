@@ -121,6 +121,7 @@ type Estimate struct {
 	PeriodEnd            openapi_types.Date   `json:"period_end"`
 	PeriodStart          openapi_types.Date   `json:"period_start"`
 	ProfileFileId        openapi_types.UUID   `json:"profile_file_id"`
+	RejectionReason      *string              `json:"rejection_reason,omitempty"`
 	Status               string               `json:"status"`
 	VersionNo            int                  `json:"version_no"`
 }
@@ -250,6 +251,11 @@ type CalculateEstimateJSONBody struct {
 	ProfileFileId        openapi_types.UUID   `json:"profile_file_id"`
 }
 
+// RejectEstimateJSONBody defines parameters for RejectEstimate.
+type RejectEstimateJSONBody struct {
+	Reason string `json:"reason"`
+}
+
 // ListFilesParams defines parameters for ListFiles.
 type ListFilesParams struct {
 	FileKind *FileKind `form:"file_kind,omitempty" json:"file_kind,omitempty"`
@@ -270,6 +276,9 @@ type ListHistoryParams struct {
 // CalculateEstimateJSONRequestBody defines body for CalculateEstimate for application/json ContentType.
 type CalculateEstimateJSONRequestBody CalculateEstimateJSONBody
 
+// RejectEstimateJSONRequestBody defines body for RejectEstimate for application/json ContentType.
+type RejectEstimateJSONRequestBody RejectEstimateJSONBody
+
 // UploadFileMultipartRequestBody defines body for UploadFile for multipart/form-data ContentType.
 type UploadFileMultipartRequestBody UploadFileMultipartBody
 
@@ -287,6 +296,9 @@ type ServerInterface interface {
 	// PublishEstimate Подтвердить публикацию версии; повтор идемпотентен
 	// (POST /estimates/{id}/publish)
 	PublishEstimate(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// RejectEstimate Отклонить рассчитанную версию с причиной, повтор идемпотентен
+	// (POST /estimates/{id}/reject)
+	RejectEstimate(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// ListFiles Загруженные файлы, новые первыми
 	// (GET /files)
 	ListFiles(w http.ResponseWriter, r *http.Request, params ListFilesParams)
@@ -390,6 +402,32 @@ func (siw *ServerInterfaceWrapper) PublishEstimate(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PublishEstimate(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RejectEstimate operation middleware
+func (siw *ServerInterfaceWrapper) RejectEstimate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RejectEstimate(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -696,6 +734,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/estimates", wrapper.CalculateEstimate)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/estimates/{id}", wrapper.GetEstimate)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/estimates/{id}/publish", wrapper.PublishEstimate)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/estimates/{id}/reject", wrapper.RejectEstimate)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/files", wrapper.ListFiles)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/files", wrapper.UploadFile)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/files/{id}", wrapper.GetFile)
@@ -844,6 +883,73 @@ func (response PublishEstimate404ApplicationProblemPlusJSONResponse) VisitPublis
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PublishEstimate422ApplicationProblemPlusJSONResponse Problem
+
+func (response PublishEstimate422ApplicationProblemPlusJSONResponse) VisitPublishEstimateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RejectEstimateRequestObject struct {
+	Id   openapi_types.UUID `json:"id"`
+	Body *RejectEstimateJSONRequestBody
+}
+
+type RejectEstimateResponseObject interface {
+	VisitRejectEstimateResponse(w http.ResponseWriter) error
+}
+
+type RejectEstimate200JSONResponse Estimate
+
+func (response RejectEstimate200JSONResponse) VisitRejectEstimateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RejectEstimate404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response RejectEstimate404ApplicationProblemPlusJSONResponse) VisitRejectEstimateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RejectEstimate422ApplicationProblemPlusJSONResponse Problem
+
+func (response RejectEstimate422ApplicationProblemPlusJSONResponse) VisitRejectEstimateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(422)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1354,6 +1460,9 @@ type StrictServerInterface interface {
 	// PublishEstimate Подтвердить публикацию версии; повтор идемпотентен
 	// (POST /estimates/{id}/publish)
 	PublishEstimate(ctx context.Context, request PublishEstimateRequestObject) (PublishEstimateResponseObject, error)
+	// RejectEstimate Отклонить рассчитанную версию с причиной, повтор идемпотентен
+	// (POST /estimates/{id}/reject)
+	RejectEstimate(ctx context.Context, request RejectEstimateRequestObject) (RejectEstimateResponseObject, error)
 	// ListFiles Загруженные файлы, новые первыми
 	// (GET /files)
 	ListFiles(ctx context.Context, request ListFilesRequestObject) (ListFilesResponseObject, error)
@@ -1516,6 +1625,39 @@ func (sh *strictHandler) PublishEstimate(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PublishEstimateResponseObject); ok {
 		if err := validResponse.VisitPublishEstimateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RejectEstimate operation middleware
+func (sh *strictHandler) RejectEstimate(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request RejectEstimateRequestObject
+
+	request.Id = id
+
+	var body RejectEstimateJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RejectEstimate(ctx, request.(RejectEstimateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RejectEstimate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RejectEstimateResponseObject); ok {
+		if err := validResponse.VisitRejectEstimateResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -31,6 +31,7 @@ var operations = map[string]auth.Operation{
 	"POST /estimates":              auth.OpPublishEstimate,
 	"GET /estimates/{id}":          auth.OpViewDemand,
 	"POST /estimates/{id}/publish": auth.OpPublishEstimate,
+	"POST /estimates/{id}/reject":  auth.OpPublishEstimate,
 	"POST /files":                  auth.OpUploadStatistics,
 	"GET /files":                   auth.OpUploadStatistics,
 	"GET /files/{id}":              auth.OpUploadStatistics,
