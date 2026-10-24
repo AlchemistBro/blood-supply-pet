@@ -1413,3 +1413,10 @@ th[aria-sort] .sort-arrow {
   margin: 0 auto;
   min-height: calc(100vh - var(--bs-header-h) - 44px);
 }
+
+/* Карточка «ключ — значение» не слипается со следующим блоком. */
+.content > dl,
+.content > div > dl,
+.summary-grid dl {
+  margin-bottom: 16px;
+}

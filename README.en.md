@@ -1,5 +1,7 @@
 # Blood Supply
 
+![Request screen: matching variants with explanations](docs/ui/screens/request.png)
+
 A Go microservices project for distributing donated blood components between clinics: inventory and stock norms,
 territorial demand, emergency replenishment planning, clinician requests, transfer confirmation and transport.
 The domain comes from an RTU MIREA architecture project. Data, thresholds and matching rules are synthetic.
