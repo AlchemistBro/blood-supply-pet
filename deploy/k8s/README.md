@@ -35,7 +35,7 @@ deploy/k8s/
     data/                  CloudNativePG Cluster, Database, ScheduledBackup; MinIO и Job бакета
     platform/kafka/        StatefulSet, сервисы, topics.txt и Job создания топиков
     platform/keycloak/     Deployment, realm ConfigMap (копия realm из compose), адрес KC_HOSTNAME
-    platform/observability/ otel-lgtm
+    platform/observability/ otel-lgtm; дашборды и алерты Grafana из deploy/observability (ConfigMap)
     kustomization.yaml     место под services/ и ingress/ отмечено комментарием
   components/
     demo-secrets/          ДЕМО-секреты (secretGenerator): роли PostgreSQL, MinIO, Keycloak

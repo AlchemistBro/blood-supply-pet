@@ -1,0 +1,19 @@
+{{define "content" -}}
+<h1>Вход в систему</h1>
+{{- with .Error}}
+<p role="alert">{{.}}</p>
+{{- end}}
+<p>Вход выполняется через единую учётную запись (Keycloak).</p>
+<p><a href="/auth/login?next={{.Next}}">Войти</a></p>
+{{- if .Demo}}
+<section aria-labelledby="demo-access">
+  <h2 id="demo-access">Демо-доступ</h2>
+  <p>Учётные записи демонстрационного стенда. Пароль вводится на странице Keycloak.</p>
+  <ul>
+    {{- range .Demo}}
+    <li><a href="/auth/login?hint={{.Login}}">{{.Label}}</a> <span>({{.Login}})</span></li>
+    {{- end}}
+  </ul>
+</section>
+{{- end}}
+{{- end}}

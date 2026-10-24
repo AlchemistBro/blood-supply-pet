@@ -252,7 +252,8 @@ func (h *handler) setFaults(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteProblem(w, r, http.StatusBadRequest, "Некорректные сбои", "failNextCalls не может быть отрицательным.")
 		return
 	}
-	if req.SlowMs != nil && (*req.SlowMs < 0 || time.Duration(*req.SlowMs)*time.Millisecond > maxSlow) {
+	// Сравнение в миллисекундах: перевод огромного slowMs в Duration переполнился бы и прошёл проверку.
+	if req.SlowMs != nil && (*req.SlowMs < 0 || *req.SlowMs > maxSlow.Milliseconds()) {
 		httpx.WriteProblem(w, r, http.StatusBadRequest, "Некорректные сбои",
 			fmt.Sprintf("slowMs должен быть от 0 до %d.", maxSlow.Milliseconds()))
 		return
