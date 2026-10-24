@@ -34,6 +34,7 @@ const (
 
 // OIDC — порт входа (реализация — oidc.Client).
 type OIDC interface {
+	Available(ctx context.Context) error
 	AuthURL(st session.LoginState, loginHint string) string
 	Exchange(ctx context.Context, code string, st session.LoginState) (oidc.Result, error)
 	Refresh(ctx context.Context, refreshToken string) (oidc.Result, error)

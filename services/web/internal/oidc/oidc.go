@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -261,6 +262,30 @@ func (c *Client) LogoutURL() string {
 
 // ProviderOrigin — источник страниц Keycloak, который видит браузер (для CSP form-action).
 func (c *Client) ProviderOrigin() string { return c.origin }
+
+// Available проверяет внутренний discovery только перед новым входом, без токенов и состояния пользователя.
+func (c *Client) Available(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, 1500*time.Millisecond)
+	defer cancel()
+	address := c.cfg.DiscoveryURL
+	if address == "" {
+		address = c.cfg.Issuer
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(address, "/")+"/.well-known/openid-configuration", nil)
+	if err != nil {
+		return err
+	}
+	response, err := c.http.Do(request)
+	if err != nil {
+		return fmt.Errorf("доступность OIDC: %w", err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("доступность OIDC: HTTP %d", response.StatusCode)
+	}
+	_, err = io.Copy(io.Discard, io.LimitReader(response.Body, 64<<10))
+	return err
+}
 
 // personalClaimsIn — имена claims с персональными данными в JWT (подпись уже проверена).
 func personalClaimsIn(raw string) ([]string, error) {

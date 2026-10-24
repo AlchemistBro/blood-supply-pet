@@ -49,6 +49,12 @@ func (s *Server) renderLogin(w http.ResponseWriter, r *http.Request, status int,
 // startLogin создаёт состояние входа (state, nonce, PKCE) в cookie bs_auth и ведёт в Keycloak.
 func (s *Server) startLogin(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
+	if err := s.oidc.Available(r.Context()); err != nil {
+		s.log.WarnContext(r.Context(), "провайдер входа временно недоступен")
+		w.Header().Set("Retry-After", "5")
+		s.renderLogin(w, r, http.StatusServiceUnavailable, "Служба входа временно недоступна. Повторите вход позже.", s.safeNext(q.Get("next")))
+		return
+	}
 	st, err := oidc.NewLoginState(s.safeNext(q.Get("next")))
 	if err != nil {
 		s.renderError(w, r, http.StatusInternalServerError, "Вход недоступен", "Не удалось начать вход. Повторите позже.")
