@@ -75,7 +75,8 @@ func (s *Service) expire(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*Escalat
 	esc := &Escalation{ExpiredID: o.ID}
 	if next, rest, has := domain.NextSource(o.FallbackSources, o.TargetClinicID); has {
 		nextID, _, err := s.openTx(ctx, tx, domain.NewObligation{
-			ChoiceID: domain.EscalationChoiceID(o.ID), RequestID: o.RequestID, Origin: o.Origin,
+			PatientCaseSealed: o.PatientCaseSealed,
+			ChoiceID:          domain.EscalationChoiceID(o.ID), RequestID: o.RequestID, Origin: o.Origin,
 			SourceClinicID: next, TargetClinicID: o.TargetClinicID, ComponentKind: o.ComponentKind,
 			RequestedQty: o.RequestedQty, UrgencyCode: o.UrgencyCode, ConfirmWindow: o.ConfirmWindow,
 			FallbackSources: rest, Spec: o.Spec, ProtectedFloors: o.ProtectedFloors,

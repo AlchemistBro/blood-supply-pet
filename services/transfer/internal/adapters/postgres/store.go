@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/AlchemistBro/blood-supply-pet/libs/k1seal"
 	bspgx "github.com/AlchemistBro/blood-supply-pet/libs/pgx"
 	"github.com/AlchemistBro/blood-supply-pet/services/transfer/internal/adapters/postgres/gen"
 	"github.com/AlchemistBro/blood-supply-pet/services/transfer/internal/app"
@@ -46,8 +47,9 @@ func (Store) InsertObligation(ctx context.Context, db app.DB, o domain.Obligatio
 		return false, err
 	}
 	n, err := q(db).InsertObligation(ctx, gen.InsertObligationParams{
-		ProtectedFloors: rawFloors,
-		ObligationID:    o.ID, ChoiceID: o.ChoiceID, RequestID: o.RequestID, Origin: string(o.Origin),
+		PatientCaseSealed: optString(string(o.PatientCaseSealed)),
+		ProtectedFloors:   rawFloors,
+		ObligationID:      o.ID, ChoiceID: o.ChoiceID, RequestID: o.RequestID, Origin: string(o.Origin),
 		SourceClinicID: o.SourceClinicID, TargetClinicID: o.TargetClinicID, ComponentKindCode: o.ComponentKind,
 		BloodGroupCode: o.BloodGroup, RequestedQty: qty, UrgencyCode: o.UrgencyCode, Deadline: o.Deadline,
 		ConfirmWindowSeconds: int64(o.ConfirmWindow / time.Second), FallbackSources: nonNil(o.FallbackSources),
@@ -423,8 +425,10 @@ func toObligation(r gen.Obligation) (domain.Obligation, error) {
 		return domain.Obligation{}, err
 	}
 	return domain.Obligation{
-		ProtectedFloors: floors,
-		ID:              r.ObligationID, ChoiceID: r.ChoiceID, RequestID: r.RequestID, Origin: domain.Origin(r.Origin),
+		PatientAllocationKey: r.PatientAllocationKey, PatientAllocationStatus: r.PatientAllocationStatus, PatientAllocationAt: r.PatientAllocationAt,
+		PatientCaseSealed: k1seal.Sealed(deref(r.PatientCaseSealed)),
+		ProtectedFloors:   floors,
+		ID:                r.ObligationID, ChoiceID: r.ChoiceID, RequestID: r.RequestID, Origin: domain.Origin(r.Origin),
 		SourceClinicID: r.SourceClinicID, TargetClinicID: r.TargetClinicID, ComponentKind: r.ComponentKindCode,
 		BloodGroup: r.BloodGroupCode, RequestedQty: int(r.RequestedQty), ConfirmedQty: int(r.ConfirmedQty), Status: status,
 		UrgencyCode: r.UrgencyCode, Deadline: r.Deadline, ConfirmWindow: time.Duration(r.ConfirmWindowSeconds) * time.Second,

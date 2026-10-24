@@ -5,9 +5,9 @@ INSERT INTO obligation (
     obligation_id, choice_id, request_id, origin, source_clinic_id, target_clinic_id, component_kind_code,
     blood_group_code, requested_qty, status, urgency_code, deadline, confirm_window_seconds, fallback_sources,
     spec_blood_group_code, spec_rh_positive, spec_phenotype, spec_min_expires_at, spec_rule_version,
-    created_at, updated_at, protected_floors
+    created_at, updated_at, protected_floors, patient_case_sealed
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, 'PENDING', $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $19, $20
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, 'PENDING', $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $19, $20, $21
 )
 ON CONFLICT (choice_id) DO NOTHING;
 

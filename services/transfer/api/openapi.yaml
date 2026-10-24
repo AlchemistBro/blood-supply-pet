@@ -11,6 +11,23 @@ info:
 servers:
   - url: http://localhost:8105
 paths:
+  /obligations/{id}/candidates:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getCandidates
+      x-bs-operation: CONFIRM_TRANSFER
+      summary: До 100 свободных единиц FEFO, подходящих спецификации; без фенотипа в ответе
+      responses:
+        "200":
+          description: Пригодные кандидаты из проекции transfer
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [units]
+                properties:
+                  units: { type: array, items: { $ref: "#/components/schemas/Candidate" } }
   /obligations:
     post:
       operationId: openObligation
@@ -231,6 +248,18 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
   schemas:
+    Candidate:
+      type: object
+      required: [unit_id, clinic_id, component_kind, blood_group, volume_ml, expires_at, status, available]
+      properties:
+        unit_id: { type: string, format: uuid }
+        clinic_id: { type: integer, format: int64 }
+        component_kind: { type: string }
+        blood_group: { type: string }
+        volume_ml: { type: integer, format: int64 }
+        expires_at: { type: string, format: date-time }
+        status: { type: string }
+        available: { type: boolean }
     ObligationStatus:
       type: string
       enum: [PENDING, CONFIRMED, TRANSPORT_REQUESTED, DISPATCHED, DELIVERED, REJECTED, EXPIRED, CANCELLED, BROKEN]
@@ -275,7 +304,7 @@ components:
       type: object
       required: [obligation_id, choice_id, request_id, origin, source_clinic_id, target_clinic_id, component_kind,
                  requested_qty, confirmed_qty, status, urgency, deadline, fallback_sources, spec, units, version,
-                 created_at, updated_at]
+                 created_at, updated_at, patient_allocation_status]
       properties:
         obligation_id: { type: string, format: uuid }
         choice_id: { type: string, format: uuid }
@@ -303,6 +332,8 @@ components:
         version: { type: integer, format: int64 }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+        patient_allocation_status: { type: string }
+        patient_allocation_acknowledged_at: { type: string, format: date-time }
     ObligationList:
       type: object
       required: [items]

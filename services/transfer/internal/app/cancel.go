@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/inventory"
 	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/logistics"
 	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/transfer"
 	"github.com/AlchemistBro/blood-supply-pet/libs/messaging"
@@ -84,6 +85,9 @@ func (s *Service) cancelLocked(ctx context.Context, tx pgx.Tx, o domain.Obligati
 	}
 	if locked.Status.HoldsAllocations() {
 		if err := s.command(ctx, tx, o.ID, CancelTransport{ObligationID: o.ID, Reason: logistics.CancelObligationCancelled}); err != nil {
+			return CancelResult{}, err
+		}
+		if err := s.releasePatient(ctx, tx, locked, locked.Version+1, inventory.ReleaseObligationCancelled); err != nil {
 			return CancelResult{}, err
 		}
 	}

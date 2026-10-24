@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -41,6 +42,9 @@ func (s *Service) Confirm(ctx context.Context, c ConfirmTransfer) (domain.Confir
 		return nil, err
 	}
 	if inv := domain.ValidateOwnership(o.SourceClinicID, o.ComponentKind, c.UnitIDs, copies); inv != nil {
+		return *inv, nil
+	}
+	if inv := confirmationSpec(o, c.UnitIDs, copies, s.clock.Now()); inv != nil {
 		return *inv, nil
 	}
 
@@ -107,6 +111,18 @@ func (s *Service) confirmLocked(ctx context.Context, tx pgx.Tx, o domain.Obligat
 	}
 
 	k := len(present)
+	copies, err := s.store.UnitCopies(ctx, tx, present)
+	if err != nil {
+		return nil, err
+	}
+	if inv := confirmationSpec(locked, present, copies, now); inv != nil {
+		return *inv, nil
+	}
+	live, err := s.store.LiveAvailable(ctx, tx, locked.SourceClinicID, locked.ComponentKind, now)
+	if err != nil {
+		return nil, err
+	}
+	stock.Available = live
 	stock.Protected = max(stock.Protected, locked.ProtectedFloors[locked.SourceClinicID])
 	if exceeded := stock.CheckProtected(k); exceeded != nil {
 		return *exceeded, nil
@@ -157,7 +173,26 @@ func (s *Service) confirmLocked(ctx context.Context, tx pgx.Tx, o domain.Obligat
 	}); err != nil {
 		return nil, err
 	}
+	if err := s.allocatePatient(ctx, tx, locked, locked.Version+1, present); err != nil {
+		return nil, err
+	}
 	return domain.Confirmed{ObligationID: o.ID, Units: present, Shortfall: shortfall}, nil
+}
+
+func confirmationSpec(o domain.Obligation, ids []uuid.UUID, copies map[uuid.UUID]domain.UnitCopy, at time.Time) *domain.InvalidRequest {
+	for _, id := range ids {
+		u, ok := copies[id]
+		if !ok {
+			return &domain.InvalidRequest{Reason: "единица не найдена"}
+		}
+		if reason := o.Spec.Mismatch(o.SourceClinicID, o.ComponentKind, u); reason != "" {
+			return &domain.InvalidRequest{Reason: "единица не соответствует заданию: " + reason.Text()}
+		}
+		if !u.ExpiresAt.After(at) {
+			return &domain.InvalidRequest{Reason: "срок годности единицы истёк"}
+		}
+	}
+	return nil
 }
 
 // notPending — ответ, когда задание уже не ждёт подтверждения: повтор того же запроса или «задание снято».
