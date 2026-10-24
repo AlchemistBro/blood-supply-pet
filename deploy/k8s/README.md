@@ -2,7 +2,8 @@
 
 Целевая среда по ADR-0009: kind локально и в CI, манифесты kustomize, PostgreSQL под CloudNativePG.
 Спецификация — `docs/architecture/deployment.md`, задачи этапа — `docs/tasks/08-kubernetes.md`.
-Здесь платформа, сервисы приложения и имитаторы; ingress и NetworkPolicy добавляются отдельно.
+Здесь платформа, сервисы приложения, имитаторы, вход (Ingress, TLS) и NetworkPolicy по сегментам;
+overlays `local`, `ci` и `prod-example`.
 
 ## Что разворачивается
 
@@ -37,17 +38,19 @@ deploy/k8s/
     platform/keycloak/     Deployment, realm ConfigMap (копия realm из compose), адрес KC_HOSTNAME
     platform/observability/ otel-lgtm
     services/              <svc>/ deployment, service, pdb, hpa; общие ConfigMap окружения
-    kustomization.yaml     место под ingress/ отмечено комментарием
+    ingress/               Ingress web, Keycloak (/auth), ИНТ-02; закрытые служебные пути
+    networkpolicy/         запрет по умолчанию, DNS, потоки по сегментам, отдельные правила K1
   components/
     go-service/            стандарт пода сервиса на Go: пробы, securityContext, /tmp, Downward API
     demo-secrets/          ДЕМО-секреты (secretGenerator): роли PostgreSQL, MinIO, Keycloak, сервисы
-    sims/                  namespace bs-sims, Mailpit, sim-aist, sim-emergency, sim-logistics
+    sims/                  namespace bs-sims, Mailpit, sim-aist, sim-emergency, sim-logistics, их NetworkPolicy
   overlays/
     local/                 base + демо-секреты + имитаторы
     ci/                    то же с урезанными ресурсами и томами
+    prod-example/          без демо-секретов и имитаторов: заглушки секретов, домен, внешние системы
 ```
 
-Секреты в `base` не генерируются: `prod-example` будет брать их из внешнего менеджера, а `local` и `ci`
+Секреты в `base` не генерируются: `prod-example` берёт их из внешнего менеджера (заглушки), а `local` и `ci`
 подключают компонент `demo-secrets`. Значения в нём демонстрационные (пароль роли равен её имени, как в compose)
 и помечены меткой `blood-supply.io/demo=true`.
 
@@ -58,11 +61,13 @@ deploy/k8s/
 ```
 kubectl kustomize deploy/k8s/overlays/local
 kubectl kustomize deploy/k8s/overlays/ci
+kubectl kustomize deploy/k8s/overlays/prod-example
 ```
 
 Удалённых ресурсов в kustomization нет, сборка работает офлайн.
 
-Стандарт сервиса и ссылки на ConfigMap/Secret проверяет `tools/k8scheck` (тоже без кластера):
+Стандарт сервиса, ссылки на ConfigMap/Secret и политику запрета по умолчанию в каждом namespace проверяет
+`tools/k8scheck` (тоже без кластера):
 
 ```
 kubectl kustomize deploy/k8s/overlays/local | go run ./tools/k8scheck
@@ -81,6 +86,17 @@ kubectl kustomize deploy/k8s/overlays/local | go run ./tools/k8scheck
    ```
 
    Без CRD `postgresql.cnpg.io/v1` применение overlay упадёт на `Cluster`, `Database`, `ScheduledBackup`.
+
+   Контроллер ingress-nginx для kind (namespace `ingress-nginx`, класс `nginx`, порты 80/443 узла):
+
+   ```
+   kubectl apply -f \
+     https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.3/deploy/static/provider/kind/deploy.yaml
+   kubectl wait -n ingress-nginx --for=condition=Ready pod -l app.kubernetes.io/component=controller --timeout=180s
+   ```
+
+   CNI кластера должен исполнять NetworkPolicy (kindnet в kind 0.24+ это делает; иначе политики молча
+   не действуют). Секрет TLS `bs-tls` — раздел «Вход и TLS».
 2. Overlay: `kubectl apply --server-side -k deploy/k8s/overlays/local`.
    Дальше всё сходится само, в таком порядке:
    - namespace и секреты; MinIO; Job `minio-setup` ждёт MinIO, создаёт бакет `pg-backups` с версионированием и
@@ -189,15 +205,85 @@ HPA по CPU (70 %) у `web`, `inventory`, `matching` (docs/tasks/08-kubernetes.
 значение хранится в двух местах. CloudNativePG включает TLS на сервере; `sslmode=require` шифрует канал без
 проверки сертификата (CA оператора в демо не раздаётся).
 
-## Что нужно знать следующим манифестам
+## Вход и TLS (`base/ingress`)
 
-- NetworkPolicy должна пропускать, кроме `bs-app → bs-data`:
-  Keycloak (`bs-edge`) → `pg-rw:5432` (его база в общем кластере); оператор `cnpg-system` → поды `pg` (порт 8000)
-  и поды `pg` между собой (5432, репликация); поды `pg` → MinIO (9000); Job `minio-setup` → MinIO;
-  все сегменты → `bs-observability` (4317/4318); `bs-app` → `bs-sims` (8201–8203, SMTP 1025);
-  `bs-app` → Keycloak (8080, JWKS и токены); `sim-emergency` (`bs-sims`) → `planning:8103` (ИНТ-02);
-  ingress → `web:8080`, `planning:8103` (`/api/int/forecast`), Keycloak.
-- Поды с данными K1 помечены `blood-supply.io/data-class=k1` (`matching`, `inventory`) — для отдельной политики.
+ingress-nginx, класс `nginx`, хост `localhost` (в `prod-example` — домен). Снаружи доступны только:
+
+| Путь | Куда | Ограничения |
+| --- | --- | --- |
+| `/` | `web:8080` (`bs-app`) | 20 запросов/с с адреса (всплеск 60), тело до 5 МБ (CSV оценки расхода), SSE без буферизации, таймаут чтения 1 ч |
+| `/auth` | `keycloak:8080` (`bs-edge`) | 10 запросов/с с адреса (подбор паролей), буфер заголовков 128 КБ |
+| `/api/int/forecast` | `planning:8103`, путь `/int/forecast` (ИНТ-02) | фильтр адресов источника (в демо — частные сети, в `prod-example` — адрес шлюза C02), служебный токен (проверяет planning), 5 запросов/с, тело до 1 МБ |
+
+Закрыты снаружи (отдельные Ingress с допуском только `127.0.0.1`, то есть никому извне): служебные пути web
+`/metrics`, `/healthz`, `/readyz`, `/openapi.yaml`; консоль администратора Keycloak `/auth/admin` и realm `master`.
+API остальных сервисов в Ingress нет: внутрь кластера запрос попадает только через web, Keycloak и ИНТ-02.
+Администрирование Keycloak и просмотр Grafana — `kubectl port-forward`.
+
+Для ИНТ-02 в реальном развёртывании добавляется mTLS клиента C02: аннотации
+`nginx.ingress.kubernetes.io/auth-tls-secret: bs-app/c02-client-ca` и `auth-tls-verify-client: "on"`.
+
+**TLS.** Ingress ссылаются на секрет `bs-tls` (тип `kubernetes.io/tls`) в `bs-app` и `bs-edge`. Ключ в репозитории
+не хранится (секреты в git запрещены, в CI работает gitleaks), поэтому secretGenerator для него не используется.
+Самоподписанный демо-сертификат создаётся при развёртывании:
+
+```
+openssl req -x509 -nodes -newkey rsa:2048 -days 365 -subj "/CN=localhost" \
+  -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" -keyout tls.key -out tls.crt
+kubectl create secret tls bs-tls -n bs-app  --cert tls.crt --key tls.key
+kubectl create secret tls bs-tls -n bs-edge --cert tls.crt --key tls.key
+```
+
+Пока секрета нет, ingress-nginx отдаёт свой самоподписанный сертификат по умолчанию — стенд работает, браузер
+предупреждает так же. В `prod-example` сертификат выпускает внешний УЦ (cert-manager в демо не используется:
+это ещё один набор CRD).
+
+## NetworkPolicy (`base/networkpolicy`, `components/sims/networkpolicy.yaml`)
+
+В каждом namespace — `default-deny` на вход и выход для всех подов и `allow-dns` (CoreDNS в `kube-system`).
+Каждый поток открыт с двух сторон: выход у источника, вход у получателя.
+
+| Откуда | Куда | Порт |
+| --- | --- | --- |
+| ingress-nginx | `web`; `planning` (ИНТ-02); Keycloak | 8080; 8103; 8080 |
+| сервисы `bs-app` | Kafka | 9092 |
+| сервисы `bs-app` | PostgreSQL `pg` (`bs-data`) — только этот порт | 5432 |
+| сервисы `bs-app` | Keycloak (`bs-edge`): JWKS, discovery, служебные токены | 8080 |
+| сервисы `bs-app` | внутренние API друг друга (`web → audit`, `transfer → inventory`, …) | 8101–8108 |
+| сервисы `bs-app` | otel-lgtm (`bs-observability`) | 4317, 4318 |
+| `logistics-gateway`, `notification` | `sim-logistics`, Mailpit (`bs-sims`) | 8203, 1025 |
+| `inventory` | `sim-aist` (`bs-sims`) | 8201 |
+| `sim-emergency` | `planning` (ИНТ-02) | 8103 |
+| `sim-logistics` | otel-lgtm | 4318 |
+| Job `kafka-topics` | Kafka | 9092 |
+| Keycloak | PostgreSQL `pg` (его база в общем кластере) | 5432 |
+| поды `pg` | друг другу (репликация, статус); MinIO; API Kubernetes | любые; 9000; 443, 6443 |
+| оператор `cnpg-system` | поды `pg` | 8000, 9187, 5432 |
+| `pg`, Job `minio-setup` | MinIO | 9000 |
+
+`bs-observability` только принимает (исходящих, кроме DNS, нет).
+
+**K1.** Поды с меткой `blood-supply.io/data-class=k1` (`matching`, `inventory`) исключены из общих правил
+сервисов (политики складываются, поэтому общие правила выбирают поды без этой метки) и получают свои
+(`app-k1.yaml`): вход в `inventory` — только от `transfer` и `web`, в `matching` — только от `web`; выход —
+только Kafka, PostgreSQL, Keycloak, телеметрия и для `inventory` — АИСТ-М. В частности, K1-поды не ходят
+во внутренние API других сервисов.
+
+## prod-example
+
+Не разворачивается: собирается и проверяется (`kubectl kustomize`, `tools/k8scheck`, в CI — kubeconform).
+Отличия от `local`:
+
+- нет `demo-secrets` и `sims`: секреты — заглушки `secrets-placeholder.yaml` (те же имена и ключи, значение
+  `REPLACE_FROM_SECRET_MANAGER`, аннотация `blood-supply.io/secret-source: external`) под внешний менеджер
+  секретов; ExternalSecret и подобные CRD не добавлены;
+- домен `blood-supply.example.org` в Ingress, `KC_HOSTNAME`, `BS_OIDC_ISSUER`, `BS_WEB_PUBLIC_URL`;
+  HSTS включён, демо-доступа нет (значения base);
+- Keycloak без `--import-realm`: демо-realm с пользователями `demo` в прод не попадает;
+- смежные системы — внешние адреса (`external-systems`) и выход к ним по `ipBlock` (`external-egress.yaml`,
+  адреса-заглушки из RFC 5737);
+- ИНТ-02 — только с адреса шлюза C02;
+- по две реплики у сервисов без HPA.
 
 ## Резервное копирование и PITR (NFR005–NFR007, NFR012)
 
