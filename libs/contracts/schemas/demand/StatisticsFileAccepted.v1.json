@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/demand/StatisticsFileAccepted.v1.json",
+  "title": "StatisticsFileAccepted",
+  "type": "object",
+  "description": "Событие demand.events: файл статистики принят целиком или частично. Содержимого строк нет, только их число.",
+  "additionalProperties": false,
+  "required": [
+    "statistics_file_id",
+    "file_kind",
+    "status",
+    "rejected_rows",
+    "uploaded_by"
+  ],
+  "properties": {
+    "statistics_file_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "file_kind": {
+      "type": "string",
+      "enum": [
+        "DISTRICT_PROFILE",
+        "CONSUMPTION_HISTORY",
+        "CLINIC_SHARE"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ACCEPTED",
+        "PARTIAL"
+      ]
+    },
+    "accepted_rows": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "rejected_rows": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "uploaded_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Учётная запись аналитика из токена, не ФИО"
+    }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "statistics_file_id": "0192f3a1-7b2c-7d4e-8f90-600000000002",
+  "file_kind": "CLINIC_SHARE",
+  "reason": "INVALID_ROWS",
+  "rejected_rows": 14,
+  "uploaded_by": "analyst1"
+}

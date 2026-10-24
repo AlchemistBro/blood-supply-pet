@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/AlchemistBro/blood-supply-pet/libs/correlation"
 	"github.com/AlchemistBro/blood-supply-pet/libs/httpx"
@@ -124,5 +125,48 @@ func TestHealthReady(t *testing.T) {
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("healthz: %d", rec.Code)
+	}
+}
+
+// Через журнал доступа http.ResponseController достаёт исходный ответ: снимается дедлайн записи
+// (длинный поток SSE) и доступен Hijack.
+func TestAccessLogKeepsResponseControllerFeatures(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := httpx.Chain(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rc := http.NewResponseController(w)
+		if err := rc.SetWriteDeadline(time.Time{}); err != nil {
+			http.Error(w, "deadline: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if r.URL.Path == "/hijack" {
+			conn, buf, err := rc.Hijack()
+			if err != nil {
+				http.Error(w, "hijack: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			defer func() { _ = conn.Close() }()
+			_, _ = buf.WriteString("HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n")
+			_ = buf.Flush()
+			return
+		}
+		_, _ = io.WriteString(w, "ok")
+	}), httpx.Standard(log)...)
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+
+	for path, want := range map[string]int{"/": http.StatusOK, "/hijack": http.StatusNoContent} {
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, srv.URL+path, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if resp.StatusCode != want {
+			t.Fatalf("%s: статус %d, тело %q", path, resp.StatusCode, body)
+		}
 	}
 }

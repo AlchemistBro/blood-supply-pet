@@ -1,0 +1,55 @@
+# matching — подбор по заявке (ФП4). Единственная постоянная база с данными K1 (ADR-0020): ключи шифрования
+# номера случая есть только у matching и inventory. Прочие настройки сервиса уточнить при реализации.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: matching
+  namespace: bs-app
+  labels:
+    app.kubernetes.io/name: matching
+    app.kubernetes.io/component: service
+    blood-supply.io/runtime: go-service
+    blood-supply.io/data-class: k1
+spec:
+  # Число реплик ведёт HPA (hpa.yaml), поле replicas не задаётся, чтобы apply его не сбрасывал.
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: matching
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: matching
+        app.kubernetes.io/component: service
+        blood-supply.io/runtime: go-service
+        blood-supply.io/data-class: k1
+      annotations:
+        prometheus.io/port: "8104"
+    spec:
+      containers:
+        - name: app
+          image: ghcr.io/alchemistbro/blood-supply-matching:edge
+          ports:
+            - name: http
+              containerPort: 8104
+          envFrom:
+            - configMapRef:
+                name: platform-env
+          env:
+            - name: BS_HTTP_ADDR
+              value: ":8104"
+            - name: BS_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: matching-db
+                  key: BS_DB_URL
+            - name: BS_K1_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: k1-keys
+                  key: BS_K1_KEYS
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 384Mi

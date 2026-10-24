@@ -94,3 +94,59 @@ secretGenerator:
     namespace: bs-edge
     type: kubernetes.io/basic-auth
     literals: [username=keycloak, password=keycloak]
+
+  # ---------------------------------------------------------------- bs-app: сервисы
+  # Строка подключения к своей базе. Пароль совпадает с pg-role-<роль> в bs-data.
+  # TLS включён на сервере CloudNativePG; sslmode=require шифрует канал без проверки сертификата
+  # (сертификат кластера выпускает CA оператора, в демо его не раздаём).
+  - name: inventory-db
+    namespace: bs-app
+    literals:
+      - BS_DB_URL=postgres://inventory:inventory@pg-rw.bs-data.svc:5432/inventory?sslmode=require
+  - name: demand-db
+    namespace: bs-app
+    literals:
+      - BS_DB_URL=postgres://demand:demand@pg-rw.bs-data.svc:5432/demand?sslmode=require
+  - name: planning-db
+    namespace: bs-app
+    literals:
+      - BS_DB_URL=postgres://planning:planning@pg-rw.bs-data.svc:5432/planning?sslmode=require
+  - name: matching-db
+    namespace: bs-app
+    literals:
+      - BS_DB_URL=postgres://matching:matching@pg-rw.bs-data.svc:5432/matching?sslmode=require
+  - name: transfer-db
+    namespace: bs-app
+    literals:
+      - BS_DB_URL=postgres://transfer:transfer@pg-rw.bs-data.svc:5432/transfer?sslmode=require
+  - name: logistics-gateway-db
+    namespace: bs-app
+    literals:
+      - BS_DB_URL=postgres://logistics:logistics@pg-rw.bs-data.svc:5432/logistics?sslmode=require
+  - name: notification-db
+    namespace: bs-app
+    literals:
+      - BS_DB_URL=postgres://notification:notification@pg-rw.bs-data.svc:5432/notification?sslmode=require
+  - name: audit-db
+    namespace: bs-app
+    literals:
+      - BS_DB_URL=postgres://audit:audit@pg-rw.bs-data.svc:5432/audit?sslmode=require
+  # web: секрет клиента web из realm (deploy/compose/keycloak) и ключ шифрования cookie сессии
+  # (32 байта в base64, AES-GCM, ADR-0018).
+  - name: web-secrets
+    namespace: bs-app
+    literals:
+      - BS_OIDC_CLIENT_SECRET=web-demo-secret
+      - BS_SESSION_KEY=Ymxvb2Qtc3VwcGx5LWRlbW8tc2Vzc2lvbi1rZXktMzI=
+  # Служебный клиент services (client credentials): web → audit (ADR-0017), transfer → inventory (ADR-0004).
+  - name: service-client
+    namespace: bs-app
+    literals:
+      - BS_SERVICE_CLIENT_ID=services
+      - BS_SERVICE_CLIENT_SECRET=services-demo-secret
+  # Ключи шифрования номера случая (K1, ADR-0020): только matching и inventory. Формат
+  # «идентификатор:ключ в base64 (32 байта)», несколько ключей через запятую — для ротации.
+  - name: k1-keys
+    namespace: bs-app
+    literals:
+      - BS_K1_KEYS=demo-1:Ymxvb2Qtc3VwcGx5LWRlbW8tazEta2V5LTMyYnl0ZXM=

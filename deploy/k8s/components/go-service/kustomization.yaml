@@ -1,0 +1,20 @@
+# Стандарт сервиса на Go (deployment.md, ADR-0009, ADR-0015): пробы, securityContext, /tmp, Downward API,
+# аннотации метрик. Компонент накладывает патч на каждый Deployment с меткой
+# blood-supply.io/runtime=go-service, поэтому манифест сервиса содержит только своё: имя, образ, порт,
+# переменные, ресурсы.
+#
+# Требования к Deployment сервиса:
+#   - контейнер называется app, его HTTP-порт называется http (на него смотрят пробы);
+#   - образ distroless nonroot (deploy/docker/Dockerfile, пользователь 65532), корень ФС только для чтения;
+#   - ресурсы и число реплик задаёт сам сервис: патч их не трогает.
+#
+# Патч только стратегического слияния и без ссылок на ConfigMap/Secret: компонент подключают и base/services,
+# и components/sims, так что для сервисов base он может примениться дважды — результат от этого не меняется.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+patches:
+  - path: deployment-standard.yaml
+    target:
+      kind: Deployment
+      labelSelector: blood-supply.io/runtime=go-service

@@ -1,0 +1,69 @@
+# Keycloak за ingress по пути /auth (KC_HTTP_RELATIVE_PATH=/auth, KC_HOSTNAME=https://localhost/auth):
+# издатель токенов и страницы входа на том же хосте, что web.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: keycloak
+  namespace: bs-edge
+  labels:
+    app.kubernetes.io/name: keycloak
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # Подбор паролей: 10 запросов в секунду с адреса (security.md, лимиты на /auth).
+    nginx.ingress.kubernetes.io/limit-rps: "10"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "3"
+    # Ответы Keycloak с длинными cookie и заголовками не помещаются в буфер по умолчанию.
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "128k"
+    nginx.ingress.kubernetes.io/proxy-body-size: "1m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [localhost]
+      secretName: bs-tls
+  rules:
+    - host: localhost
+      http:
+        paths:
+          - path: /auth
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  name: http
+---
+# Консоль администратора и служебные пути Keycloak снаружи закрыты (допуск только 127.0.0.1).
+# Администрирование — через kubectl port-forward svc/keycloak -n bs-edge 8080.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: keycloak-admin
+  namespace: bs-edge
+  labels:
+    app.kubernetes.io/name: keycloak
+  annotations:
+    nginx.ingress.kubernetes.io/whitelist-source-range: "127.0.0.1/32"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [localhost]
+      secretName: bs-tls
+  rules:
+    - host: localhost
+      http:
+        paths:
+          - path: /auth/admin
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  name: http
+          - path: /auth/realms/master
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  name: http

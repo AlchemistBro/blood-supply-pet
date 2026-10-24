@@ -4,7 +4,7 @@ version: "3"
 
 vars:
   COMPOSE: docker compose -f deploy/compose/compose.yaml --env-file deploy/compose/.env
-  SERVICES: audit
+  SERVICES: audit inventory logistics-gateway transfer web demand planning matching notification
   VERSION:
     sh: git describe --tags --always --dirty 2>/dev/null || echo dev
 
@@ -20,10 +20,12 @@ tasks:
   gen:
     desc: Сгенерировать код из OpenAPI (oapi-codegen) и SQL (sqlc)
     cmds:
+      # Сервис без генерируемого сервера (web, имитаторы) не имеет api/oapi-codegen.yaml, сервис без базы
+      # (scaffold --no-db) — каталога sqlc: такие шаги пропускаются, а не валят генерацию.
       - for: { var: SERVICES, split: " " }
-        cmd: cd services/{{.ITEM}}/api && go tool oapi-codegen -config oapi-codegen.yaml openapi.yaml
+        cmd: if [ -f services/{{.ITEM}}/api/oapi-codegen.yaml ]; then cd services/{{.ITEM}}/api && go tool oapi-codegen -config oapi-codegen.yaml openapi.yaml; fi
       - for: { var: SERVICES, split: " " }
-        cmd: cd services/{{.ITEM}}/sqlc && sqlc generate
+        cmd: if [ -d services/{{.ITEM}}/sqlc ]; then cd services/{{.ITEM}}/sqlc && sqlc generate; fi
 
   gen:check:
     desc: Убедиться, что сгенерированный код актуален (нет незакоммиченного diff после gen)
@@ -70,9 +72,9 @@ tasks:
       - go test -tags integration -count=1 -timeout 15m ./libs/... ./services/...
 
   test:fitness:
-    desc: Фитнес-тесты саги (гонки, дубли, kill шлюза); появятся с этапом 1
+    desc: Фитнес-тесты саги (гонки, дубли, kill шлюза); падение любого валит задачу
     cmds:
-      - go test -tags integration -count=1 -timeout 15m -run 'Fitness|Race|Saga' ./services/... || true
+      - go test -tags integration -count=1 -timeout 15m -run 'Fitness|Race|Saga' ./services/...
 
   test:e2e:
     desc: Сквозные сценарии против поднятого стенда (task up)

@@ -1,0 +1,62 @@
+# logistics-gateway — ACL к перевозчику C03: заказ перевозки, сверка, аренда, оценки времени доставки.
+# Роль и база PostgreSQL называются logistics (data-model.md).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: logistics-gateway
+  namespace: bs-app
+  labels:
+    app.kubernetes.io/name: logistics-gateway
+    app.kubernetes.io/component: service
+    blood-supply.io/runtime: go-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: logistics-gateway
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: logistics-gateway
+        app.kubernetes.io/component: service
+        blood-supply.io/runtime: go-service
+      annotations:
+        prometheus.io/port: "8106"
+    spec:
+      containers:
+        - name: app
+          image: ghcr.io/alchemistbro/blood-supply-logistics-gateway:edge
+          ports:
+            - name: http
+              containerPort: 8106
+          envFrom:
+            - configMapRef:
+                name: platform-env
+          env:
+            - name: BS_HTTP_ADDR
+              value: ":8106"
+            - name: BS_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: logistics-gateway-db
+                  key: BS_DB_URL
+            - name: BS_C03_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: external-systems
+                  key: BS_C03_URL
+            # Значения равны умолчаниям services/logistics-gateway/cmd/logistics-gateway/config.go.
+            - name: BS_C03_TIMEOUT
+              value: 5s
+            - name: BS_LOGISTICS_LEASE
+              value: 30s
+            - name: BS_LOGISTICS_MAX_ATTEMPTS
+              value: "5"
+            - name: BS_LOGISTICS_RECONCILER_ENABLED
+              value: "true"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi

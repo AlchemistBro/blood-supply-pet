@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "note": "демо: служебные ящики подразделений, не личные адреса (ADR-0021); письма видны в Mailpit",
+  "duty": "duty-shift@demo.blood-supply.local",
+  "operator_pattern": "transfusion.{clinic_code}@demo.blood-supply.local"
+}

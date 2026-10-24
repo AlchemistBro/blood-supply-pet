@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/transfer/EscalationClosed.v1.json",
+  "title": "EscalationClosed",
+  "type": "object",
+  "description": "Событие transfer.events: дежурный закрыл эскалацию (ADR-0023). Свободного текста нет.",
+  "additionalProperties": false,
+  "required": [
+    "obligation_id",
+    "request_id",
+    "resolution",
+    "closed_by",
+    "at"
+  ],
+  "properties": {
+    "obligation_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "obligation_version": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Версия O07 после перехода; проекции применяют событие, только если версия выше сохранённой"
+    },
+    "source_clinic_id": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Клиника-источник обязательства; для фильтра живых статусов без запроса к transfer"
+    },
+    "target_clinic_id": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Клиника-получатель обязательства; для фильтра живых статусов без запроса к transfer"
+    },
+    "request_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "reason": {
+      "type": "string",
+      "enum": [
+        "EXPIRED_NO_FALLBACK",
+        "TRANSPORT_REFUSED",
+        "TRANSPORT_OUTCOME_UNKNOWN",
+        "SOURCE_SYSTEM_UNAVAILABLE",
+        "TEMPERATURE_EXCURSION"
+      ],
+      "description": "Причина закрываемой эскалации"
+    },
+    "resolution": {
+      "type": "string",
+      "enum": [
+        "MANUAL_TRANSPORT_ASSIGNED",
+        "RESOLVED",
+        "NO_ACTION_REQUIRED"
+      ]
+    },
+    "closed_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

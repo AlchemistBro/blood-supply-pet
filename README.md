@@ -126,9 +126,17 @@ sequenceDiagram
 ```
 
 Подробно: [C4 контекст](docs/architecture/c4-context.md) · [C4 контейнеры](docs/architecture/c4-containers.md) ·
+[C4 компоненты transfer и шлюза](docs/architecture/c4-components.md) ·
 [карта контекстов](docs/domain/context-map.md) · [состояния O07](docs/domain/obligation-states.md) ·
-[сага](docs/architecture/saga-confirmation.md) · [события и команды](docs/architecture/events.md) ·
+[сага](docs/architecture/saga-confirmation.md) · [UML: состояния и сверка шлюза](docs/architecture/uml.md) ·
+[события и команды](docs/architecture/events.md) ·
 [модель данных](docs/architecture/data-model.md) · [развёртывание](docs/architecture/deployment.md) · [ADR](docs/adr/README.md).
+
+Процессы в BPMN 2.0 (открываются в bpmn.io и Camunda Modeler): [подтверждение передачи](docs/architecture/diagrams/bpmn/confirm-transfer.bpmn) ·
+[план пополнения по прогнозу ЧС](docs/architecture/diagrams/bpmn/replenishment-plan.bpmn) ·
+[заявка врача](docs/architecture/diagrams/bpmn/clinical-request.bpmn) ·
+[загрузка CSV и публикация оценки](docs/architecture/diagrams/bpmn/csv-demand.bpmn). Перечень всех схем:
+[docs/architecture/diagrams](docs/architecture/diagrams/README.md).
 
 ### Стек
 

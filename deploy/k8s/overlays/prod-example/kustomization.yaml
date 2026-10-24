@@ -1,0 +1,85 @@
+# Пример продового развёртывания (deployment.md, ADR-0009). Не разворачивается: только собирается и
+# проверяется (kubectl kustomize, tools/k8scheck, в CI — kubeconform). Отличия от local:
+#   - нет демо-секретов: объекты Secret — заглушки под внешний менеджер секретов (secrets-placeholder.yaml);
+#   - нет имитаторов и Mailpit: адреса смежных систем и выход к ним — внешние (external-egress.yaml);
+#   - домен вместо localhost, по две реплики у сервисов без HPA, HSTS и без демо-доступа на странице входа;
+#   - ИНТ-02 принимается только с адреса шлюза C02.
+# Kafka остаётся одним брокером для примера; в реальном кластере — Strimzi (3 брокера, SASL/SCRAM, ACL
+# по владельцу топика, security.md). MinIO заменяется внешним объектным хранилищем.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+labels:
+  - pairs:
+      blood-supply.io/env: prod-example
+    includeSelectors: false
+
+resources:
+  - ../../base
+  - secrets-placeholder.yaml
+  - external-egress.yaml
+
+configMapGenerator:
+  - name: platform-env
+    namespace: bs-app
+    behavior: merge
+    literals:
+      - BS_ENV=prod-example
+      - BS_OIDC_ISSUER=https://blood-supply.example.org/auth/realms/blood-supply
+  - name: web-config
+    namespace: bs-app
+    behavior: merge
+    literals:
+      - BS_WEB_PUBLIC_URL=https://blood-supply.example.org
+  - name: external-systems
+    namespace: bs-app
+    behavior: merge
+    literals:
+      - BS_AIST_URL=https://aist.example.invalid
+      - BS_C03_URL=https://carrier.example.invalid
+      - BS_SMTP_ADDR=smtp.example.invalid:587
+  - name: keycloak-config
+    namespace: bs-edge
+    behavior: merge
+    literals:
+      - KC_HOSTNAME=https://blood-supply.example.org/auth
+
+patches:
+  # Домен вместо localhost во всех Ingress.
+  - target:
+      group: networking.k8s.io
+      kind: Ingress
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: blood-supply.example.org
+      - op: replace
+        path: /spec/tls/0/hosts/0
+        value: blood-supply.example.org
+  # ИНТ-02 — только с адреса шлюза C02 (заглушка RFC 5737). Дополнительно в реальном развёртывании —
+  # mTLS: nginx.ingress.kubernetes.io/auth-tls-secret с CA клиента C02 и auth-tls-verify-client: "on".
+  - target:
+      group: networking.k8s.io
+      kind: Ingress
+      name: int-forecast
+    patch: |-
+      - op: replace
+        path: /metadata/annotations/nginx.ingress.kubernetes.io~1whitelist-source-range
+        value: 198.51.100.10/32
+  # Демо-realm (пользователи с паролем demo, redirect на localhost) в прод не импортируется:
+  # realm настраивается отдельно (экспорт/импорт под домен или конфигурация как код).
+  - target:
+      kind: Deployment
+      name: keycloak
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/args
+        value: ["start"]
+  # По две реплики у сервисов без HPA (у web, inventory, matching минимум 2 задаёт HPA).
+  - target:
+      kind: Deployment
+      name: ^(demand|planning|transfer|logistics-gateway|notification|audit)$
+    patch: |-
+      - op: add
+        path: /spec/replicas
+        value: 2

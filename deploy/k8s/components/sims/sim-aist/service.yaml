@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: sim-aist
+  namespace: bs-sims
+  labels:
+    app.kubernetes.io/name: sim-aist
+spec:
+  selector:
+    app.kubernetes.io/name: sim-aist
+  ports:
+    - name: http
+      port: 8201
+      targetPort: http

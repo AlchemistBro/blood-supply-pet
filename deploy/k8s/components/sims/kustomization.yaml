@@ -1,8 +1,32 @@
-# Имитаторы смежных систем (C01, C03, C04) — только local и ci, в prod-example не подключаются.
-# Сюда же ложатся sim-aist, sim-logistics, sim-emergency вместе с манифестами сервисов.
+# Имитаторы смежных систем (C01, C02, C03, C04) — только local и ci, в prod-example не подключаются.
+# Состояние имитаторов в памяти, базы у них нет (ADR-0015, дополнение о сервисе без базы).
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
 
 resources:
   - namespace.yaml
   - mailpit.yaml
+  - sim-aist/deployment.yaml
+  - sim-aist/service.yaml
+  - sim-emergency/deployment.yaml
+  - sim-emergency/service.yaml
+  - sim-logistics/deployment.yaml
+  - sim-logistics/service.yaml
+  - networkpolicy.yaml
+
+# Стандарт пода имитаторов тот же, что у сервисов. Патч компонента идемпотентен, повторное
+# применение к сервисам base ничего не меняет.
+components:
+  - ../go-service
+
+configMapGenerator:
+  - name: sims-env
+    namespace: bs-sims
+    literals:
+      # Имитаторы есть только в local и ci; различать окружение им незачем.
+      - BS_ENV=sim
+      - BS_LOG_LEVEL=info
+      - BS_LOG_FORMAT=json
+      - BS_OTEL_ENDPOINT=otel-lgtm.bs-observability.svc:4318
+      # ИНТ-02: прогноз ЧС идёт в planning напрямую, минуя ingress (на входе — белый список полей, NFR010).
+      - BS_PLANNING_URL=http://planning.bs-app.svc:8103

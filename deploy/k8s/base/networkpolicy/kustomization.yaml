@@ -1,0 +1,12 @@
+# NetworkPolicy по сегментам ПР4 (deployment.md, security.md): запрет по умолчанию и явные потоки.
+# Политики bs-sims — в components/sims.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - default-deny.yaml
+  - edge.yaml
+  - app.yaml
+  - app-k1.yaml
+  - data.yaml
+  - observability.yaml

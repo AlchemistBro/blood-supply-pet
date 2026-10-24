@@ -1,0 +1,47 @@
+# Выход к настоящим смежным системам (вместо имитаторов bs-sims). Адреса — документационные диапазоны
+# RFC 5737 как заглушки: при развёртывании заменяются адресами C01, C03 и почтового шлюза C04.
+# Поток ИНТ-05 (номер случая в АИСТ-М) в проде идёт по mTLS (security.md).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: inventory-egress-aist-external
+  namespace: bs-app
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: inventory, blood-supply.io/data-class: k1}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock: {cidr: 203.0.113.10/32}
+      ports:
+        - {protocol: TCP, port: 443}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: logistics-gateway-egress-c03
+  namespace: bs-app
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: logistics-gateway}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock: {cidr: 203.0.113.20/32}
+      ports:
+        - {protocol: TCP, port: 443}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: notification-egress-smtp
+  namespace: bs-app
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: notification}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock: {cidr: 203.0.113.30/32}
+      ports:
+        - {protocol: TCP, port: 587}

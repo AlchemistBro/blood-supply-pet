@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "component_kinds": [
     {
       "component_kind_code": "RBC",
@@ -99,6 +99,33 @@
       "urgency_code": "EMERGENCY",
       "urgency_name": "Экстренная",
       "confirm_window_minutes": 15
+    }
+  ],
+  "unit_statuses": [
+    {
+      "unit_status_code": "IN_STOCK",
+      "unit_status_name": "В наличии",
+      "is_available": true
+    },
+    {
+      "unit_status_code": "QUARANTINE",
+      "unit_status_name": "Карантин",
+      "is_available": false
+    },
+    {
+      "unit_status_code": "ISSUED",
+      "unit_status_name": "Выдана",
+      "is_available": false
+    },
+    {
+      "unit_status_code": "DISCARDED",
+      "unit_status_name": "Списана",
+      "is_available": false
+    },
+    {
+      "unit_status_code": "TRANSFERRED",
+      "unit_status_name": "Передана",
+      "is_available": false
     }
   ]
 }

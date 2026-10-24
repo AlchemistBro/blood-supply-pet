@@ -1,0 +1,6 @@
+{{/* Страница подтверждения без JS: та же форма, что в <dialog>. Page.Content — Confirm, Page.Title — вопрос. */}}
+{{define "content" -}}
+<section class="card">
+{{template "confirm_form" (onPage .Content)}}
+</section>
+{{- end}}

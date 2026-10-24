@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/security/SecurityIncidentSuspected.v1.json",
+  "title": "SecurityIncidentSuspected",
+  "type": "object",
+  "description": "Событие security.events: подозрение на инцидент с ПДн (152-ФЗ ст. 21 ч. 3.1: уведомление за 24 ч, результаты за 72 ч; ADR-0025). Без ПДн: правило, учётная запись, число и окно.",
+  "additionalProperties": false,
+  "required": [
+    "incident_id",
+    "rule",
+    "user_id",
+    "count",
+    "window_seconds",
+    "detected_at"
+  ],
+  "properties": {
+    "incident_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "rule": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+      "description": "Код правила детектора"
+    },
+    "user_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Учётная запись из токена, не ФИО"
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "window_seconds": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "first_seen_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "detected_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}
