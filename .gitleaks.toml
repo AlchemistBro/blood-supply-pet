@@ -1,0 +1,15 @@
+title = "blood-supply"
+
+[extend]
+useDefault = true
+
+# Только известный публичный ключ демонстрационной cookie в одном файле.
+# Иной ключ или иной путь остаются под стандартными правилами.
+[[rules]]
+id = "generic-api-key"
+[[rules.allowlists]]
+description = "Публичный синтетический ключ локального стенда, ADR-0018"
+condition = "AND"
+paths = ['^deploy/k8s/components/demo-secrets/kustomization\.yaml$']
+regexTarget = "line"
+regexes = ['^\s*- BS_SESSION_KEY=Ymxvb2Qtc3VwcGx5LWRlbW8tc2Vzc2lvbi1rZXktMzI=\s*$']
