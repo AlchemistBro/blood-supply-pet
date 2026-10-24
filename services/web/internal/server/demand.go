@@ -43,22 +43,24 @@ type demandEstimateLine struct {
 	Volume float64 `json:"demand_volume_ml"`
 }
 type demandEstimateView struct {
-	ID      uuid.UUID            `json:"demand_estimate_id"`
-	Version int                  `json:"version_no"`
-	Status  string               `json:"status"`
-	Start   string               `json:"period_start"`
-	End     string               `json:"period_end"`
-	Profile uuid.UUID            `json:"profile_file_id"`
-	Shares  uuid.UUID            `json:"clinic_share_version_id"`
-	History []uuid.UUID          `json:"history_ids"`
-	Lines   []demandEstimateLine `json:"lines"`
-	Notice  string               `json:"notice"`
+	RejectionReason string               `json:"rejection_reason"`
+	ID              uuid.UUID            `json:"demand_estimate_id"`
+	Version         int                  `json:"version_no"`
+	Status          string               `json:"status"`
+	Start           string               `json:"period_start"`
+	End             string               `json:"period_end"`
+	Profile         uuid.UUID            `json:"profile_file_id"`
+	Shares          uuid.UUID            `json:"clinic_share_version_id"`
+	History         []uuid.UUID          `json:"history_ids"`
+	Lines           []demandEstimateLine `json:"lines"`
+	Notice          string               `json:"notice"`
 }
 type demandRowError struct {
 	Row    int    `json:"row_no"`
 	Reason string `json:"reason"`
 }
 type demandScreen struct {
+	File      demandFileView
 	Files     []demandFileView
 	History   []demandHistoryView
 	Shares    []demandShareView
@@ -70,6 +72,9 @@ type demandScreen struct {
 }
 
 func (s *Server) registerDemand(mux *http.ServeMux) {
+	mux.Handle("GET /demand/templates/{kind}", s.guard.Require(auth.OpUploadStatistics)(http.HandlerFunc(s.demandCSVTemplate)))
+	mux.Handle("GET /demand/files/{id}", s.guard.Require(auth.OpUploadStatistics)(http.HandlerFunc(s.demandFile)))
+	mux.Handle("POST /demand/estimates/{id}/reject", s.guard.Require(auth.OpPublishEstimate)(http.HandlerFunc(s.rejectDemand)))
 	mux.Handle("GET /demand", s.guard.Require(auth.OpViewDemand)(http.HandlerFunc(s.demandPage)))
 	mux.Handle("POST /demand/files", s.guard.Require(auth.OpUploadStatistics)(http.HandlerFunc(s.uploadDemandFile)))
 	mux.Handle("POST /demand/estimates", s.guard.Require(auth.OpPublishEstimate)(http.HandlerFunc(s.calculateDemand)))
@@ -234,6 +239,40 @@ func (s *Server) publishDemand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/demand/estimates/"+id.String(), http.StatusSeeOther) //nolint:gosec // id разобран uuid.Parse; адрес состоит из фиксированного локального пути и UUID
+}
+
+func (s *Server) rejectDemand(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		s.renderError(w, r, 400, "Неверная версия", "Откройте оценку из списка.")
+		return
+	}
+	if err := s.demand.PostJSON(r.Context(), "/estimates/"+id.String()+"/reject", map[string]string{"reason": r.FormValue("reason")}, nil); err != nil {
+		s.demandFailure(w, r, err)
+		return
+	}
+	http.Redirect(w, r, "/demand/estimates/"+id.String(), http.StatusSeeOther) //nolint:gosec // Локальный путь с UUID после uuid.Parse.
+}
+func (s *Server) demandFile(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		s.renderError(w, r, 400, "Неверный файл", "Откройте файл из истории.")
+		return
+	}
+	var data demandScreen
+	if err := s.demand.GetJSON(r.Context(), "/files/"+id.String(), &data.File); err != nil {
+		s.demandFailure(w, r, err)
+		return
+	}
+	var rows struct {
+		Items []demandRowError `json:"items"`
+	}
+	if err := s.demand.GetJSON(r.Context(), "/files/"+id.String()+"/errors", &rows); err != nil {
+		s.demandFailure(w, r, err)
+		return
+	}
+	data.Errors = rows.Items
+	s.renderScreen(w, r, 200, "demand-file.html", "История проверки CSV", data)
 }
 
 func (f demandFileView) Profile() bool { return f.Kind == "DISTRICT_PROFILE" && f.Status != "REJECTED" }

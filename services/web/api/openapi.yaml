@@ -10,6 +10,30 @@ info:
 servers:
   - url: http://localhost:8080
 paths:
+  /demand/files/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: demandFile
+      x-bs-operation: UPLOAD_STATISTICS
+      responses:
+        "200": { description: Сохранённый результат проверки CSV }
+  /demand/templates/{kind}:
+    parameters:
+      - { name: kind, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: demandCSVTemplate
+      x-bs-operation: UPLOAD_STATISTICS
+      responses:
+        "200": { description: Демо-шаблон CSV }
+  /demand/estimates/{id}/reject:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: rejectDemand
+      x-bs-operation: PUBLISH_ESTIMATE
+      responses:
+        "303": { description: Версия отклонена с причиной }
   /audit:
     get:
       operationId: auditPage

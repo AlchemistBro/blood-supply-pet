@@ -57,6 +57,27 @@ paths:
       responses:
         "200": { description: Опубликованная версия, content: { application/json: { schema: { $ref: "#/components/schemas/Estimate" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
+        "422": { description: Версия отклонена, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+  /estimates/{id}/reject:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: rejectEstimate
+      x-bs-operation: PUBLISH_ESTIMATE
+      summary: Отклонить рассчитанную версию с причиной, повтор идемпотентен
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        "200": { description: Отклонённая версия, content: { application/json: { schema: { $ref: "#/components/schemas/Estimate" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { description: Версия уже опубликована или причина не заполнена, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
   /files:
     post:
       operationId: uploadFile
@@ -252,6 +273,7 @@ components:
         period_start: { type: string, format: date }
         period_end: { type: string, format: date }
         confirmed_by: { type: string }
+        rejection_reason: { type: string }
         notice: { type: string }
         lines: { type: array, items: { $ref: "#/components/schemas/EstimateLine" } }
     Problem:

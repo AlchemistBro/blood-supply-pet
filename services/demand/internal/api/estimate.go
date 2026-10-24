@@ -17,6 +17,9 @@ func estimateView(n app.EstimateRecord) gen.Estimate {
 	if n.ConfirmedBy != "" {
 		out.ConfirmedBy = &n.ConfirmedBy
 	}
+	if n.RejectionReason != "" {
+		out.RejectionReason = &n.RejectionReason
+	}
 	for _, line := range n.Lines {
 		out.Lines = append(out.Lines, gen.EstimateLine{ClinicId: line.ClinicID, ComponentKind: line.ComponentKind, BloodGroup: line.BloodGroup, DemandVolumeMl: line.DemandVolumeML})
 	}
@@ -68,8 +71,31 @@ func (h *Handler) PublishEstimate(ctx context.Context, req gen.PublishEstimateRe
 	if errors.Is(err, app.ErrNotFound) {
 		return gen.PublishEstimate404ApplicationProblemPlusJSONResponse{NotFoundApplicationProblemPlusJSONResponse: fileNotFound()}, nil
 	}
+	if errors.Is(err, domain.ErrEstimateInput) {
+		detail := err.Error()
+		return gen.PublishEstimate422ApplicationProblemPlusJSONResponse{Title: "Версия не может быть опубликована", Status: 422, Detail: &detail}, nil
+	}
 	if err != nil {
 		return nil, err
 	}
 	return gen.PublishEstimate200JSONResponse(estimateView(n)), nil
+}
+
+func (h *Handler) RejectEstimate(ctx context.Context, req gen.RejectEstimateRequestObject) (gen.RejectEstimateResponseObject, error) {
+	if req.Body == nil {
+		return gen.RejectEstimate422ApplicationProblemPlusJSONResponse{Title: "Укажите причину", Status: 422}, nil
+	}
+	p, _ := auth.FromContext(ctx)
+	n, err := h.svc.RejectEstimate(ctx, req.Id, req.Body.Reason, app.Actor{UserID: userID(p), Role: p.PrimaryRole()})
+	if errors.Is(err, app.ErrNotFound) {
+		return gen.RejectEstimate404ApplicationProblemPlusJSONResponse{NotFoundApplicationProblemPlusJSONResponse: fileNotFound()}, nil
+	}
+	if errors.Is(err, domain.ErrEstimateInput) {
+		detail := err.Error()
+		return gen.RejectEstimate422ApplicationProblemPlusJSONResponse{Title: "Версия не может быть отклонена", Status: 422, Detail: &detail}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return gen.RejectEstimate200JSONResponse(estimateView(n)), nil
 }

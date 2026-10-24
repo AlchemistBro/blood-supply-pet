@@ -3,7 +3,9 @@ package app
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -23,13 +25,14 @@ type EstimateSelection struct {
 	Period         domain.Period
 }
 type EstimateRecord struct {
-	ID          uuid.UUID
-	Version     int
-	Selection   EstimateSelection
-	Status      string
-	At          time.Time
-	ConfirmedBy string
-	Lines       []demand.DemandLine
+	RejectionReason string
+	ID              uuid.UUID
+	Version         int
+	Selection       EstimateSelection
+	Status          string
+	At              time.Time
+	ConfirmedBy     string
+	Lines           []demand.DemandLine
 }
 
 func (s *Service) Calculate(ctx context.Context, in EstimateSelection, actor Actor) (EstimateRecord, error) {
@@ -85,6 +88,33 @@ func (s *Service) Estimate(ctx context.Context, id uuid.UUID) (EstimateRecord, e
 }
 func (s *Service) Estimates(ctx context.Context) ([]EstimateRecord, error) {
 	return s.store.ListEstimates(ctx)
+}
+
+func (s *Service) RejectEstimate(ctx context.Context, id uuid.UUID, reason string, actor Actor) (EstimateRecord, error) {
+	reason = strings.TrimSpace(reason)
+	if reason == "" || utf8.RuneCountInString(reason) > 500 {
+		return EstimateRecord{}, fmt.Errorf("%w: укажите причину до 500 символов", domain.ErrEstimateInput)
+	}
+	var n EstimateRecord
+	err := bspgx.WithTx(ctx, s.pool, func(ctx context.Context, tx pgx.Tx) error {
+		var err error
+		n, err = s.store.ReadEstimate(ctx, tx, id, true)
+		if err != nil {
+			return err
+		}
+		if n.Status == "REJECTED" && n.RejectionReason == reason {
+			return nil
+		}
+		if n.Status != "CALCULATED" {
+			return fmt.Errorf("%w: отклонить можно только рассчитанную версию", domain.ErrEstimateInput)
+		}
+		if err := s.store.MarkEstimateRejected(ctx, tx, id, actor.UserID, reason, s.clock.Now()); err != nil {
+			return err
+		}
+		n.Status, n.RejectionReason = "REJECTED", reason
+		return s.journal.Audit(ctx, tx, messaging.AuditEntry{UserID: actor.UserID, Role: actor.Role, Action: "ESTIMATE_REJECTED", ObjectType: "demand_estimate", ObjectID: id.String(), Result: auditc.ResultSuccess, Details: map[string]any{"reason": reason}})
+	})
+	return n, err
 }
 
 func (s *Service) PublishEstimate(ctx context.Context, id uuid.UUID, actor Actor) (EstimateRecord, error) {

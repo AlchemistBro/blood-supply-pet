@@ -57,4 +57,25 @@ func TestEstimatePublishesOnceAndFreezesHistory(t *testing.T) {
 	if n := e.count(t, `SELECT count(*) FROM estimate_history_link WHERE demand_estimate_id=$1`, result.ID); n != len(ids) {
 		t.Fatalf("версии истории не сохранены: %d", n)
 	}
+	if response := e.request(t, http.MethodPost, "/estimates/"+result.ID.String()+"/reject", e.analyst, bytes.NewBufferString(`{"reason":"исправить входы"}`), "application/json"); response.StatusCode != 422 {
+		t.Fatalf("опубликованная версия изменена: %d", response.StatusCode)
+	}
+	created = e.request(t, http.MethodPost, "/estimates", e.analyst, bytes.NewReader(body), "application/json")
+	if created.StatusCode != 200 {
+		t.Fatalf("вторая версия: %d", created.StatusCode)
+	}
+	draft := decode[struct {
+		ID uuid.UUID `json:"demand_estimate_id"`
+	}](t, created)
+	for range 2 {
+		if response := e.request(t, http.MethodPost, "/estimates/"+draft.ID.String()+"/reject", e.analyst, bytes.NewBufferString(`{"reason":"исправить входы"}`), "application/json"); response.StatusCode != 200 {
+			t.Fatalf("отклонение: %d %s", response.StatusCode, response.Body)
+		}
+	}
+	if response := e.request(t, http.MethodPost, "/estimates/"+draft.ID.String()+"/publish", e.analyst, bytes.NewBufferString(`{}`), "application/json"); response.StatusCode != 422 {
+		t.Fatalf("отклонённая версия опубликована: %d", response.StatusCode)
+	}
+	if n := e.count(t, `SELECT count(*) FROM audit_local WHERE action='ESTIMATE_REJECTED'`); n != 1 {
+		t.Fatalf("повтор отклонения породил %d записей", n)
+	}
 }

@@ -114,6 +114,7 @@ type Store interface {
 	ReadEstimate(ctx context.Context, tx pgx.Tx, id uuid.UUID, lock bool) (EstimateRecord, error)
 	ListEstimates(ctx context.Context) ([]EstimateRecord, error)
 	MarkEstimatePublished(ctx context.Context, tx pgx.Tx, id uuid.UUID, actor string, at time.Time) error
+	MarkEstimateRejected(ctx context.Context, tx pgx.Tx, id uuid.UUID, actor, reason string, at time.Time) error
 	LockUploads(ctx context.Context, tx pgx.Tx, kind domain.FileKind) error
 	HistoryPeriods(ctx context.Context, tx pgx.Tx, source domain.HistorySource) ([]StoredPeriod, error)
 	// InsertFile возвращает false, если файл с тем же SHA-256 уже есть.
