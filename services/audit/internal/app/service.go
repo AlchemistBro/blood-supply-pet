@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -57,15 +58,19 @@ var ErrInvalid = errors.New("некорректная запись аудита"
 
 // Service — сценарии аудита.
 type Service struct {
-	pool  *pgxpool.Pool
-	store Store
-	clock clock.Clock
-	log   *slog.Logger
+	pool       *pgxpool.Pool
+	store      Store
+	clock      clock.Clock
+	log        *slog.Logger
+	security   SecurityConfig
+	journal    *messaging.Journal
+	verifyOK   atomic.Int64
+	verifyLast atomic.Int64
 }
 
 // New создаёт сервис.
 func New(pool *pgxpool.Pool, store Store, clk clock.Clock, log *slog.Logger) *Service {
-	return &Service{pool: pool, store: store, clock: clk, log: log}
+	return &Service{pool: pool, store: store, clock: clk, log: log, security: DefaultSecurityConfig(), journal: messaging.NewJournal("audit", auditc.ModuleAudit, clk)}
 }
 
 // HandleMessage — обработчик audit.events: inbox + добавление в цепочку одной транзакцией.
@@ -130,6 +135,9 @@ func (s *Service) append(ctx context.Context, tx pgx.Tx, rec auditc.AuditRecorde
 		// а у записей, пришедших по HTTP, source_message_id всегда новый.
 		return domain.Record{}, err
 	}
+	if err := s.detect(ctx, tx, stored); err != nil {
+		return domain.Record{}, err
+	}
 	return stored, nil
 }
 
@@ -184,8 +192,22 @@ func (s *Service) Verify(ctx context.Context) (VerifyReport, error) {
 		return nil
 	})
 	if err != nil && !errors.Is(err, errStopWalk) {
-		return VerifyReport{}, err
+		var chainBreak *domain.ChainBreakError
+		if !errors.As(err, &chainBreak) {
+			return VerifyReport{}, err
+		}
+		broken = &chainBreak.Report
 	}
+	if broken != nil {
+		s.verifyOK.Store(0)
+		if err := s.reportBreak(ctx, broken); err != nil {
+			return VerifyReport{}, err
+		}
+	}
+	if broken == nil {
+		s.verifyOK.Store(1)
+	}
+	s.verifyLast.Store(s.clock.Now().Unix())
 	return VerifyReport{OK: broken == nil, Checked: v.Checked(), HeadHash: v.HeadHash(), Broken: broken}, nil
 }
 

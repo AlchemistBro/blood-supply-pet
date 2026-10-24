@@ -2,6 +2,7 @@
 package postgres
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -72,7 +73,18 @@ func (s *Store) List(ctx context.Context, f app.Filter) ([]domain.Record, error)
 
 // Walk обходит журнал по порядку пачками.
 func (s *Store) Walk(ctx context.Context, fromSeq int64, batch int, fn func(domain.Record) error) error {
-	q := gen.New(s.pool)
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	q := gen.New(tx)
+	var headSeq int64
+	var headHash []byte
+	if err := tx.QueryRow(ctx, `SELECT seq,hash FROM audit_chain_head WHERE id=1`).Scan(&headSeq, &headHash); err != nil {
+		return err
+	}
+	lastHash := domain.GenesisHash
 	for {
 		rows, err := q.RecordsFromSeq(ctx, gen.RecordsFromSeqParams{Seq: fromSeq, Limit: clampInt32(batch)})
 		if err != nil {
@@ -87,9 +99,13 @@ func (s *Store) Walk(ctx context.Context, fromSeq int64, batch int, fn func(doma
 				return err
 			}
 			fromSeq = r.Seq
+			lastHash = r.Hash
 		}
 		if len(rows) < batch {
-			return nil
+			if fromSeq != headSeq || !bytes.Equal(lastHash, headHash) {
+				return &domain.ChainBreakError{Report: domain.BreakReport{Seq: fromSeq + 1, Reason: "хвост журнала не совпадает с сохранённой головой цепочки"}}
+			}
+			return tx.Commit(ctx)
 		}
 	}
 }
