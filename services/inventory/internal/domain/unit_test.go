@@ -54,7 +54,9 @@ func TestApplyMapsSourceChangesToEvents(t *testing.T) {
 			s.StorageLocation = "холодильник 2"
 			return s
 		}(), domain.EventUpdated, "", false},
-		{"выбывшая единица меняет статус выбытия", stored(domain.StatusIssued, 1), source(domain.StatusDiscarded, domain.ReasonDiscarded, 2), domain.EventUpdated, "", true},
+		{"выбывшая единица меняет статус выбытия: без события", stored(domain.StatusIssued, 1), source(domain.StatusDiscarded, domain.ReasonDiscarded, 2), domain.EventSilent, "", true},
+		{"выбывшая единица вернулась в наличие: без события", stored(domain.StatusIssued, 1), source(domain.StatusInStock, "", 2), domain.EventSilent, "", true},
+		{"выбывшая единица сменила место хранения: без события", stored(domain.StatusDiscarded, 1), source(domain.StatusDiscarded, domain.ReasonDiscarded, 2), domain.EventSilent, "", false},
 		{"повтор той же версии", stored(domain.StatusInStock, 5), source(domain.StatusIssued, domain.ReasonIssued, 5), domain.EventNone, "", false},
 		{"устаревшая версия", stored(domain.StatusIssued, 5), source(domain.StatusInStock, "", 4), domain.EventNone, "", false},
 	}

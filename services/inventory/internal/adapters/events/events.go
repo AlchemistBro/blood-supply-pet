@@ -32,6 +32,8 @@ func New(journal *messaging.Journal) *Publisher {
 func Payload(ch domain.Change) (contracts.Payload, bool) {
 	u := ch.Unit
 	switch ch.Event {
+	case domain.EventNone, domain.EventSilent:
+		return nil, false
 	case domain.EventRegistered:
 		return inventory.UnitRegistered{
 			UnitID: u.UnitID, ClinicID: u.ClinicID, ComponentKind: u.ComponentKind, BloodGroup: u.BloodGroup,

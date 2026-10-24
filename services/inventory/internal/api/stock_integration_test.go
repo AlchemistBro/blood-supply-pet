@@ -48,6 +48,7 @@ func TestStockAccessByRoleAndClinic(t *testing.T) {
 	denied := 0
 	for _, c := range cases {
 		resp := e.do(t, http.MethodGet, c.path, e.tokenAt(t, c.role, c.clinic), nil)
+		_ = resp.Body.Close()
 		if resp.StatusCode != c.want {
 			t.Errorf("%s: %s → %d, ожидали %d", c.name, c.path, resp.StatusCode, c.want)
 		}
@@ -64,7 +65,9 @@ func TestStockAccessByRoleAndClinic(t *testing.T) {
 			t.Fatalf("отказ записан с операцией %s, ожидали VIEW_STOCK", op)
 		}
 	}
-	if resp := e.do(t, http.MethodGet, "/clinics/1/stock", "", nil); resp.StatusCode != http.StatusUnauthorized {
+	resp := e.do(t, http.MethodGet, "/clinics/1/stock", "", nil)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("без токена: %d, ожидали 401", resp.StatusCode)
 	}
 }
@@ -80,11 +83,15 @@ func TestUnitCardAccessAndNoAistCode(t *testing.T) {
 	}
 	op1 := e.tokenAt(t, auth.RoleOperator, authtest.Clinic(1))
 	for _, p := range []string{"/units/" + foreign.String(), "/units/" + foreign.String() + "/history"} {
-		if resp := e.do(t, http.MethodGet, p, op1, nil); resp.StatusCode != http.StatusForbidden {
+		resp := e.do(t, http.MethodGet, p, op1, nil)
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
 			t.Errorf("%s оператору клиники 1: %d, ожидали 403", p, resp.StatusCode)
 		}
 	}
-	if resp := e.do(t, http.MethodGet, "/units/"+id.String(), op1, nil); resp.StatusCode != http.StatusOK {
+	resp := e.do(t, http.MethodGet, "/units/"+id.String(), op1, nil)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("своя единица: %d", resp.StatusCode)
 	}
 
@@ -92,6 +99,7 @@ func TestUnitCardAccessAndNoAistCode(t *testing.T) {
 	for _, p := range []string{"/units/" + foreign.String(), "/units/" + foreign.String() + "/history", "/clinics/2/units"} {
 		resp := e.do(t, http.MethodGet, p, it, nil)
 		body, err := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -102,10 +110,14 @@ func TestUnitCardAccessAndNoAistCode(t *testing.T) {
 			t.Fatalf("%s отдаёт исходный код АИСТ-М (ADR-0010): %s", p, body)
 		}
 	}
-	if resp := e.do(t, http.MethodGet, "/units/"+uuid.Must(uuid.NewV7()).String(), it, nil); resp.StatusCode != http.StatusNotFound {
+	resp = e.do(t, http.MethodGet, "/units/"+uuid.Must(uuid.NewV7()).String(), it, nil)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("неизвестная единица: %d, ожидали 404", resp.StatusCode)
 	}
-	if resp := e.do(t, http.MethodGet, "/clinics/99999/stock", it, nil); resp.StatusCode != http.StatusNotFound {
+	resp = e.do(t, http.MethodGet, "/clinics/99999/stock", it, nil)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("неизвестная клиника: %d, ожидали 404", resp.StatusCode)
 	}
 }
@@ -117,41 +129,55 @@ func TestStockResponsesMatchContract(t *testing.T) {
 	duty := e.tokenAt(t, auth.RoleDuty, nil)
 
 	var stock gen.ClinicStock
-	decodeStrict(t, e.do(t, http.MethodGet, "/clinics/1/stock", duty, nil), &stock)
+	resp := e.do(t, http.MethodGet, "/clinics/1/stock", duty, nil)
+	decodeStrict(t, resp, &stock)
+	_ = resp.Body.Close()
 	if stock.ClinicId != 1 || len(stock.Lines) != 1 || stock.Lines[0].UnitCount != 1 || stock.Lines[0].VolumeL != 0.3 ||
 		stock.Watermark == nil || stock.IsStale {
 		t.Fatalf("запас: %+v", stock)
 	}
 
 	var page gen.UnitPage
-	decodeStrict(t, e.do(t, http.MethodGet, "/clinics/1/units?fefo=true&kind=RBC&group=A%2B&limit=10", duty, nil), &page)
+	resp = e.do(t, http.MethodGet, "/clinics/1/units?fefo=true&kind=RBC&group=A%2B&limit=10", duty, nil)
+	decodeStrict(t, resp, &page)
+	_ = resp.Body.Close()
 	if len(page.Units) != 1 || uuid.UUID(page.Units[0].UnitId) != id || !page.Units[0].Available || !page.Units[0].RhPositive {
 		t.Fatalf("единицы: %+v", page)
 	}
-	if resp := e.do(t, http.MethodGet, "/clinics/1/units?kind=BLOOD", duty, nil); resp.StatusCode != http.StatusBadRequest {
+	resp = e.do(t, http.MethodGet, "/clinics/1/units?kind=BLOOD", duty, nil)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("неизвестный вид: %d, ожидали 400", resp.StatusCode)
 	}
 
 	var card gen.UnitCard
-	decodeStrict(t, e.do(t, http.MethodGet, "/units/"+id.String(), duty, nil), &card)
+	resp = e.do(t, http.MethodGet, "/units/"+id.String(), duty, nil)
+	decodeStrict(t, resp, &card)
+	_ = resp.Body.Close()
 	if card.Status != "IN_STOCK" || card.Version != 1 {
 		t.Fatalf("карточка: %+v", card)
 	}
 
 	var history gen.UnitHistory
-	decodeStrict(t, e.do(t, http.MethodGet, "/units/"+id.String()+"/history", duty, nil), &history)
+	resp = e.do(t, http.MethodGet, "/units/"+id.String()+"/history", duty, nil)
+	decodeStrict(t, resp, &history)
+	_ = resp.Body.Close()
 	if len(history.Items) != 1 || history.Items[0].Status != "IN_STOCK" {
 		t.Fatalf("история: %+v", history)
 	}
 
 	var last gen.SyncOverview
-	decodeStrict(t, e.do(t, http.MethodGet, "/sync/last", duty, nil), &last)
+	resp = e.do(t, http.MethodGet, "/sync/last", duty, nil)
+	decodeStrict(t, resp, &last)
+	_ = resp.Body.Close()
 	if last.LastSuccess == nil || last.LastRun == nil || last.Watermark == nil {
 		t.Fatalf("последний обмен: %+v", last)
 	}
 
 	var runs gen.SyncRunPage
-	decodeStrict(t, e.do(t, http.MethodGet, "/sync/runs?kind=CHANGES&limit=1", duty, nil), &runs)
+	resp = e.do(t, http.MethodGet, "/sync/runs?kind=CHANGES&limit=1", duty, nil)
+	decodeStrict(t, resp, &runs)
+	_ = resp.Body.Close()
 	if len(runs.Items) != 1 || runs.Items[0].SyncKind != "CHANGES" {
 		t.Fatalf("журнал: %+v", runs)
 	}
