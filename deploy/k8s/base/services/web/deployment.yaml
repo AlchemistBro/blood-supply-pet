@@ -36,6 +36,11 @@ spec:
             - configMapRef:
                 name: web-config
           env:
+            - name: BS_DEMAND_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: service-endpoints
+                  key: BS_DEMAND_URL
             - name: BS_TRANSFER_URL
               valueFrom:
                 configMapKeyRef:
