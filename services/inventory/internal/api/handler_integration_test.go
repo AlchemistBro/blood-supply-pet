@@ -162,11 +162,15 @@ func TestUnitStatusRequiresServiceRole(t *testing.T) {
 	id := e.syncUnit(t, "U-1")
 	path := "/internal/units/status?ids=" + id.String()
 
-	if resp := e.do(t, http.MethodGet, path, "", nil); resp.StatusCode != http.StatusUnauthorized {
+	resp := e.do(t, http.MethodGet, path, "", nil)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("без токена: %d, ожидали 401", resp.StatusCode)
 	}
 	for _, role := range []auth.Role{auth.RolePhysician, auth.RoleOperator, auth.RoleAnalyst, auth.RoleDuty, auth.RoleITService} {
-		if resp := e.do(t, http.MethodGet, path, e.token(t, role), nil); resp.StatusCode != http.StatusForbidden {
+		resp := e.do(t, http.MethodGet, path, e.token(t, role), nil)
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
 			t.Errorf("роль %s: %d, ожидали 403", role, resp.StatusCode)
 		}
 	}
@@ -174,7 +178,9 @@ func TestUnitStatusRequiresServiceRole(t *testing.T) {
 	if len(denied) != 5 || denied[0] != auth.OpInternalUnitStatus {
 		t.Fatalf("отказы в аудит: %v", denied)
 	}
-	if resp := e.do(t, http.MethodGet, path, e.token(t, auth.RoleService), nil); resp.StatusCode != http.StatusOK {
+	resp = e.do(t, http.MethodGet, path, e.token(t, auth.RoleService), nil)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("роль SERVICE: %d, ожидали 200", resp.StatusCode)
 	}
 }
@@ -185,6 +191,7 @@ func TestUnitStatusResponseMatchesContract(t *testing.T) {
 	id := e.syncUnit(t, "U-1")
 	unknown := uuid.Must(uuid.NewV7())
 	resp := e.do(t, http.MethodGet, "/internal/units/status?ids="+id.String()+","+unknown.String(), e.token(t, auth.RoleService), nil)
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK || !strings.HasPrefix(resp.Header.Get("Content-Type"), "application/json") {
 		t.Fatalf("ответ %d %s", resp.StatusCode, resp.Header.Get("Content-Type"))
 	}
@@ -206,6 +213,7 @@ func TestUnitStatusFallsBackToCopy(t *testing.T) {
 	syncedAt := e.clock.Now()
 	e.aist.SetDown(true)
 	resp := e.do(t, http.MethodGet, "/internal/units/status?ids="+id.String(), e.token(t, auth.RoleService), nil)
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("ответ %d", resp.StatusCode)
 	}
@@ -220,7 +228,9 @@ func TestUnitStatusRejectsBadIDs(t *testing.T) {
 	e := setup(t, false)
 	tok := e.token(t, auth.RoleService)
 	for _, q := range []string{"", "?ids=", "?ids=not-a-uuid"} {
-		if resp := e.do(t, http.MethodGet, "/internal/units/status"+q, tok, nil); resp.StatusCode != http.StatusBadRequest {
+		resp := e.do(t, http.MethodGet, "/internal/units/status"+q, tok, nil)
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusBadRequest {
 			t.Errorf("%q: %d, ожидали 400", q, resp.StatusCode)
 		}
 	}
@@ -230,7 +240,9 @@ func TestUnitStatusRejectsBadIDs(t *testing.T) {
 func TestProtectedVolumeIsHiddenOutsideLocal(t *testing.T) {
 	e := setup(t, false)
 	body := map[string]any{"clinic_id": 1, "component_kind": "RBC", "volume_units": 3}
-	if resp := e.do(t, http.MethodPost, "/dev/protected-volume", e.token(t, auth.RoleDuty), body); resp.StatusCode != http.StatusNotFound {
+	resp := e.do(t, http.MethodPost, "/dev/protected-volume", e.token(t, auth.RoleDuty), body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("вне local: %d, ожидали 404", resp.StatusCode)
 	}
 }
@@ -238,10 +250,13 @@ func TestProtectedVolumeIsHiddenOutsideLocal(t *testing.T) {
 func TestProtectedVolumeOnLocalStand(t *testing.T) {
 	e := setup(t, true)
 	body := map[string]any{"clinic_id": 1, "component_kind": "RBC", "volume_units": 3}
-	if resp := e.do(t, http.MethodPost, "/dev/protected-volume", e.token(t, auth.RoleService), body); resp.StatusCode != http.StatusForbidden {
-		t.Fatalf("роль SERVICE: %d, ожидали 403", resp.StatusCode)
+	denied := e.do(t, http.MethodPost, "/dev/protected-volume", e.token(t, auth.RoleService), body)
+	_ = denied.Body.Close()
+	if denied.StatusCode != http.StatusForbidden {
+		t.Fatalf("роль SERVICE: %d, ожидали 403", denied.StatusCode)
 	}
 	resp := e.do(t, http.MethodPost, "/dev/protected-volume", e.token(t, auth.RoleDuty), body)
+	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusAccepted {
 		t.Fatalf("дежурный: %d, ожидали 202", resp.StatusCode)
 	}
@@ -251,7 +266,9 @@ func TestProtectedVolumeOnLocalStand(t *testing.T) {
 		t.Fatalf("ответ: %+v", pv)
 	}
 	bad := map[string]any{"clinic_id": 1, "component_kind": "RBC", "volume_units": -1}
-	if resp := e.do(t, http.MethodPost, "/dev/protected-volume", e.token(t, auth.RoleDuty), bad); resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("отрицательный объём: %d, ожидали 400", resp.StatusCode)
+	invalid := e.do(t, http.MethodPost, "/dev/protected-volume", e.token(t, auth.RoleDuty), bad)
+	_ = invalid.Body.Close()
+	if invalid.StatusCode != http.StatusBadRequest {
+		t.Fatalf("отрицательный объём: %d, ожидали 400", invalid.StatusCode)
 	}
 }
