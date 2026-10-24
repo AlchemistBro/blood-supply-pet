@@ -17,7 +17,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/AlchemistBro/blood-supply-pet/libs/clock"
+	"github.com/AlchemistBro/blood-supply-pet/libs/contracts"
 	auditc "github.com/AlchemistBro/blood-supply-pet/libs/contracts/audit"
+	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/demand"
 	"github.com/AlchemistBro/blood-supply-pet/libs/messaging"
 	bspgx "github.com/AlchemistBro/blood-supply-pet/libs/pgx"
 	"github.com/AlchemistBro/blood-supply-pet/services/demand/internal/domain"
@@ -152,6 +154,17 @@ func (s *Service) Upload(ctx context.Context, in UploadInput) (UploadResult, err
 		}
 		if len(p.replace) > 0 && check.Status != domain.StatusRejected {
 			details["replaced_history_rows"] = len(p.replace)
+		}
+		var payload contracts.Payload = demand.StatisticsFileAccepted{StatisticsFileID: id, FileKind: string(in.Kind), Status: string(check.Status), AcceptedRows: &info.AcceptedRows, RejectedRows: info.RejectedRows, UploadedBy: in.Actor.UserID}
+		if check.Status == domain.StatusRejected {
+			reason := demand.RejectInvalidRows
+			if check.FileError != "" {
+				reason = demand.RejectInvalidFormat
+			}
+			payload = demand.StatisticsFileRejected{StatisticsFileID: id, FileKind: string(in.Kind), Reason: reason, RejectedRows: info.RejectedRows, UploadedBy: in.Actor.UserID}
+		}
+		if _, err := s.journal.Publish(ctx, tx, contracts.TopicDemandEvents, id.String(), payload); err != nil {
+			return err
 		}
 		return s.journal.Audit(ctx, tx, messaging.AuditEntry{
 			UserID: in.Actor.UserID, Role: in.Actor.Role, Action: action, ObjectType: objectTypeFile,

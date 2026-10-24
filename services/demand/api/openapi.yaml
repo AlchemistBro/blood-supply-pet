@@ -10,6 +10,53 @@ info:
 servers:
   - url: http://localhost:8102
 paths:
+  /estimates:
+    get:
+      operationId: listEstimates
+      x-bs-operation: VIEW_DEMAND
+      summary: Версии оценки потребности, новые первыми
+      responses:
+        "200": { description: Версии, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Estimate" } } } } }
+    post:
+      operationId: calculateEstimate
+      x-bs-operation: PUBLISH_ESTIMATE
+      summary: Рассчитать версию по явно выбранным входам (демо-формулы)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [profile_file_id, clinic_share_version_id, history_ids, period_start, period_end]
+              properties:
+                profile_file_id: { type: string, format: uuid }
+                clinic_share_version_id: { type: string, format: uuid }
+                history_ids: { type: array, minItems: 1, maxItems: 10000, items: { type: string, format: uuid } }
+                period_start: { type: string, format: date }
+                period_end: { type: string, format: date }
+      responses:
+        "200": { description: Рассчитанная версия, content: { application/json: { schema: { $ref: "#/components/schemas/Estimate" } } } }
+        "422": { description: Несогласованные входы, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+  /estimates/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getEstimate
+      x-bs-operation: VIEW_DEMAND
+      summary: Оценка с версиями входов и потребностью клиник
+      responses:
+        "200": { description: Оценка, content: { application/json: { schema: { $ref: "#/components/schemas/Estimate" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /estimates/{id}/publish:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: publishEstimate
+      x-bs-operation: PUBLISH_ESTIMATE
+      summary: Подтвердить публикацию версии; повтор идемпотентен
+      responses:
+        "200": { description: Опубликованная версия, content: { application/json: { schema: { $ref: "#/components/schemas/Estimate" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /files:
     post:
       operationId: uploadFile
@@ -184,6 +231,29 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
   schemas:
+    EstimateLine:
+      type: object
+      required: [clinic_id, component_kind, blood_group, demand_volume_ml]
+      properties:
+        clinic_id: { type: integer, format: int64 }
+        component_kind: { type: string }
+        blood_group: { type: string }
+        demand_volume_ml: { type: number, format: double }
+    Estimate:
+      type: object
+      required: [demand_estimate_id, version_no, status, profile_file_id, clinic_share_version_id, history_ids, period_start, period_end, lines, notice]
+      properties:
+        demand_estimate_id: { type: string, format: uuid }
+        version_no: { type: integer }
+        status: { type: string }
+        profile_file_id: { type: string, format: uuid }
+        clinic_share_version_id: { type: string, format: uuid }
+        history_ids: { type: array, items: { type: string, format: uuid } }
+        period_start: { type: string, format: date }
+        period_end: { type: string, format: date }
+        confirmed_by: { type: string }
+        notice: { type: string }
+        lines: { type: array, items: { $ref: "#/components/schemas/EstimateLine" } }
     Problem:
       type: object
       required: [title, status]

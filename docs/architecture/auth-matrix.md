@@ -17,6 +17,10 @@
 
 | Метод и путь | Операция | CLINIC_OPERATOR | DUTY_OFFICER | IT_SERVICE | PHYSICIAN | SERVICE | TERRITORIAL_ANALYST |
 | --- | --- | :---: | :---: | :---: | :---: | :---: | :---: |
+| `GET /estimates` | VIEW_DEMAND | 403 | 2xx | 403 | 403 | 403 | 2xx |
+| `POST /estimates` | PUBLISH_ESTIMATE | 403 | 403 | 403 | 403 | 403 | 2xx |
+| `GET /estimates/{id}` | VIEW_DEMAND | 403 | 2xx | 403 | 403 | 403 | 2xx |
+| `POST /estimates/{id}/publish` | PUBLISH_ESTIMATE | 403 | 403 | 403 | 403 | 403 | 2xx |
 | `GET /files` | UPLOAD_STATISTICS | 403 | 403 | 403 | 403 | 403 | 2xx |
 | `POST /files` | UPLOAD_STATISTICS | 403 | 403 | 403 | 403 | 403 | 2xx |
 | `GET /files/{id}` | UPLOAD_STATISTICS | 403 | 403 | 403 | 403 | 403 | 2xx |
