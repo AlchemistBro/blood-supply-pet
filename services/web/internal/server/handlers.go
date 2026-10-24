@@ -28,6 +28,8 @@ const (
 	msgRetry     = "Вход не выполнен: ссылка входа устарела или открыта в другом окне. Войдите ещё раз."
 	msgCancelled = "Вход не выполнен: Keycloak отклонил или отменил вход. Войдите ещё раз."
 	msgFailed    = "Вход не выполнен: не удалось подтвердить вход в Keycloak. Войдите ещё раз."
+	// msgPersonalData — Keycloak настроен неверно: токен с ФИО или email не хранится (ADR-0018).
+	msgPersonalData = "Вход невозможен: Keycloak передаёт в токене персональные данные (ФИО или email). Обратитесь в ИТ-службу."
 )
 
 // loginPage — страница входа с блоком «Демо-доступ».
@@ -89,11 +91,14 @@ func (s *Server) callback(w http.ResponseWriter, r *http.Request) {
 	res, err := s.oidc.Exchange(r.Context(), q.Get("code"), st)
 	if err != nil {
 		s.log.InfoContext(r.Context(), "вход не подтверждён", "err", err)
-		reason := "exchange"
-		if errors.Is(err, oidc.ErrNonce) {
+		reason, msg := "exchange", msgFailed
+		switch {
+		case errors.Is(err, oidc.ErrNonce):
 			reason = "nonce"
+		case errors.Is(err, oidc.ErrPersonalData):
+			reason, msg = "personal_data", msgPersonalData
 		}
-		s.loginFailed(w, r, reason, msgFailed)
+		s.loginFailed(w, r, reason, msg)
 		return
 	}
 	csrf, err := session.RandomToken()

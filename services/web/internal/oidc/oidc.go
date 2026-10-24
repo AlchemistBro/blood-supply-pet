@@ -6,6 +6,8 @@ package oidc
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -26,7 +28,16 @@ var (
 	ErrNonce = errors.New("nonce в id_token не совпал")
 	// ErrToken — провайдер не выдал токены или они не прошли проверку.
 	ErrToken = errors.New("токены провайдера не прошли проверку")
+	// ErrPersonalData — в access token есть ФИО или контакты: такой токен нельзя хранить в cookie сессии
+	// и пересылать сервисам (в системе нет ФИО). Исправляется настройкой клиента web в Keycloak.
+	ErrPersonalData = errors.New("в access token есть персональные данные")
 )
+
+// personalClaims — claims стандартных scope profile, email, phone, address: в токенах системы их быть не должно.
+var personalClaims = []string{
+	"name", "given_name", "family_name", "middle_name", "nickname", "email", "phone_number", "address",
+	"birthdate", "gender", "picture", "snils",
+}
 
 // Config — клиент web в realm blood-supply.
 type Config struct {
@@ -110,8 +121,9 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 		oauth: oauth2.Config{
 			ClientID: cfg.ClientID, ClientSecret: cfg.ClientSecret, RedirectURL: cfg.RedirectURL,
 			Endpoint: endpoint,
-			// profile нужен только ради preferred_username; ФИО web не читает и не хранит (ADR-0018).
-			Scopes: []string{gooidc.ScopeOpenID, "profile"},
+			// Только openid: preferred_username, роли и clinic_id кладут мапперы клиента web, а scope profile и
+			// email не запрашиваются — с ними Keycloak положил бы в токен ФИО и email (ADR-0018).
+			Scopes: []string{gooidc.ScopeOpenID},
 		},
 		idVerifier: provider.Verifier(&gooidc.Config{ClientID: cfg.ClientID}),
 		access:     access,
@@ -190,6 +202,13 @@ func (c *Client) result(ctx context.Context, tok *oauth2.Token) (Result, error) 
 	if err != nil {
 		return Result{}, fmt.Errorf("%w: access token: %w", ErrToken, err)
 	}
+	// Токен хранится в cookie целиком (его пересылают сервисам, подпись не позволяет вырезать поля),
+	// поэтому токен с ФИО или контактами не принимается вовсе.
+	if found, err := personalClaimsIn(tok.AccessToken); err != nil {
+		return Result{}, fmt.Errorf("%w: access token: %w", ErrToken, err)
+	} else if len(found) > 0 {
+		return Result{}, fmt.Errorf("%w: %s", ErrPersonalData, strings.Join(found, ", "))
+	}
 	return Result{Principal: p, AccessToken: tok.AccessToken, RefreshToken: tok.RefreshToken, Expiry: tok.Expiry}, nil
 }
 
@@ -212,6 +231,29 @@ func (c *Client) LogoutURL() string {
 
 // ProviderOrigin — источник страниц Keycloak, который видит браузер (для CSP form-action).
 func (c *Client) ProviderOrigin() string { return c.origin }
+
+// personalClaimsIn — имена claims с персональными данными в JWT (подпись уже проверена).
+func personalClaimsIn(raw string) ([]string, error) {
+	parts := strings.Split(raw, ".")
+	if len(parts) != 3 {
+		return nil, errors.New("не JWT")
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nil, fmt.Errorf("тело JWT: %w", err)
+	}
+	var claims map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return nil, fmt.Errorf("тело JWT: %w", err)
+	}
+	var found []string
+	for _, k := range personalClaims {
+		if _, ok := claims[k]; ok {
+			found = append(found, k)
+		}
+	}
+	return found, nil
+}
 
 func originOf(raw string) (string, error) {
 	u, err := url.Parse(raw)
