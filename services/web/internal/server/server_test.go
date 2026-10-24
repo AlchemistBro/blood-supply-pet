@@ -70,7 +70,7 @@ func newEnv(t *testing.T) *env {
 	e := &env{t: t, provider: oidctest.New(t), clock: clock.NewMutable(time.Now()), audit: &fakeAudit{}, svcCode: http.StatusOK}
 	// Как настроенный realm-blood-supply.json: в токенах нет ФИО и email (проверка — TestPersonalData*).
 	e.provider.SetPersonalClaims(false)
-	e.service =httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	e.service = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		e.gotToken = strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(e.svcCode)
@@ -443,6 +443,43 @@ func TestRefreshFailureRedirectsToLogin(t *testing.T) {
 	rec := e.do(http.MethodGet, "/", j, nil)
 	if rec.Code != http.StatusSeeOther || j.hasPrefix("bs_session.") {
 		t.Fatalf("неудачное обновление: %d, сессия %v", rec.Code, j.hasPrefix("bs_session."))
+	}
+}
+
+func TestRefreshKeepsAbsoluteSessionDeadline(t *testing.T) {
+	e := newEnv(t)
+	j := e.login(operator, "/")
+	e.clock.Advance(7 * time.Hour)
+	if rec := e.do(http.MethodGet, "/", j, nil); rec.Code != http.StatusOK {
+		t.Fatalf("обновление до срока сессии: %d", rec.Code)
+	}
+	calls := e.provider.TokenCalls()
+	e.clock.Advance(time.Hour + time.Second)
+	rec := e.do(http.MethodGet, "/", j, nil)
+	if rec.Code != http.StatusSeeOther || j.hasPrefix("bs_session.") {
+		t.Fatalf("обновление продлило абсолютный срок: %d", rec.Code)
+	}
+	if e.provider.TokenCalls() != calls {
+		t.Fatal("после абсолютного срока refresh не должен вызываться")
+	}
+}
+
+type changedSubjectOIDC struct{ OIDC }
+
+func (c changedSubjectOIDC) Refresh(ctx context.Context, token string) (oidc.Result, error) {
+	res, err := c.OIDC.Refresh(ctx, token)
+	res.Principal.Subject = "another-user"
+	return res, err
+}
+
+func TestRefreshCannotChangeSessionSubject(t *testing.T) {
+	e := newEnv(t)
+	j := e.login(operator, "/")
+	e.srv.oidc = changedSubjectOIDC{e.srv.oidc}
+	e.clock.Advance(10 * time.Minute)
+	rec := e.do(http.MethodGet, "/", j, nil)
+	if rec.Code != http.StatusSeeOther || j.hasPrefix("bs_session.") {
+		t.Fatalf("токен другого участника принят в сессию: %d", rec.Code)
 	}
 }
 

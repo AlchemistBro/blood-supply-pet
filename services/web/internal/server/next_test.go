@@ -19,7 +19,8 @@ func TestCleanLocalPathRejectsOpenRedirects(t *testing.T) {
 		"/x/..\\..\\evil.example", // обратная черта в любом месте
 		"/%5C",                    // раскодированная обратная черта
 		"/%5Cevil.example",
-		"/..%2F%5Cevil.example",  // /../\evil.example после раскодирования
+		"/..%2F%5Cevil.example", // /../\evil.example после раскодирования
+		"/x/..%2F%5Cevil.example",
 		"/%2F%2Fevil.example",    // //evil.example после раскодирования
 		"/\t/evil.example",       // управляющий символ
 		"/%09/evil.example",      // он же закодированный

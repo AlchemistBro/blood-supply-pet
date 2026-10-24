@@ -88,6 +88,9 @@ func (s *Server) requireSession(next http.Handler) http.Handler {
 			ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 			res, err := s.oidc.Refresh(ctx, d.RefreshToken)
 			cancel()
+			if err == nil && (res.Principal.Subject == "" || res.Principal.Subject != d.Subject) {
+				err = errors.New("участник сессии изменился при обновлении токена")
+			}
 			if err != nil {
 				s.log.InfoContext(r.Context(), "токен не обновлён, нужен вход", "err", err)
 				s.sessions.Clear(w, r)
