@@ -18,10 +18,11 @@ import (
 const (
 	ReleaseObligationCancelled = "OBLIGATION_CANCELLED"
 	ReleaseObligationBroken    = "OBLIGATION_BROKEN"
+	ReleaseUnitReplaced = "UNIT_REPLACED"
 )
 
 // ReleaseReasons — все причины снятия закрепления в порядке схемы.
-var ReleaseReasons = []string{ReleaseObligationCancelled, ReleaseObligationBroken}
+var ReleaseReasons = []string{ReleaseObligationCancelled, ReleaseObligationBroken,ReleaseUnitReplaced}
 
 // AllocateUnitsToPatient — команда закрепить подтверждённые единицы за пациентом в АИСТ-М (ИНТ-05, FR051).
 type AllocateUnitsToPatient struct {
