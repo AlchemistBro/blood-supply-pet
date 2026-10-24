@@ -10,6 +10,55 @@ info:
 servers:
   - url: http://localhost:8080
 paths:
+  /tasks:
+    get:
+      operationId: taskList
+      x-bs-operation: VIEW_TASKS
+      summary: Задания клиники-источника с фильтром статуса
+      responses:
+        "200": { description: Список заданий, content: { text/html: { schema: { type: string } } } }
+  /tasks/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: taskCard
+      x-bs-operation: VIEW_OBLIGATION
+      summary: Карточка задания, единицы FEFO и история; без фенотипа
+      responses:
+        "200": { description: Карточка задания, content: { text/html: { schema: { type: string } } } }
+  /tasks/{id}/confirm:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: confirmTask
+      x-bs-operation: CONFIRM_TRANSFER
+      summary: Подтверждение формой без JavaScript (csrf_token, unit_ids, idempotency_key, accept_partial)
+      responses:
+        "200": { description: Результат подтверждения }
+        "409": { description: Состояние задания или единиц изменилось }
+        "422": { description: Недопустимый выбор или защищённый объём }
+        "503": { description: Источник временно недоступен }
+  /tasks/{id}/replace:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: replaceTask
+      x-bs-operation: REPLACE_UNIT
+      summary: Замена формой без JavaScript (csrf_token, old_unit_id, new_unit_id)
+      responses:
+        "200": { description: Результат замены }
+        "409": { description: Замена недопустима в текущем состоянии }
+        "422": { description: Единица не соответствует спецификации }
+        "503": { description: Источник временно недоступен }
+  /tasks/{id}/reject:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: rejectTask
+      x-bs-operation: REJECT_TRANSFER
+      summary: Отказ источника формой (csrf_token, reason=SOURCE_REFUSED)
+      responses:
+        "200": { description: Результат отказа }
   /login:
     get:
       operationId: loginPage
