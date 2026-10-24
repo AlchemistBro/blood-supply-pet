@@ -8,8 +8,8 @@ blood-supply-pet/
 │   ├── PLAN.md               план, решения, этапы, статус
 │   ├── adr/                  ADR-0001…
 │   ├── domain/               glossary · requirements · obligation-states · context-map
-│   ├── architecture/         c4-context · c4-containers · events · data-model · saga-confirmation · deployment · security · testing · repo-layout
-│   │   └── diagrams/         bpmn/*.bpmn + svg · c4/*.svg (экспорт) · screenshots/
+│   ├── architecture/         c4-context · c4-containers · c4-components · uml · events · data-model · saga-confirmation · deployment · security · testing · repo-layout
+│   │   └── diagrams/         README (перечень схем) · bpmn/*.bpmn + svg · c4/*.svg (экспорт) · screenshots/
 │   ├── tasks/                00-foundation … 09-hardening
 │   ├── ui/                   style-guide · screens
 │   └── perf/                 отчёты нагрузки

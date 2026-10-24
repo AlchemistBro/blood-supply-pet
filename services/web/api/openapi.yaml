@@ -1,0 +1,82 @@
+openapi: 3.0.3
+info:
+  title: web
+  version: 0.1.0
+  description: |
+    Интерфейс и BFF (ADR-0007, ADR-0018). Страницы отдаются HTML; вход через Keycloak (authorization code + PKCE),
+    сессия в зашифрованной cookie, каждый POST несёт CSRF-токен (поле csrf_token или заголовок X-CSRF-Token).
+    Маршруты входа публичные и операций матрицы прав не имеют; экраны ролей описываются вместе с их операциями.
+    Главная и выход не требуют операции роли (x-bs-public), но требуют сессии; выход также требует CSRF.
+servers:
+  - url: http://localhost:8080
+paths:
+  /login:
+    get:
+      operationId: loginPage
+      x-bs-public: true
+      summary: Страница входа с блоком «Демо-доступ»
+      parameters:
+        - { name: next, in: query, description: Локальный путь возврата после входа, schema: { type: string, maxLength: 512 } }
+      responses:
+        "200": { description: Страница входа, content: { text/html: { schema: { type: string } } } }
+  /auth/login:
+    get:
+      operationId: startLogin
+      x-bs-public: true
+      summary: Переход в Keycloak (state, nonce, PKCE S256 в cookie bs_auth на 10 минут)
+      parameters:
+        - { name: hint, in: query, description: login_hint для Keycloak (логин демо-пользователя), schema: { type: string, pattern: "^[a-z0-9._-]{1,64}$" } }
+        - { name: next, in: query, schema: { type: string, maxLength: 512 } }
+      responses:
+        "302": { description: Переход на authorization endpoint Keycloak }
+  /auth/callback:
+    get:
+      operationId: loginCallback
+      x-bs-public: true
+      summary: Возврат из Keycloak; проверка state и nonce, создание сессии, LOGIN в аудит
+      parameters:
+        - { name: code, in: query, schema: { type: string } }
+        - { name: state, in: query, schema: { type: string } }
+        - { name: error, in: query, schema: { type: string } }
+      responses:
+        "303": { description: Вход выполнен, переход на адрес возврата }
+        "400": { description: Вход не выполнен (state, nonce, ошибка провайдера), content: { text/html: { schema: { type: string } } } }
+  /logout:
+    post:
+      operationId: logout
+      x-bs-public: true
+      summary: Выход - LOGOUT в аудит, удаление cookie, end-session Keycloak
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [csrf_token]
+              properties:
+                csrf_token: { type: string }
+      responses:
+        "303": { description: Переход на end-session Keycloak }
+        "403": { description: Нет CSRF-токена или он не совпал }
+  /events/obligations:
+    get:
+      operationId: obligationEvents
+      x-bs-operation: VIEW_OBLIGATION
+      summary: Живые статусы обязательств (SSE) - фрагменты HTML для sse-swap, событие obligation-<id>
+      description: |
+        Клиника из параметра должна совпадать с клиникой токена (дежурный - любая); без параметра - клиника
+        токена, у дежурного - все. Пульс - комментарий каждые 15 с. Во фрагментах нет номера случая и фенотипа.
+      parameters:
+        - { name: clinic, in: query, schema: { type: integer, format: int64, minimum: 1 } }
+      responses:
+        "200": { description: Поток событий, content: { text/event-stream: { schema: { type: string } } } }
+        "400": { description: Неверный номер клиники }
+        "403": { description: Нет права VIEW_OBLIGATION или чужая клиника }
+  /:
+    get:
+      operationId: home
+      x-bs-public: true
+      summary: Главная после входа
+      responses:
+        "200": { description: Страница, content: { text/html: { schema: { type: string } } } }
+        "303": { description: Нет сессии - переход на /login }

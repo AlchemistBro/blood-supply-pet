@@ -1,0 +1,20 @@
+openapi: 3.0.3
+info:
+  title: logistics-gateway
+  version: 0.1.0
+  description: "Шлюз перевозчика C03. Бизнес-эндпоинтов нет: команды и ответы идут через Kafka (logistics.commands, logistics.replies); служебные /healthz, /readyz, /metrics отдаёт libs/runtime."
+servers:
+  - url: http://localhost:8106
+paths: {}
+components:
+  schemas:
+    Problem:
+      type: object
+      required: [title, status]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        correlation_id: { type: string }

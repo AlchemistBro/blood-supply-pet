@@ -334,6 +334,13 @@ func TestAcceptedReplyMovesObligationOnceEvenIfDeliveredTwice(t *testing.T) {
 	s.send(o, reply, id)
 	s.send(o, reply, id) // повторная доставка
 	s.barrier(o)
+	var inboxCount int
+	if err := s.pool.QueryRow(s.ctx, `SELECT count(*) FROM inbox WHERE message_id = $1 AND message_type = 'TransportAccepted'`, id).Scan(&inboxCount); err != nil {
+		t.Fatal(err)
+	}
+	if inboxCount != 1 {
+		t.Fatalf("сообщение не сохранено в inbox: строк %d, ожидали 1", inboxCount)
+	}
 
 	v := s.view(o)
 	if v.Status != domain.StatusTransportRequested || v.TransportRef != "C03-777" {

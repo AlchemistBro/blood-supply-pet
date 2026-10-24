@@ -1,0 +1,78 @@
+{{/* Поля формы, сводка ошибок, подтверждение на <dialog> с формой-фолбэком. */}}
+
+{{define "required_mark"}}<span class="field__required" aria-hidden="true"> *</span>{{end}}
+
+{{define "field_aria"}}{{if .Required}} aria-required="true"{{end}}{{if .Error}} aria-invalid="true"{{end}}{{with .DescribedBy}} aria-describedby="{{.}}"{{end}}{{end}}
+
+{{/* Поле: подпись над полем, подсказка, ошибка под полем. Данные — Field. */}}
+{{define "field" -}}
+<div class="field{{if .IsCheckbox}} field--checkbox{{end}}{{if .Error}} field--error{{end}}">
+{{if .IsCheckbox}}
+<input type="checkbox" id="{{.ID}}" name="{{.Name}}" value="{{.CheckboxValue}}"{{if .Checked}} checked{{end}}{{template "field_aria" .}}>
+<label for="{{.ID}}">{{.Label}}{{if .Required}}{{template "required_mark"}}{{end}}</label>
+{{with .Hint}}<p class="field__hint" id="{{$.ID}}-hint">{{.}}</p>{{end}}
+{{else}}
+<label for="{{.ID}}">{{.Label}}{{if .Required}}{{template "required_mark"}}{{end}}</label>
+{{with .Hint}}<p class="field__hint" id="{{$.ID}}-hint">{{.}}</p>{{end}}
+{{if .IsTextarea}}
+<textarea id="{{.ID}}" name="{{.Name}}"{{template "field_aria" .}}>{{.Value}}</textarea>
+{{else if .IsSelect}}
+<select id="{{.ID}}" name="{{.Name}}"{{template "field_aria" .}}>
+{{range .Options}}
+<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
+{{end}}
+</select>
+{{else}}
+<input type="{{.InputType}}" id="{{.ID}}" name="{{.Name}}" value="{{.Value}}"{{with .Autocomplete}} autocomplete="{{.}}"{{end}}{{template "field_aria" .}}>
+{{end}}
+{{end}}
+{{with .Error}}<p class="field__error" id="{{$.ID}}-error"><span class="visually-hidden">Ошибка: </span>{{.}}</p>{{end}}
+</div>
+{{- end}}
+
+{{/* Сводка ошибок над формой; app.js переводит на неё фокус. Данные — FormErrors. */}}
+{{define "error_summary" -}}
+{{if .Items}}
+<div class="error-summary" role="alert" tabindex="-1" aria-labelledby="error-summary-title">
+<h2 id="error-summary-title">Исправьте ошибки в форме</h2>
+<ul>
+{{range .Items}}
+<li>{{if .Field}}<a href="#{{.Field}}">{{with .Label}}{{.}}: {{end}}{{.Message}}</a>{{else}}{{.Message}}{{end}}</li>
+{{end}}
+</ul>
+</div>
+{{end}}
+{{- end}}
+
+{{/*
+  Подтверждение. Без JS ссылка ведёт на страницу-фолбэк (ConfirmPage) с той же формой.
+  С JS app.js по data-dialog-open открывает <dialog> на месте. Данные — Confirm.
+*/}}
+{{define "confirm" -}}
+<a class="btn{{if .Danger}} btn--danger{{end}}" href="{{.FallbackURL}}" data-dialog-open="{{.ID}}" aria-haspopup="dialog">{{.TriggerLabel}}</a>
+<dialog class="dialog" id="{{.ID}}" aria-labelledby="{{.ID}}-title">
+{{template "confirm_form" (inDialog .)}}
+</dialog>
+{{- end}}
+
+{{define "confirm_form" -}}
+<form class="confirm-form" method="post" action="{{.Action}}">
+{{template "csrf" .CSRFToken}}
+{{range .Hidden}}
+<input type="hidden" name="{{.Name}}" value="{{.Value}}">
+{{end}}
+{{if .InDialog}}<h2 id="{{.ID}}-title">{{.Question}}</h2>{{end}}
+{{with .Consequence}}<p class="confirm-form__consequence">{{.}}</p>{{end}}
+{{range .Fields}}
+{{template "field" .}}
+{{end}}
+<div class="form-actions">
+<button type="submit" class="btn {{if .Danger}}btn--danger-solid{{else}}btn--primary{{end}}">{{.ConfirmText}}</button>
+{{if .InDialog}}
+<button type="submit" class="btn" formmethod="dialog" formnovalidate>{{.CancelText}}</button>
+{{else}}
+<a class="btn" href="{{.CancelURL}}">{{.CancelText}}</a>
+{{end}}
+</div>
+</form>
+{{- end}}

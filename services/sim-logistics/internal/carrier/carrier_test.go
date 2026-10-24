@@ -3,6 +3,7 @@ package carrier_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -179,6 +180,63 @@ func TestSlowSubmitHonoursContext(t *testing.T) {
 	}
 	if len(c.All("")) != 0 {
 		t.Fatal("заказ не создаётся, если клиент ушёл во время задержки")
+	}
+}
+
+// Задержка отправки идёт вне блокировки: пока первый экземпляр шлюза ждёт ответа, сверка второго отвечает сразу.
+// Иначе окно для дубля закрылось бы, и тест двух экземпляров шлюза проверял бы имитатор, а не аренду.
+// Пауза подменена: она сообщает «вошла» и ждёт отмены контекста, реального ожидания нет. Если бы пауза держала
+// блокировку, FindActive не ответил бы, и тест упал бы по своему сроку, а не завис.
+func TestFindActiveAnswersDuringSlowSubmit(t *testing.T) {
+	const deadline = 10 * time.Second
+	c := carrier.New(clock.NewMutable(start))
+	if _, err := c.Submit(context.Background(), order("o07-9")); err != nil {
+		t.Fatal(err)
+	}
+	entered := make(chan struct{})
+	c.SetSleep(func(ctx context.Context, _ time.Duration) error {
+		close(entered)
+		<-ctx.Done()
+		return fmt.Errorf("задержка прервана: %w", ctx.Err())
+	})
+	c.UpdateFaults(func(f *carrier.Faults) { f.Slow = time.Hour })
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		_, err := c.Submit(ctx, order("o07-9"))
+		done <- err
+	}()
+	select {
+	case <-entered:
+	case <-time.After(deadline):
+		t.Fatal("отправка не дошла до паузы")
+	}
+
+	found := make(chan int, 1)
+	go func() {
+		active, err := c.FindActive("o07-9")
+		if err != nil {
+			found <- -1
+			return
+		}
+		found <- len(active)
+	}()
+	select {
+	case n := <-found:
+		if n != 1 {
+			t.Fatalf("сверка во время медленной отправки нашла %d заказов, ожидали 1", n)
+		}
+	case <-time.After(deadline):
+		t.Fatal("сверка ждёт медленную отправку: пауза держит блокировку")
+	}
+
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatalf("медленная отправка: ожидали отмену контекста, получили %v", err)
+	}
+	if got := len(c.All("o07-9")); got != 1 {
+		t.Fatalf("прерванная отправка создала заказ: всего %d", got)
 	}
 }
 
