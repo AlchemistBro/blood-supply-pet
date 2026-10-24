@@ -180,8 +180,9 @@ func (s *Service) syncChanges(ctx context.Context, requestedBy string, clinicID 
 		note = &msg
 		s.metrics.rejected.Add(ctx, int64(res.Rejected))
 	}
-	if err := s.store.FinishSyncRun(ctx, runID, s.clock.Now(), res.Result, note); err != nil {
-		return res, err
+	run.Note = note
+	if err := bspgx.WithTx(ctx, s.pool, func(ctx context.Context, tx pgx.Tx) error { return s.completeDataSync(ctx, tx, run, res, 0) }); err != nil {
+		return s.fail(ctx, res, pageResult(res), err)
 	}
 	if res.Applied > 0 || res.Rejected > 0 {
 		s.log.InfoContext(ctx, "опрос АИСТ-М", "sync_run_id", runID, "from", res.From, "to", res.To,

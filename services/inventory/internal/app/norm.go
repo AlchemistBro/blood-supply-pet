@@ -59,6 +59,14 @@ func (s *Service) SetAnnualConsumption(ctx context.Context, actor Actor, clinicI
 			return err
 		}
 		n.Version = version
+		current, err := s.store.CurrentNorm(ctx, tx, clinicID, kind)
+		if err != nil {
+			return err
+		}
+		if current != nil && current.Year == year && current.Annual == annual {
+			n = *current
+			return nil
+		}
 		if err := s.store.SaveNorm(ctx, tx, n, annualID, actor.UserID); err != nil {
 			return err
 		}

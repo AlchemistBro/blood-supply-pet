@@ -9,6 +9,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/inventory"
+
 	"github.com/AlchemistBro/blood-supply-pet/services/inventory/internal/domain"
 )
 
@@ -96,6 +98,7 @@ func FailureKind(err error) string {
 
 // SyncRun — сеанс обмена с АИСТ-М.
 type SyncRun struct {
+	Note          *string
 	ClinicID      *int64
 	ID            uuid.UUID
 	Kind          string
@@ -106,6 +109,10 @@ type SyncRun struct {
 
 // Store — порт хранилища копии запаса. Методы с tx работают в транзакции бизнес-операции.
 type Store interface {
+	CurrentNorm(ctx context.Context, tx pgx.Tx, clinicID int64, kind string) (*NormRecord, error)
+	CorrectUnitFromSnapshot(ctx context.Context, tx pgx.Tx, u domain.Unit) error
+	SnapshotMissingUnits(ctx context.Context, tx pgx.Tx, codes []string) ([]uuid.UUID, error)
+	CompleteDataSync(ctx context.Context, tx pgx.Tx, runID uuid.UUID, at time.Time, result string, discrepancies int, note *string) ([]inventory.StockSnapshotPublished, error)
 	NextNormVersion(ctx context.Context, tx pgx.Tx) (int64, error)
 	SaveNorm(ctx context.Context, tx pgx.Tx, n NormRecord, annualID uuid.UUID, actor string) error
 	Norms(ctx context.Context, clinicID int64) ([]NormRecord, error)

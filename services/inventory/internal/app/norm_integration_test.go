@@ -16,6 +16,10 @@ func TestNormAndBelowThresholdAreTransactionalAndNotRepeated(t *testing.T) {
 	if err != nil || n.NormML != 1000 {
 		t.Fatalf("норматив: %+v %v", n, err)
 	}
+	again, err := e.svc.SetAnnualConsumption(ctx, app.Actor{UserID: "operator-c001", Role: "CLINIC_OPERATOR"}, 1, "RBC", 2026, 360000)
+	if err != nil || again.ID != n.ID {
+		t.Fatalf("повтор PUT создал новый норматив: %+v %v", again, err)
+	}
 	e.sync(t)
 	e.sync(t)
 	counts := map[string]int{}

@@ -180,7 +180,7 @@ func TestParallelSyncOnceIsSerialized(t *testing.T) {
 	if skipped != 1 {
 		t.Fatalf("пропущено опросов %d, ожидали 1: %+v", skipped, results)
 	}
-	if n := len(outbox(t, e.pool)); n != 3 {
+	if n := len(unitEvents(t, e.pool)); n != 3 {
 		t.Fatalf("событий %d, ожидали 3", n)
 	}
 }

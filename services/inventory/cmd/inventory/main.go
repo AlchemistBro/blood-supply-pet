@@ -37,7 +37,7 @@ func main() {
 				},
 			})
 			api.Mount(rt.Mux, svc, rt.Deny(), api.Options{DevEnabled: rt.Cfg.Environment == "local"})
-			return []runtime.Worker{svc.RunSync}, nil
+			return []runtime.Worker{svc.RunSync, svc.RunSnapshots}, nil
 		},
 	})
 }

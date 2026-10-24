@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -12,6 +13,15 @@ import (
 )
 
 const normLock int64 = 0x6e6f726d
+
+func (s *Store) CurrentNorm(ctx context.Context, tx pgx.Tx, clinicID int64, kind string) (*app.NormRecord, error) {
+	var n app.NormRecord
+	err := tx.QueryRow(ctx, `SELECT n.stock_norm_id,n.clinic_id,n.component_kind_code,a.consumption_year,a.annual_volume_ml,n.avg_monthly_ml::float8,n.norm_ml::float8,n.is_min_unit_applied,n.version,n.calculated_at FROM stock_norm n JOIN annual_consumption a USING(annual_consumption_id) WHERE n.clinic_id=$1 AND n.component_kind_code=$2 AND n.is_current`, clinicID, kind).Scan(&n.ID, &n.ClinicID, &n.Kind, &n.Year, &n.Annual, &n.MonthlyML, &n.NormML, &n.Minimum, &n.Version, &n.At)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	return &n, err
+}
 
 func (s *Store) NextNormVersion(ctx context.Context, tx pgx.Tx) (int64, error) {
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, normLock); err != nil {
