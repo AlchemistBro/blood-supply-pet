@@ -1,9 +1,12 @@
 package auth
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -87,9 +90,9 @@ func NewVerifier(ctx context.Context, cfg Config) (Verifier, error) {
 }
 
 type claims struct {
-	PreferredUsername string `json:"preferred_username"`
-	Email             string `json:"email"`
-	ClinicID          any    `json:"clinic_id"`
+	PreferredUsername string          `json:"preferred_username"`
+	Email             string          `json:"email"`
+	ClinicID          json.RawMessage `json:"clinic_id"`
 	RealmAccess       struct {
 		Roles []string `json:"roles"`
 	} `json:"realm_access"`
@@ -129,8 +132,23 @@ func knownRole(s string) (Role, bool) {
 // parseClinicID принимает число или строку: Keycloak отдаёт атрибуты пользователя строками.
 func parseClinicID(v any) (int64, bool) {
 	switch x := v.(type) {
+	case json.RawMessage:
+		// Числовой claim нельзя округлять через float64: это может сменить клинику.
+		dec := json.NewDecoder(bytes.NewReader(x))
+		dec.UseNumber()
+		var value any
+		if err := dec.Decode(&value); err != nil {
+			return 0, false
+		}
+		return parseClinicID(value)
+	case json.Number:
+		n, err := strconv.ParseInt(string(x), 10, 64)
+		return n, err == nil && n > 0
 	case float64:
-		return int64(x), x > 0
+		if x <= 0 || x >= math.Exp2(63) || math.IsNaN(x) || math.Trunc(x) != x {
+			return 0, false
+		}
+		return int64(x), true
 	case string:
 		n, err := strconv.ParseInt(strings.TrimSpace(x), 10, 64)
 		return n, err == nil && n > 0

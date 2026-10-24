@@ -160,3 +160,16 @@ func TestVerifierRejectsForeignIssuer(t *testing.T) {
 		t.Fatal("токен чужого издателя принят")
 	}
 }
+
+// Числовой clinic_id из подписанного JWT сохраняется без округления через float64.
+func TestSignedClinicIDKeepsIntegerPrecision(t *testing.T) {
+	idp := authtest.New(t)
+	verifier := idp.Verifier(t, "blood-supply-api")
+	for _, id := range []int64{1, 9007199254740993, 9223372036854775807} {
+		token := idp.Token(t, authtest.TokenOptions{Username: "operator", Roles: []auth.Role{auth.RoleOperator}, ClinicID: authtest.Clinic(id), Audience: "blood-supply-api"})
+		p, err := verifier.Verify(t.Context(), token)
+		if err != nil || p.ClinicID == nil || *p.ClinicID != id {
+			t.Fatalf("clinic_id=%d: principal=%+v, err=%v", id, p, err)
+		}
+	}
+}
