@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -133,10 +134,23 @@ func (c *Client) batch(ctx context.Context, ids []uuid.UUID) (unitStatusReport, 
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return unitStatusReport{}, err
+		// url.Error включает полный URL с unit_id: наружу отдаётся только вид отказа.
+		switch {
+		case errors.Is(err, context.DeadlineExceeded):
+			return unitStatusReport{}, fmt.Errorf("статус единиц: %w", context.DeadlineExceeded)
+		case errors.Is(err, context.Canceled):
+			return unitStatusReport{}, fmt.Errorf("статус единиц: %w", context.Canceled)
+		case errors.Is(err, httpx.ErrCircuitOpen):
+			return unitStatusReport{}, fmt.Errorf("статус единиц: %w", httpx.ErrCircuitOpen)
+		default:
+			return unitStatusReport{}, errors.New("сетевая ошибка получения статуса единиц")
+		}
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+			slog.WarnContext(ctx, "Отказ служебному токену transfer при обращении к inventory", "status", resp.StatusCode)
+		}
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
 		return unitStatusReport{}, fmt.Errorf("inventory ответил %d", resp.StatusCode)
 	}

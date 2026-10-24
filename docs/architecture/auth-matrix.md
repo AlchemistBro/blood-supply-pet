@@ -25,3 +25,14 @@
 | `GET /sync/runs` | VIEW_STOCK | 2xx | 2xx | 2xx | 2xx | 403 | 403 |
 | `GET /units/{id}` | VIEW_STOCK | 2xx | 2xx | 2xx | 2xx | 403 | 403 |
 | `GET /units/{id}/history` | VIEW_STOCK | 2xx | 2xx | 2xx | 2xx | 403 | 403 |
+
+## transfer
+
+| Метод и путь | Операция | CLINIC_OPERATOR | DUTY_OFFICER | IT_SERVICE | PHYSICIAN | SERVICE | TERRITORIAL_ANALYST |
+| --- | --- | :---: | :---: | :---: | :---: | :---: | :---: |
+| `GET /obligations` | VIEW_OBLIGATION | 2xx | 2xx | 403 | 2xx | 2xx | 403 |
+| `POST /obligations` | OPEN_OBLIGATION | 403 | 403 | 403 | 403 | 2xx | 403 |
+| `GET /obligations/{id}` | VIEW_OBLIGATION | 2xx | 2xx | 403 | 2xx | 2xx | 403 |
+| `POST /obligations/{id}/cancel` | CANCEL_OBLIGATION | 403 | 2xx | 403 | 403 | 2xx | 403 |
+| `POST /obligations/{id}/confirm` | CONFIRM_TRANSFER | 2xx | 2xx | 403 | 403 | 403 | 403 |
+| `POST /obligations/{id}/replace` | REPLACE_UNIT | 2xx | 2xx | 403 | 403 | 403 | 403 |
