@@ -29,7 +29,10 @@
 
 | Метод и путь | Операция | CLINIC_OPERATOR | DUTY_OFFICER | IT_SERVICE | PHYSICIAN | SERVICE | TERRITORIAL_ANALYST |
 | --- | --- | :---: | :---: | :---: | :---: | :---: | :---: |
+| `PUT /clinics/{id}/annual-consumption` | ENTER_ANNUAL_CONSUMPTION | 2xx | 403 | 403 | 403 | 403 | 403 |
+| `GET /clinics/{id}/norms` | VIEW_STOCK | 2xx | 2xx | 2xx | 2xx | 403 | 403 |
 | `GET /clinics/{id}/stock` | VIEW_STOCK | 2xx | 2xx | 2xx | 2xx | 403 | 403 |
+| `POST /clinics/{id}/sync` | SYNC_ON_DEMAND | 2xx | 403 | 403 | 403 | 403 | 403 |
 | `GET /clinics/{id}/units` | VIEW_STOCK | 2xx | 2xx | 2xx | 2xx | 403 | 403 |
 | `POST /dev/protected-volume` | DEV_PANEL | 2xx | 2xx | 2xx | 2xx | 403 | 2xx |
 | `GET /internal/units/status` | INTERNAL_UNIT_STATUS | 403 | 403 | 403 | 403 | 2xx | 403 |

@@ -99,7 +99,7 @@ func (s *Store) UnitsByIDs(ctx context.Context, ids []uuid.UUID) ([]domain.Unit,
 func (s *Store) StartSyncRun(ctx context.Context, run app.SyncRun) error {
 	_, err := s.q.StartSyncRun(ctx, gen.StartSyncRunParams{
 		SyncRunID: run.ID, SyncKind: run.Kind, RequestedBy: run.RequestedBy, StartedAt: run.StartedAt,
-		SourceVersion: run.SourceVersion,
+		SourceVersion: run.SourceVersion, ClinicID: run.ClinicID,
 	})
 	if err != nil {
 		return fmt.Errorf("начало сеанса обмена: %w", err)

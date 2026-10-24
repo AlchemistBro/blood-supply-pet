@@ -24,14 +24,17 @@ const (
 // operations — операция матрицы прав для каждого маршрута; совпадает с x-bs-operation в openapi.yaml
 // (проверяет TestEveryOperationHasPolicy).
 var operations = map[string]auth.Operation{
-	routeUnitStatus:           auth.OpInternalUnitStatus,
-	routeProtectedVolume:      auth.OpDevPanel,
-	"GET /clinics/{id}/stock": auth.OpViewStock,
-	"GET /clinics/{id}/units": auth.OpViewStock,
-	"GET /units/{id}":         auth.OpViewStock,
-	"GET /units/{id}/history": auth.OpViewStock,
-	"GET /sync/last":          auth.OpViewStock,
-	"GET /sync/runs":          auth.OpViewStock,
+	"PUT /clinics/{id}/annual-consumption": auth.OpEnterConsumption,
+	"GET /clinics/{id}/norms":              auth.OpViewStock,
+	"POST /clinics/{id}/sync":              auth.OpSyncOnDemand,
+	routeUnitStatus:                        auth.OpInternalUnitStatus,
+	routeProtectedVolume:                   auth.OpDevPanel,
+	"GET /clinics/{id}/stock":              auth.OpViewStock,
+	"GET /clinics/{id}/units":              auth.OpViewStock,
+	"GET /units/{id}":                      auth.OpViewStock,
+	"GET /units/{id}/history":              auth.OpViewStock,
+	"GET /sync/last":                       auth.OpViewStock,
+	"GET /sync/runs":                       auth.OpViewStock,
 }
 
 // Options — что включено.

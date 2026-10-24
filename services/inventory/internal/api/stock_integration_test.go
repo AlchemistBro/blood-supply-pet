@@ -182,3 +182,31 @@ func TestStockResponsesMatchContract(t *testing.T) {
 		t.Fatalf("журнал: %+v", runs)
 	}
 }
+
+func TestAnnualConsumptionAndSyncAreLimitedToOwnClinic(t *testing.T) {
+	e := setup(t, false)
+	token := e.tokenAt(t, auth.RoleOperator, authtest.Clinic(1))
+	for _, c := range []struct {
+		method, path string
+		body         any
+	}{
+		{http.MethodPut, "/clinics/2/annual-consumption", map[string]any{"component_kind": "RBC", "consumption_year": 2026, "annual_volume_ml": 360000}},
+		{http.MethodPost, "/clinics/2/sync", nil},
+	} {
+		resp := e.do(t, c.method, c.path, token, c.body)
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
+			t.Errorf("%s: %d", c.path, resp.StatusCode)
+		}
+	}
+	resp := e.do(t, http.MethodPut, "/clinics/1/annual-consumption", token, map[string]any{"component_kind": "RBC", "consumption_year": 2026, "annual_volume_ml": 360000})
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("расход своей клиники: %d", resp.StatusCode)
+	}
+	var norm gen.StockNorm
+	decodeStrict(t, resp, &norm)
+	if norm.NormMl != 1000 {
+		t.Fatalf("норматив: %+v", norm)
+	}
+}

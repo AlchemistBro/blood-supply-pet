@@ -11,6 +11,59 @@ servers:
 # x-bs-operation у каждой операции — операция матрицы прав (libs/httpx/auth/policy.go), которую проверяет сервер.
 # Служебные маршруты (/healthz, /readyz, /metrics, /openapi.yaml) здесь не описаны: их отдаёт libs/runtime без токена.
 paths:
+  /clinics/{id}/annual-consumption:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+    put:
+      operationId: setAnnualConsumption
+      x-bs-operation: ENTER_ANNUAL_CONSUMPTION
+      summary: Годовой расход и новый норматив (демо-формулы FR012)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [component_kind, consumption_year, annual_volume_ml]
+              properties:
+                component_kind: { type: string }
+                consumption_year: { type: integer, minimum: 2000, maximum: 2100 }
+                annual_volume_ml: { type: integer, format: int64, minimum: 0, maximum: 1000000000000 }
+      responses:
+        "200": { description: Норматив сохранён, content: { application/json: { schema: { $ref: "#/components/schemas/StockNorm" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /clinics/{id}/norms:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+    get:
+      operationId: getClinicNorms
+      x-bs-operation: VIEW_STOCK
+      summary: Действующие нормативы по видам компонентов
+      responses:
+        "200": { description: Нормативы, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/StockNorm" } } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /clinics/{id}/sync:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+    post:
+      operationId: syncClinic
+      x-bs-operation: SYNC_ON_DEMAND
+      summary: Обновить копию из АИСТ-М вне расписания (FR050)
+      responses:
+        "200":
+          description: Итог сеанса; skipped означает, что опрос уже идёт
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sync_run_id, result, applied, skipped]
+                properties:
+                  sync_run_id: { type: string, format: uuid }
+                  result: { type: string }
+                  applied: { type: integer }
+                  skipped: { type: boolean }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /clinics/{id}/stock:
     get:
       operationId: getClinicStock
@@ -382,6 +435,20 @@ components:
         volume_units: { type: integer, format: int64 }
         version: { type: integer, format: int64 }
         reason: { type: string }
+    StockNorm:
+      type: object
+      required: [stock_norm_id, clinic_id, component_kind, consumption_year, annual_volume_ml, avg_monthly_ml, norm_ml, is_min_unit_applied, version, calculated_at]
+      properties:
+        stock_norm_id: { type: string, format: uuid }
+        clinic_id: { type: integer, format: int64 }
+        component_kind: { type: string }
+        consumption_year: { type: integer }
+        annual_volume_ml: { type: integer, format: int64 }
+        avg_monthly_ml: { type: number, format: double }
+        norm_ml: { type: number, format: double }
+        is_min_unit_applied: { type: boolean }
+        version: { type: integer, format: int64 }
+        calculated_at: { type: string, format: date-time }
     Problem:
       type: object
       required: [title, status]

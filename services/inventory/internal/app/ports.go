@@ -96,6 +96,7 @@ func FailureKind(err error) string {
 
 // SyncRun — сеанс обмена с АИСТ-М.
 type SyncRun struct {
+	ClinicID      *int64
 	ID            uuid.UUID
 	Kind          string
 	RequestedBy   string
@@ -105,6 +106,10 @@ type SyncRun struct {
 
 // Store — порт хранилища копии запаса. Методы с tx работают в транзакции бизнес-операции.
 type Store interface {
+	NextNormVersion(ctx context.Context, tx pgx.Tx) (int64, error)
+	SaveNorm(ctx context.Context, tx pgx.Tx, n NormRecord, annualID uuid.UUID, actor string) error
+	Norms(ctx context.Context, clinicID int64) ([]NormRecord, error)
+	CheckNormThresholds(ctx context.Context, tx pgx.Tx, at time.Time) ([]NormThreshold, error)
 	// LockUnitByCode блокирует строку единицы по коду АИСТ-М; nil — единицы ещё нет.
 	LockUnitByCode(ctx context.Context, tx pgx.Tx, code string) (*domain.Unit, error)
 	// InsertUnit добавляет единицу; false — код уже занят параллельной вставкой.
