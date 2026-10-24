@@ -51,6 +51,7 @@ const (
 	OpInternalUnitStatus Operation = "INTERNAL_UNIT_STATUS"
 	OpReceiveForecast    Operation = "RECEIVE_FORECAST"
 	OpDevPanel           Operation = "DEV_PANEL"
+	OpSeedDemo           Operation = "SEED_DEMO"
 	OpViewIntegrations   Operation = "VIEW_INTEGRATIONS"
 	OpTraceUnits         Operation = "TRACE_UNITS"
 )
@@ -90,6 +91,7 @@ var policy = map[Operation][]Role{
 	OpInternalUnitStatus: {RoleService},
 	OpReceiveForecast:    {RoleService},
 	OpDevPanel:           {RolePhysician, RoleOperator, RoleAnalyst, RoleDuty, RoleITService},
+	OpSeedDemo:           {RoleITService},
 	OpViewIntegrations:   {RoleITService, RoleDuty},
 	OpTraceUnits:         {RoleOperator, RoleDuty},
 }
