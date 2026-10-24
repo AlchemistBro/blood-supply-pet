@@ -241,6 +241,20 @@ type StockLine struct {
 	VolumeMl int64   `json:"volume_ml"`
 }
 
+// StockNorm defines model for StockNorm.
+type StockNorm struct {
+	AnnualVolumeMl   int64              `json:"annual_volume_ml"`
+	AvgMonthlyMl     float64            `json:"avg_monthly_ml"`
+	CalculatedAt     time.Time          `json:"calculated_at"`
+	ClinicId         int64              `json:"clinic_id"`
+	ComponentKind    string             `json:"component_kind"`
+	ConsumptionYear  int                `json:"consumption_year"`
+	IsMinUnitApplied bool               `json:"is_min_unit_applied"`
+	NormMl           float64            `json:"norm_ml"`
+	StockNormId      openapi_types.UUID `json:"stock_norm_id"`
+	Version          int64              `json:"version"`
+}
+
 // SyncOverview defines model for SyncOverview.
 type SyncOverview struct {
 	AsOf        time.Time  `json:"as_of"`
@@ -398,6 +412,13 @@ type NotFound = Problem
 // Unauthorized defines model for Unauthorized.
 type Unauthorized = Problem
 
+// SetAnnualConsumptionJSONBody defines parameters for SetAnnualConsumption.
+type SetAnnualConsumptionJSONBody struct {
+	AnnualVolumeMl  int64  `json:"annual_volume_ml"`
+	ComponentKind   string `json:"component_kind"`
+	ConsumptionYear int    `json:"consumption_year"`
+}
+
 // ListClinicUnitsParams defines parameters for ListClinicUnits.
 type ListClinicUnitsParams struct {
 	Fefo *bool `form:"fefo,omitempty" json:"fefo,omitempty"`
@@ -429,14 +450,26 @@ type ListSyncRunsParams struct {
 // ListSyncRunsParamsKind defines parameters for ListSyncRuns.
 type ListSyncRunsParamsKind string
 
+// SetAnnualConsumptionJSONRequestBody defines body for SetAnnualConsumption for application/json ContentType.
+type SetAnnualConsumptionJSONRequestBody SetAnnualConsumptionJSONBody
+
 // PublishProtectedVolumeJSONRequestBody defines body for PublishProtectedVolume for application/json ContentType.
 type PublishProtectedVolumeJSONRequestBody = ProtectedVolumeInput
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// SetAnnualConsumption Годовой расход и новый норматив (демо-формулы FR012)
+	// (PUT /clinics/{id}/annual-consumption)
+	SetAnnualConsumption(w http.ResponseWriter, r *http.Request, id int64)
+	// GetClinicNorms Действующие нормативы по видам компонентов
+	// (GET /clinics/{id}/norms)
+	GetClinicNorms(w http.ResponseWriter, r *http.Request, id int64)
 	// GetClinicStock Фактический запас клиники по виду и группе (FR010, FR011) с водяным знаком (NFR015)
 	// (GET /clinics/{id}/stock)
 	GetClinicStock(w http.ResponseWriter, r *http.Request, id ClinicID)
+	// SyncClinic Обновить копию из АИСТ-М вне расписания (FR050)
+	// (POST /clinics/{id}/sync)
+	SyncClinic(w http.ResponseWriter, r *http.Request, id int64)
 	// ListClinicUnits Единицы фактического запаса клиники, по умолчанию FEFO (FR015)
 	// (GET /clinics/{id}/units)
 	ListClinicUnits(w http.ResponseWriter, r *http.Request, id ClinicID, params ListClinicUnitsParams)
@@ -469,6 +502,58 @@ type ServerInterfaceWrapper struct {
 
 type MiddlewareFunc func(http.Handler) http.Handler
 
+// SetAnnualConsumption operation middleware
+func (siw *ServerInterfaceWrapper) SetAnnualConsumption(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetAnnualConsumption(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetClinicNorms operation middleware
+func (siw *ServerInterfaceWrapper) GetClinicNorms(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetClinicNorms(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetClinicStock operation middleware
 func (siw *ServerInterfaceWrapper) GetClinicStock(w http.ResponseWriter, r *http.Request) {
 
@@ -486,6 +571,32 @@ func (siw *ServerInterfaceWrapper) GetClinicStock(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetClinicStock(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SyncClinic operation middleware
+func (siw *ServerInterfaceWrapper) SyncClinic(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SyncClinic(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -881,6 +992,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/clinics/{id}/annual-consumption", wrapper.SetAnnualConsumption)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/clinics/{id}/norms", wrapper.GetClinicNorms)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/clinics/{id}/sync", wrapper.SyncClinic)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/clinics/{id}/stock", wrapper.GetClinicStock)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/clinics/{id}/units", wrapper.ListClinicUnits)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/units/{id}", wrapper.GetUnit)
@@ -900,6 +1014,99 @@ type ForbiddenApplicationProblemPlusJSONResponse Problem
 type NotFoundApplicationProblemPlusJSONResponse Problem
 
 type UnauthorizedApplicationProblemPlusJSONResponse Problem
+
+type SetAnnualConsumptionRequestObject struct {
+	Id   int64 `json:"id"`
+	Body *SetAnnualConsumptionJSONRequestBody
+}
+
+type SetAnnualConsumptionResponseObject interface {
+	VisitSetAnnualConsumptionResponse(w http.ResponseWriter) error
+}
+
+type SetAnnualConsumption200JSONResponse StockNorm
+
+func (response SetAnnualConsumption200JSONResponse) VisitSetAnnualConsumptionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAnnualConsumption400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response SetAnnualConsumption400ApplicationProblemPlusJSONResponse) VisitSetAnnualConsumptionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAnnualConsumption403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response SetAnnualConsumption403ApplicationProblemPlusJSONResponse) VisitSetAnnualConsumptionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetClinicNormsRequestObject struct {
+	Id int64 `json:"id"`
+}
+
+type GetClinicNormsResponseObject interface {
+	VisitGetClinicNormsResponse(w http.ResponseWriter) error
+}
+
+type GetClinicNorms200JSONResponse []StockNorm
+
+func (response GetClinicNorms200JSONResponse) VisitGetClinicNormsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetClinicNorms403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetClinicNorms403ApplicationProblemPlusJSONResponse) VisitGetClinicNormsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type GetClinicStockRequestObject struct {
 	Id ClinicID `json:"id"`
@@ -967,6 +1174,49 @@ func (response GetClinicStock404ApplicationProblemPlusJSONResponse) VisitGetClin
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SyncClinicRequestObject struct {
+	Id int64 `json:"id"`
+}
+
+type SyncClinicResponseObject interface {
+	VisitSyncClinicResponse(w http.ResponseWriter) error
+}
+
+type SyncClinic200JSONResponse struct {
+	Applied   int                `json:"applied"`
+	Result    string             `json:"result"`
+	Skipped   bool               `json:"skipped"`
+	SyncRunId openapi_types.UUID `json:"sync_run_id"`
+}
+
+func (response SyncClinic200JSONResponse) VisitSyncClinicResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SyncClinic403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response SyncClinic403ApplicationProblemPlusJSONResponse) VisitSyncClinicResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1479,9 +1729,18 @@ func (response GetUnitHistory404ApplicationProblemPlusJSONResponse) VisitGetUnit
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// SetAnnualConsumption Годовой расход и новый норматив (демо-формулы FR012)
+	// (PUT /clinics/{id}/annual-consumption)
+	SetAnnualConsumption(ctx context.Context, request SetAnnualConsumptionRequestObject) (SetAnnualConsumptionResponseObject, error)
+	// GetClinicNorms Действующие нормативы по видам компонентов
+	// (GET /clinics/{id}/norms)
+	GetClinicNorms(ctx context.Context, request GetClinicNormsRequestObject) (GetClinicNormsResponseObject, error)
 	// GetClinicStock Фактический запас клиники по виду и группе (FR010, FR011) с водяным знаком (NFR015)
 	// (GET /clinics/{id}/stock)
 	GetClinicStock(ctx context.Context, request GetClinicStockRequestObject) (GetClinicStockResponseObject, error)
+	// SyncClinic Обновить копию из АИСТ-М вне расписания (FR050)
+	// (POST /clinics/{id}/sync)
+	SyncClinic(ctx context.Context, request SyncClinicRequestObject) (SyncClinicResponseObject, error)
 	// ListClinicUnits Единицы фактического запаса клиники, по умолчанию FEFO (FR015)
 	// (GET /clinics/{id}/units)
 	ListClinicUnits(ctx context.Context, request ListClinicUnitsRequestObject) (ListClinicUnitsResponseObject, error)
@@ -1544,6 +1803,65 @@ type strictHandler struct {
 	options     StrictHTTPServerOptions
 }
 
+// SetAnnualConsumption operation middleware
+func (sh *strictHandler) SetAnnualConsumption(w http.ResponseWriter, r *http.Request, id int64) {
+	var request SetAnnualConsumptionRequestObject
+
+	request.Id = id
+
+	var body SetAnnualConsumptionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetAnnualConsumption(ctx, request.(SetAnnualConsumptionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetAnnualConsumption")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetAnnualConsumptionResponseObject); ok {
+		if err := validResponse.VisitSetAnnualConsumptionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetClinicNorms operation middleware
+func (sh *strictHandler) GetClinicNorms(w http.ResponseWriter, r *http.Request, id int64) {
+	var request GetClinicNormsRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetClinicNorms(ctx, request.(GetClinicNormsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetClinicNorms")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetClinicNormsResponseObject); ok {
+		if err := validResponse.VisitGetClinicNormsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetClinicStock operation middleware
 func (sh *strictHandler) GetClinicStock(w http.ResponseWriter, r *http.Request, id ClinicID) {
 	var request GetClinicStockRequestObject
@@ -1563,6 +1881,32 @@ func (sh *strictHandler) GetClinicStock(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetClinicStockResponseObject); ok {
 		if err := validResponse.VisitGetClinicStockResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SyncClinic operation middleware
+func (sh *strictHandler) SyncClinic(w http.ResponseWriter, r *http.Request, id int64) {
+	var request SyncClinicRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SyncClinic(ctx, request.(SyncClinicRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SyncClinic")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SyncClinicResponseObject); ok {
+		if err := validResponse.VisitSyncClinicResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

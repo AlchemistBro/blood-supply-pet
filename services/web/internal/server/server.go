@@ -131,6 +131,9 @@ func (s *Server) Register(mux *http.ServeMux) {
 	if s.transfer != nil && s.inventory != nil {
 		s.registerOperator(mux)
 	}
+	if s.inventory != nil {
+		s.registerStock(mux)
+	}
 }
 
 // Middleware — цепочка web вместо bearer JWT (runtime.Runtime.Use): заголовки безопасности,

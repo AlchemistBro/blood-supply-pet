@@ -4,6 +4,7 @@
 package fakeaist
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -53,10 +54,29 @@ func New(t testing.TB, now time.Time) *Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /units/changes", s.changes)
 	mux.HandleFunc("GET /units/status", s.status)
+	mux.HandleFunc("GET /snapshot.csv", s.snapshot)
 	s.srv = httptest.NewServer(mux)
 	s.URL = s.srv.URL
 	t.Cleanup(s.srv.Close)
 	return s
+}
+
+func (s *Server) snapshot(w http.ResponseWriter, r *http.Request) {
+	if !s.wait(r) {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.unavailable(w) {
+		return
+	}
+	w.Header().Set("Content-Type", "text/csv")
+	cw := csv.NewWriter(w)
+	_ = cw.Write([]string{"aist_unit_code", "clinic_code", "component_kind", "blood_group", "phenotype", "volume_ml", "expires_at", "storage_location", "status", "withdrawal_reason", "version", "changed_at"})
+	for _, u := range s.units {
+		_ = cw.Write([]string{u.AistUnitCode, u.ClinicCode, u.ComponentKind, u.BloodGroup, u.Phenotype, strconv.FormatInt(u.VolumeML, 10), u.ExpiresAt.Format(time.RFC3339), u.StorageLocation, u.Status, u.WithdrawalReason, strconv.FormatInt(u.Version, 10), u.ChangedAt.Format(time.RFC3339Nano)})
+	}
+	cw.Flush()
 }
 
 // Add создаёт единицу со следующей версией. Пустые поля получают значения по умолчанию.

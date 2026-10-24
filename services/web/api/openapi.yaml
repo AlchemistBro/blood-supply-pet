@@ -10,6 +10,43 @@ info:
 servers:
   - url: http://localhost:8080
 paths:
+  /stock:
+    get:
+      operationId: stockPage
+      x-bs-operation: VIEW_STOCK
+      summary: Запас клиники, норматив и предупреждение ниже порога
+      responses:
+        "200": { description: Экран запаса }
+  /stock/units:
+    get:
+      operationId: stockUnits
+      x-bs-operation: VIEW_STOCK
+      summary: Единицы FEFO с фильтрами по виду и группе
+      responses:
+        "200": { description: Экран единиц }
+  /stock/units/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: stockUnit
+      x-bs-operation: VIEW_STOCK
+      summary: Карточка единицы и история статусов без исходного кода АИСТ-М и фенотипа
+      responses:
+        "200": { description: Карточка единицы }
+  /stock/sync:
+    post:
+      operationId: syncStock
+      x-bs-operation: SYNC_ON_DEMAND
+      summary: Обновление из АИСТ-М формой с csrf_token и clinic
+      responses:
+        "200": { description: Результат обновления }
+  /stock/annual-consumption:
+    post:
+      operationId: setConsumption
+      x-bs-operation: ENTER_ANNUAL_CONSUMPTION
+      summary: Ввод годового расхода и расчёт демонстрационного норматива
+      responses:
+        "200": { description: Норматив сохранён }
   /tasks:
     get:
       operationId: taskList

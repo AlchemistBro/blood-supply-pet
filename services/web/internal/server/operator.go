@@ -44,6 +44,8 @@ func (t taskView) Replaceable() bool {
 }
 
 type candidateView struct {
+	ClinicID  int64     `json:"clinic_id"`
+	Status    string    `json:"status"`
 	ID        uuid.UUID `json:"unit_id"`
 	Kind      string    `json:"component_kind"`
 	Group     string    `json:"blood_group"`
@@ -98,6 +100,7 @@ func (s *Server) screenPage(r *http.Request, title string) ui.Page {
 		page.Nav = append(page.Nav, ui.NavItem{Label: "Задания на передачу", URL: "/tasks", Active: strings.HasPrefix(r.URL.Path, "/tasks")})
 	}
 	if s.inventory != nil && auth.Allowed(auth.OpViewStock, p.Roles) {
+		page.Nav = append(page.Nav, ui.NavItem{Label: "Запас клиники", URL: "/stock", Active: strings.HasPrefix(r.URL.Path, "/stock")})
 		var sync struct {
 			Watermark *time.Time `json:"watermark"`
 		}
@@ -108,7 +111,7 @@ func (s *Server) screenPage(r *http.Request, title string) ui.Page {
 	return page
 }
 
-func (s *Server) renderScreen(w http.ResponseWriter, r *http.Request, status int, name, title string, data taskScreen) {
+func (s *Server) renderScreen(w http.ResponseWriter, r *http.Request, status int, name, title string, data any) {
 	p := s.screenPage(r, title)
 	p.Content = data
 	var buf bytes.Buffer

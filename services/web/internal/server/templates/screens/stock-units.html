@@ -1,0 +1,6 @@
+{{define "content"}}
+<p><a href="/stock?clinic={{.Content.Clinic}}">← Запас клиники</a></p>
+<form method="get" action="/stock/units"><input type="hidden" name="clinic" value="{{.Content.Clinic}}"><label>Вид <select name="kind"><option value="">Все</option><option>RBC</option><option>FFP</option><option>PLT</option><option>CRYO</option></select></label><label>Группа <select name="group"><option value="">Все</option><option>O+</option><option>O-</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option></select></label><button class="btn" type="submit">Применить</button></form>
+<table class="data-table"><caption>Доступные единицы, ближайший срок годности первым (по 100 на странице).</caption><thead><tr><th>Единица</th><th>Вид</th><th>Группа</th><th>Объём, мл</th><th>Годна до</th><th>Место хранения</th></tr></thead><tbody>{{range .Content.Units}}<tr><td><a href="/stock/units/{{.ID}}">{{.ID}}</a></td><td>{{.Kind}}</td><td>{{.Group}}</td><td>{{.Volume}}</td><td>{{datetime .Expires}}</td><td>{{.Location}}</td></tr>{{else}}<tr><td colspan="6">Единиц по выбранному фильтру нет.</td></tr>{{end}}</tbody></table>
+<nav aria-label="Страницы единиц">{{with .Content.PrevURL}}<a href="{{.}}">← Предыдущие</a>{{end}} {{with .Content.NextURL}}<a href="{{.}}">Следующие →</a>{{end}}</nav>
+{{end}}

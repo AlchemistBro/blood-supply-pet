@@ -85,6 +85,18 @@ func NextPollDelay(prev, interval, maxDelay time.Duration, failed bool) time.Dur
 // (единицы, история статусов, события в outbox, курсор сеанса). Обрыв посреди сеанса не теряет
 // применённых страниц, а повтор страницы ничего не меняет: старая или та же версия не перезаписывает новую.
 func (s *Service) SyncOnce(ctx context.Context) (SyncResult, error) {
+	return s.syncChanges(ctx, requestedBySystem, nil)
+}
+
+// SyncOnDemand использует общий курсор ИНТ-01: обновление вне расписания не теряет изменения других клиник.
+func (s *Service) SyncOnDemand(ctx context.Context, clinicID int64, actor Actor) (SyncResult, error) {
+	if !s.ClinicExists(clinicID) {
+		return SyncResult{}, fmt.Errorf("%w: неизвестная клиника", ErrInvalid)
+	}
+	return s.syncChanges(ctx, actor.UserID, &clinicID)
+}
+
+func (s *Service) syncChanges(ctx context.Context, requestedBy string, clinicID *int64) (SyncResult, error) {
 	lease, err := bspgx.TryAdvisoryLock(ctx, s.pool, syncLockKey)
 	if err != nil {
 		return SyncResult{}, err
@@ -102,7 +114,11 @@ func (s *Service) SyncOnce(ctx context.Context) (SyncResult, error) {
 	if err != nil {
 		return SyncResult{}, fmt.Errorf("uuid v7: %w", err)
 	}
-	run := SyncRun{ID: runID, Kind: SyncKindChanges, RequestedBy: requestedBySystem, StartedAt: s.clock.Now(), SourceVersion: cursor}
+	kind := SyncKindChanges
+	if clinicID != nil {
+		kind = "ON_DEMAND"
+	}
+	run := SyncRun{ID: runID, Kind: kind, RequestedBy: requestedBy, ClinicID: clinicID, StartedAt: s.clock.Now(), SourceVersion: cursor}
 	if err := s.store.StartSyncRun(ctx, run); err != nil {
 		return SyncResult{}, err
 	}
@@ -164,8 +180,9 @@ func (s *Service) SyncOnce(ctx context.Context) (SyncResult, error) {
 		note = &msg
 		s.metrics.rejected.Add(ctx, int64(res.Rejected))
 	}
-	if err := s.store.FinishSyncRun(ctx, runID, s.clock.Now(), res.Result, note); err != nil {
-		return res, err
+	run.Note = note
+	if err := bspgx.WithTx(ctx, s.pool, func(ctx context.Context, tx pgx.Tx) error { return s.completeDataSync(ctx, tx, run, res, 0) }); err != nil {
+		return s.fail(ctx, res, pageResult(res), err)
 	}
 	if res.Applied > 0 || res.Rejected > 0 {
 		s.log.InfoContext(ctx, "опрос АИСТ-М", "sync_run_id", runID, "from", res.From, "to", res.To,
@@ -216,6 +233,9 @@ func (s *Service) applyPage(ctx context.Context, runID uuid.UUID, p ChangesPage)
 			if ok {
 				applied++
 			}
+		}
+		if err := s.checkNorms(ctx, tx); err != nil {
+			return err
 		}
 		return s.store.AdvanceSyncRun(ctx, tx, runID, p.LastVersion, applied)
 	})

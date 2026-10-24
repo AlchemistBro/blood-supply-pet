@@ -110,6 +110,18 @@ func outbox(t *testing.T, pool *pgxpool.Pool) []outboxRow {
 	return out
 }
 
+// unitEvents отделяет события единиц от снимков запаса и итога сеанса, проверяемых своими сценариями.
+func unitEvents(t *testing.T, pool *pgxpool.Pool) []outboxRow {
+	t.Helper()
+	var out []outboxRow
+	for _, msg := range outbox(t, pool) {
+		if msg.Type == "UnitRegistered" || msg.Type == "UnitUpdated" || msg.Type == "UnitWithdrawn" {
+			out = append(out, msg)
+		}
+	}
+	return out
+}
+
 type unitRow struct {
 	ID      uuid.UUID
 	Status  string
@@ -147,7 +159,7 @@ func TestNewUnitIsRegisteredOnceAndRepeatChangesNothing(t *testing.T) {
 		t.Fatalf("первый опрос: %+v", res)
 	}
 	u := unitByCode(t, e.pool, "U-1")
-	msgs := outbox(t, e.pool)
+	msgs := unitEvents(t, e.pool)
 	if len(msgs) != 1 || msgs[0].Type != "UnitRegistered" || msgs[0].Key != u.ID.String() {
 		t.Fatalf("outbox после регистрации: %+v", msgs)
 	}
@@ -162,7 +174,7 @@ func TestNewUnitIsRegisteredOnceAndRepeatChangesNothing(t *testing.T) {
 	// Курсор не даёт повторить, поэтому повтор делается явно: сеанс с курсором 0 перечитывает всё.
 	forceCursor(t, e, 0)
 	e.sync(t)
-	if got := outbox(t, e.pool); len(got) != 1 {
+	if got := unitEvents(t, e.pool); len(got) != 1 {
 		t.Fatalf("повтор той же версии дал новые события: %+v", got)
 	}
 	again := unitByCode(t, e.pool, "U-1")
@@ -198,7 +210,7 @@ func TestStaleVersionDoesNotOverwriteNewer(t *testing.T) {
 	if before.Status != domain.StatusIssued || before.Version != 3 {
 		t.Fatalf("до перезапуска: %+v", before)
 	}
-	events := len(outbox(t, e.pool))
+	events := len(unitEvents(t, e.pool))
 
 	e.aist.Restart()
 	e.aist.Add(fakeaist.Unit{AistUnitCode: "U-1"}) // снова в наличии, версия 1 < 3
@@ -210,7 +222,7 @@ func TestStaleVersionDoesNotOverwriteNewer(t *testing.T) {
 	if after != before {
 		t.Fatalf("устаревшая версия перезаписала единицу: было %+v, стало %+v", before, after)
 	}
-	if got := len(outbox(t, e.pool)); got != events {
+	if got := len(unitEvents(t, e.pool)); got != events {
 		t.Fatalf("устаревшая версия дала события: было %d, стало %d", events, got)
 	}
 }
@@ -262,7 +274,7 @@ func TestIssueInSimulatorBecomesUnitWithdrawn(t *testing.T) {
 	if u.Status != domain.StatusIssued || u.Version != 2 {
 		t.Fatalf("единица после выдачи: %+v", u)
 	}
-	msgs := outbox(t, e.pool)
+	msgs := unitEvents(t, e.pool)
 	last := msgs[len(msgs)-1]
 	if last.Type != "UnitWithdrawn" || last.Key != u.ID.String() || last.Payload["reason"] != "ISSUED" || last.Payload["version"] != float64(2) {
 		t.Fatalf("событие выдачи: %+v", last)
@@ -280,7 +292,7 @@ func TestWithdrawnUnitUpdatesCopyAndHistoryWithoutPublishing(t *testing.T) {
 	e.aist.Withdraw("U-1", "ISSUED")
 	e.sync(t)
 	before := unitByCode(t, e.pool, "U-1")
-	msgs := outbox(t, e.pool)
+	msgs := unitEvents(t, e.pool)
 	if len(msgs) != 2 || msgs[1].Type != "UnitWithdrawn" {
 		t.Fatalf("события до обновления выбывшей единицы: %+v", msgs)
 	}
@@ -302,7 +314,7 @@ func TestWithdrawnUnitUpdatesCopyAndHistoryWithoutPublishing(t *testing.T) {
 		if n := historyCount(t, e.pool, before.ID); n != wantHistory {
 			t.Fatalf("строк истории %d, ожидали %d", n, wantHistory)
 		}
-		if got := outbox(t, e.pool); len(got) != len(msgs) {
+		if got := unitEvents(t, e.pool); len(got) != len(msgs) {
 			t.Fatalf("обновление выбывшей единицы создало событие: %+v", got)
 		}
 	}
@@ -318,7 +330,7 @@ func TestExpiryBecomesUnitWithdrawnExpired(t *testing.T) {
 	if u := unitByCode(t, e.pool, "U-1"); u.Status != domain.StatusDiscarded {
 		t.Fatalf("статус %s, ожидали DISCARDED", u.Status)
 	}
-	msgs := outbox(t, e.pool)
+	msgs := unitEvents(t, e.pool)
 	if last := msgs[len(msgs)-1]; last.Type != "UnitWithdrawn" || last.Payload["reason"] != "EXPIRED" {
 		t.Fatalf("событие: %+v", last)
 	}
@@ -333,7 +345,7 @@ func TestQuarantineIsUpdatedAndUnavailable(t *testing.T) {
 	e.sync(t)
 
 	u := unitByCode(t, e.pool, "U-1")
-	msgs := outbox(t, e.pool)
+	msgs := unitEvents(t, e.pool)
 	last := msgs[len(msgs)-1]
 	if last.Type != "UnitUpdated" || last.Payload["status"] != "QUARANTINE" || last.Key != u.ID.String() {
 		t.Fatalf("событие карантина: %+v", last)
@@ -514,7 +526,7 @@ func TestProtectedVolumeIsPublishedWithGrowingVersion(t *testing.T) {
 	if second.Version <= first.Version {
 		t.Fatalf("версия не растёт: %d, %d", first.Version, second.Version)
 	}
-	msgs := outbox(t, e.pool)
+	msgs := unitEvents(t, e.pool)
 	if len(msgs) != 2 || msgs[1].Type != "ProtectedVolumePublished" || msgs[1].Key != "1:RBC" ||
 		msgs[1].Payload["volume_units"] != float64(6) || msgs[1].Payload["reason"] != "учения" {
 		t.Fatalf("outbox: %+v", msgs)
