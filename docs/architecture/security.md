@@ -46,10 +46,18 @@
 
 ## NFR010: белый список полей прогноза ЧС
 
-Входной адаптер `planning/internal/adapters/forecastin` декодирует в строгую структуру (`DisallowUnknownFields`), затем
-дополнительно отбрасывает всё, кроме: `scenario_version, territory, period_start, period_end, lines[].clinic_code?, lines[].component_kind,
-lines[].blood_group?, lines[].volume_ml, lines[].share?`. Тест: запрос с полями `snils`, `full_name`, `patients[]` принимается
-без них, в БД и логах их нет.
+Входной адаптер `planning/internal/adapters/forecastin` оставляет из тела ИНТ-02 только поля белого списка и отбрасывает
+всё остальное, затем проверяет результат по схеме `libs/contracts/schemas/int02/EmergencyForecast.v1.json`
+(`additionalProperties: false` на каждом уровне; тип `int02.EmergencyForecast`, реестр `contracts.Inbound`). Белый список
+(все поля без ПДн):
+
+- `scenario_version`, `scenario_kind?`, `scenario_name?`, `demo?`;
+- `territory{name, districts[]?{district_code, weight}}` — название территории и районы справочника с весами;
+- `period_start`, `period_end`;
+- `lines[]{clinic_code?, component_kind, blood_group?, volume_ml, share?}`.
+
+Сведения о пострадавших (`snils`, `full_name`, `patients[]` и любые другие поля вне списка) схема не описывает: тест —
+запрос с такими полями принимается без них, в БД и логах их нет.
 
 ## Платформа
 

@@ -140,7 +140,7 @@ func GenerateForecast(ref *refdata.Set, cfg ForecastConfig) (*Forecast, error) {
 	if len(ref.Districts) == 0 {
 		return nil, errors.New("справочник районов пуст")
 	}
-	rng := rand.New(rand.NewPCG(uint64(cfg.Seed), uint64(cfg.Seed)^0xC02C02C02C02C021))
+	rng := rand.New(rand.NewPCG(uint64(cfg.Seed), uint64(cfg.Seed)^0xC02C02C02C02C021)) //nolint:gosec // детерминированные демо-данные, секретов нет
 
 	districts := slices.Clone(ref.Districts)
 	slices.SortFunc(districts, func(a, b refdata.District) int { return cmp.Compare(a.DistrictID, b.DistrictID) })

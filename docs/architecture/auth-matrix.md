@@ -13,6 +13,18 @@
 | `GET /records` | READ_AUDIT | 403 | 2xx | 2xx | 403 | 403 | 403 |
 | `POST /records` | WRITE_AUDIT | 403 | 403 | 403 | 403 | 2xx | 403 |
 
+## demand
+
+| Метод и путь | Операция | CLINIC_OPERATOR | DUTY_OFFICER | IT_SERVICE | PHYSICIAN | SERVICE | TERRITORIAL_ANALYST |
+| --- | --- | :---: | :---: | :---: | :---: | :---: | :---: |
+| `GET /files` | UPLOAD_STATISTICS | 403 | 403 | 403 | 403 | 403 | 2xx |
+| `POST /files` | UPLOAD_STATISTICS | 403 | 403 | 403 | 403 | 403 | 2xx |
+| `GET /files/{id}` | UPLOAD_STATISTICS | 403 | 403 | 403 | 403 | 403 | 2xx |
+| `GET /files/{id}/errors` | UPLOAD_STATISTICS | 403 | 403 | 403 | 403 | 403 | 2xx |
+| `GET /history` | UPLOAD_STATISTICS | 403 | 403 | 403 | 403 | 403 | 2xx |
+| `GET /shares/current` | UPLOAD_STATISTICS | 403 | 403 | 403 | 403 | 403 | 2xx |
+| `GET /shares/versions` | UPLOAD_STATISTICS | 403 | 403 | 403 | 403 | 403 | 2xx |
+
 ## inventory
 
 | Метод и путь | Операция | CLINIC_OPERATOR | DUTY_OFFICER | IT_SERVICE | PHYSICIAN | SERVICE | TERRITORIAL_ANALYST |
