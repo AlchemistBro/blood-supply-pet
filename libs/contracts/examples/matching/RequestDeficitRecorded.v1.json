@@ -1,0 +1,8 @@
+{
+  "clinical_request_id": "0192f3a1-7b2c-7d4e-8f90-800000000001",
+  "clinic_id": 2,
+  "component_kind": "RBC",
+  "blood_group": "A+",
+  "uncovered_units": 1,
+  "reason": "NO_ALLOWED_VARIANT"
+}

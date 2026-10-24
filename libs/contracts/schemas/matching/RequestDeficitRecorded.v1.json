@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/matching/RequestDeficitRecorded.v1.json",
+  "title": "RequestDeficitRecorded",
+  "type": "object",
+  "description": "Событие matching.events: заявка не покрыта (O11).",
+  "additionalProperties": false,
+  "required": [
+    "clinical_request_id",
+    "clinic_id",
+    "component_kind",
+    "blood_group",
+    "uncovered_units",
+    "reason"
+  ],
+  "properties": {
+    "clinical_request_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "clinic_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "component_kind": {
+      "type": "string",
+      "enum": [
+        "RBC",
+        "FFP",
+        "PLT",
+        "CRYO"
+      ]
+    },
+    "blood_group": {
+      "type": "string",
+      "enum": [
+        "O+",
+        "O-",
+        "A+",
+        "A-",
+        "B+",
+        "B-",
+        "AB+",
+        "AB-"
+      ]
+    },
+    "uncovered_units": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "reason": {
+      "type": "string",
+      "enum": [
+        "NO_ALLOWED_VARIANT",
+        "SOURCE_REJECTED",
+        "NOT_CONFIRMED_IN_TIME",
+        "UNIT_WITHDRAWN"
+      ]
+    }
+  }
+}

@@ -26,14 +26,20 @@ const (
 	TopicLogisticsReplies  = "logistics.replies"
 	TopicLogisticsEvents   = "logistics.events"
 	TopicAuditEvents       = "audit.events"
+	// TopicSecurityEvents — подозрения на инциденты с ПДн от детектора (этап 7, ADR-0025).
+	TopicSecurityEvents = "security.events"
 )
 
 // AllTopics — полный список для создания при старте стенда.
 var AllTopics = []string{
 	TopicInventoryEvents, TopicInventoryCommands, TopicDemandEvents, TopicPlanningEvents,
 	TopicMatchingEvents, TopicTransferCommands, TopicTransferEvents, TopicLogisticsCommands,
-	TopicLogisticsReplies, TopicLogisticsEvents, TopicAuditEvents,
+	TopicLogisticsReplies, TopicLogisticsEvents, TopicAuditEvents, TopicSecurityEvents,
 }
+
+// PatientCaseSealedPattern — шаблон зашифрованного конверта номера случая пациента v1.<kid>.<base64url>
+// (ADR-0020), формат libs/k1seal. Каждое поле patient_case_sealed в схемах объявлено строкой ровно с этим шаблоном (тест контрактов).
+const PatientCaseSealedPattern = `^v1\.[A-Za-z0-9_-]{1,32}\.[A-Za-z0-9_-]+$`
 
 // DLTSuffix — суффикс топика ядовитых сообщений: после исчерпания повторов сообщение уходит в <topic>.dlt.
 const DLTSuffix = ".dlt"

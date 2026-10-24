@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/matching/ClinicalRequestCancelled.v1.json",
+  "title": "ClinicalRequestCancelled",
+  "type": "object",
+  "description": "Событие matching.events: врач отменил заявку.",
+  "additionalProperties": false,
+  "required": [
+    "clinical_request_id",
+    "cancelled_by"
+  ],
+  "properties": {
+    "clinical_request_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "cancelled_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    }
+  }
+}

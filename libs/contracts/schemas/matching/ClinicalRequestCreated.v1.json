@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/matching/ClinicalRequestCreated.v1.json",
+  "title": "ClinicalRequestCreated",
+  "type": "object",
+  "description": "Событие matching.events: врач создал заявку (O09, FR029). Номера случая пациента нет.",
+  "additionalProperties": false,
+  "required": [
+    "clinical_request_id",
+    "clinic_id",
+    "component_kind",
+    "requested_units",
+    "urgency",
+    "blood_group",
+    "created_by"
+  ],
+  "properties": {
+    "clinical_request_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "clinic_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "component_kind": {
+      "type": "string",
+      "enum": [
+        "RBC",
+        "FFP",
+        "PLT",
+        "CRYO"
+      ]
+    },
+    "requested_units": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "urgency": {
+      "type": "string",
+      "enum": [
+        "PLANNED",
+        "URGENT",
+        "EMERGENCY"
+      ]
+    },
+    "blood_group": {
+      "type": "string",
+      "enum": [
+        "O+",
+        "O-",
+        "A+",
+        "A-",
+        "B+",
+        "B-",
+        "AB+",
+        "AB-"
+      ]
+    },
+    "created_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Учётная запись врача из токена, не ФИО"
+    }
+  }
+}

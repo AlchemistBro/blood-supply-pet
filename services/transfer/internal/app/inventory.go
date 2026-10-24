@@ -139,8 +139,9 @@ func (s *Service) breakHolding(ctx context.Context, tx pgx.Tx, unitID uuid.UUID,
 	if err := s.store.AddReserved(ctx, tx, o.SourceClinicID, o.ComponentKind, -released); err != nil {
 		return err
 	}
+	r := refsAt(o, o.Version+1)
 	if err := s.event(ctx, tx, o.ID, TransferBroken{
-		ObligationID: o.ID, RequestID: o.RequestID, UnitID: unitID, Reason: domain.BrokenEventReason(reason, unitReason),
+		ObligationID: o.ID, ObligationVersion: r.version, SourceClinicID: r.source, TargetClinicID: r.target, RequestID: o.RequestID, UnitID: unitID, Reason: domain.BrokenEventReason(reason, unitReason),
 	}); err != nil {
 		return err
 	}

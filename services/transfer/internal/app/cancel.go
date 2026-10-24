@@ -72,7 +72,11 @@ func (s *Service) cancelLocked(ctx context.Context, tx pgx.Tx, o domain.Obligati
 			return CancelResult{}, err
 		}
 	}
-	if err := s.event(ctx, tx, o.ID, TransferCancelled{ObligationID: o.ID, RequestID: o.RequestID, Reason: c.Reason}); err != nil {
+	r := refsAt(locked, locked.Version+1)
+	if err := s.event(ctx, tx, o.ID, TransferCancelled{
+		ObligationID: o.ID, ObligationVersion: r.version, SourceClinicID: r.source, TargetClinicID: r.target,
+		RequestID: o.RequestID, Reason: c.Reason,
+	}); err != nil {
 		return CancelResult{}, err
 	}
 	if locked.Status.HoldsAllocations() {

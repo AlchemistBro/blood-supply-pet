@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/planning/TransferProposed.v1.json",
+  "title": "TransferProposed",
+  "type": "object",
+  "description": "Событие planning.events: предложение передачи из плана (FR026); proposal_id = choice_id в OpenObligation.",
+  "additionalProperties": false,
+  "required": [
+    "proposal_id",
+    "replenishment_plan_id",
+    "source_clinic_id",
+    "target_clinic_id",
+    "component_kind",
+    "blood_group",
+    "units",
+    "delivery_minutes"
+  ],
+  "properties": {
+    "proposal_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "replenishment_plan_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "source_clinic_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "target_clinic_id": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "component_kind": {
+      "type": "string",
+      "enum": [
+        "RBC",
+        "FFP",
+        "PLT",
+        "CRYO"
+      ]
+    },
+    "blood_group": {
+      "type": "string",
+      "enum": [
+        "O+",
+        "O-",
+        "A+",
+        "A-",
+        "B+",
+        "B-",
+        "AB+",
+        "AB-"
+      ]
+    },
+    "units": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "delivery_minutes": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "fallback_sources": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "description": "Следующие источники для эскалации по таймеру, по порядку"
+    }
+  }
+}

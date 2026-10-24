@@ -25,7 +25,9 @@ const (
 	OpSyncOnDemand       Operation = "SYNC_ON_DEMAND"
 	OpUploadStatistics   Operation = "UPLOAD_STATISTICS"
 	OpPublishEstimate    Operation = "PUBLISH_ESTIMATE"
+	OpViewDemand         Operation = "VIEW_DEMAND"
 	OpViewPlan           Operation = "VIEW_PLAN"
+	OpBuildPlan          Operation = "BUILD_PLAN"
 	OpAdjustForecast     Operation = "ADJUST_FORECAST"
 	OpViewTasks          Operation = "VIEW_TASKS"
 	OpOpenObligation     Operation = "OPEN_OBLIGATION"
@@ -35,6 +37,7 @@ const (
 	OpReplaceUnit        Operation = "REPLACE_UNIT"
 	OpRejectTransfer     Operation = "REJECT_TRANSFER"
 	OpCreateRequest      Operation = "CREATE_REQUEST"
+	OpViewRequests       Operation = "VIEW_REQUESTS"
 	OpSelectVariant      Operation = "SELECT_VARIANT"
 	OpCancelRequest      Operation = "CANCEL_REQUEST"
 	OpReadPatientCase    Operation = "READ_PATIENT_CASE"
@@ -46,6 +49,8 @@ const (
 	OpInternalUnitStatus Operation = "INTERNAL_UNIT_STATUS"
 	OpReceiveForecast    Operation = "RECEIVE_FORECAST"
 	OpDevPanel           Operation = "DEV_PANEL"
+	OpViewIntegrations   Operation = "VIEW_INTEGRATIONS"
+	OpTraceUnits         Operation = "TRACE_UNITS"
 )
 
 // policy — матрица: операция → роли, которым она разрешена.
@@ -57,16 +62,19 @@ var policy = map[Operation][]Role{
 	OpSyncOnDemand:       {RoleOperator},
 	OpUploadStatistics:   {RoleAnalyst},
 	OpPublishEstimate:    {RoleAnalyst},
+	OpViewDemand:         {RoleAnalyst, RoleDuty},
 	OpViewPlan:           {RoleOperator, RoleAnalyst, RoleDuty},
+	OpBuildPlan:          {RoleAnalyst, RoleDuty},
 	OpAdjustForecast:     {RoleOperator},
 	OpViewTasks:          {RoleOperator, RoleDuty},
 	OpOpenObligation:     {RoleService},
 	OpCancelObligation:   {RoleService, RoleDuty},
-	OpViewObligation:     {RoleOperator, RolePhysician, RoleDuty, RoleService},
+	OpViewObligation:     {RoleOperator, RolePhysician, RoleDuty, RoleService, RoleITService},
 	OpConfirmTransfer:    {RoleOperator, RoleDuty},
 	OpReplaceUnit:        {RoleOperator, RoleDuty},
 	OpRejectTransfer:     {RoleOperator, RoleDuty},
 	OpCreateRequest:      {RolePhysician},
+	OpViewRequests:       {RolePhysician, RoleDuty},
 	OpSelectVariant:      {RolePhysician},
 	OpCancelRequest:      {RolePhysician},
 	OpReadPatientCase:    {RolePhysician, RoleOperator},
@@ -78,6 +86,8 @@ var policy = map[Operation][]Role{
 	OpInternalUnitStatus: {RoleService},
 	OpReceiveForecast:    {RoleService},
 	OpDevPanel:           {RolePhysician, RoleOperator, RoleAnalyst, RoleDuty, RoleITService},
+	OpViewIntegrations:   {RoleITService, RoleDuty},
+	OpTraceUnits:         {RoleOperator, RoleDuty},
 }
 
 // Allowed сообщает, разрешена ли операция хотя бы одной из ролей.

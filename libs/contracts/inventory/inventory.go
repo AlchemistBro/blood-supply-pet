@@ -102,8 +102,9 @@ func (UnitWithdrawn) MessageType() string { return "UnitWithdrawn" }
 // SchemaVersion реализует contracts.Payload.
 func (UnitWithdrawn) SchemaVersion() int { return 1 }
 
-// ProtectedVolumePublished — защищённый объём источника по виду компонента в единицах (норматив + фоновая
-// потребность + обязательства). Считает planning, публикует inventory как владелец запаса; до появления
+// ProtectedVolumePublished — защищённый объём источника по виду компонента в единицах: норматив + фоновая
+// потребность, без подтверждённых обязательств — закреплённые единицы transfer учитывает в Остатке сам (ADR-0019).
+// Считает planning (ProtectedVolumeCalculated), публикует inventory как владелец запаса; до появления
 // planning — демо-эндпоинт inventory. Хранится с версией и основанием.
 type ProtectedVolumePublished struct {
 	ClinicID      int64  `json:"clinic_id"`

@@ -1,0 +1,10 @@
+{
+  "sync_run_id": "0192f3a1-7b2c-7d4e-8f90-500000000001",
+  "kind": "DAILY_SNAPSHOT",
+  "result": "SUCCESS",
+  "clinic_id": 1,
+  "changes_count": 37,
+  "discrepancies_count": 2,
+  "started_at": "2026-10-23T09:29:12Z",
+  "finished_at": "2026-10-23T09:30:00Z"
+}
