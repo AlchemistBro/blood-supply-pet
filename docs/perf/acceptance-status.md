@@ -34,7 +34,6 @@
 | `go run ./tools/authmatrix -check` | Согласованы 107 защищённых операций, 5 публичных, 6 ролей |
 | `go run ./tools/contracts-check --base origin/main` | 24 схемы исходной базы, несовместимых изменений 0 |
 | `python tools/docs-er/generate.py --check` | Согласованы ER восьми баз с Up-миграциями |
-| `python deploy/railway/generate.py --check` | Несекретные шаблоны согласованы; запросов к Railway не было |
 | `python tools/docs-diagrams/check-bpmn.py` | 4 BPMN: XML, ссылки и DI корректны |
 | Извлечение диаграмм | 31 исходник подготовлен к экспорту; Chromium не запускался |
 | `node --check` для экспортёра и k6-сценария | Синтаксис корректен; сценарии не выполнялись |
