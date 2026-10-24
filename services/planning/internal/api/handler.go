@@ -201,5 +201,10 @@ func planView(n app.PlanRecord) gen.Plan {
 	for _, v := range p.Protected {
 		out.Protected = append(out.Protected, gen.Protected{ClinicId: v.ClinicID, ComponentKind: v.Kind, ProtectedUnits: v.VolumeUnits, RemainingUnits: v.RemainingUnits, ProtectedMl: v.VolumeML, RemainingMl: v.RemainingML})
 	}
+	obligations := make([]gen.PlanObligation, 0, len(n.Obligations))
+	for _, v := range n.Obligations {
+		obligations = append(obligations, gen.PlanObligation{ObligationId: v.ID, SourceClinicId: v.Source, TargetClinicId: v.Target, ComponentKind: v.Kind, Status: v.Status, ConfirmedUnits: v.Units, ClinicalUseBlocked: v.Blocked})
+	}
+	out.Obligations = &obligations
 	return out
 }

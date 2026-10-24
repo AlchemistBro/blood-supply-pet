@@ -19,6 +19,7 @@ import (
 	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/demand"
 	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/inventory"
 	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/logistics"
+	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/transfer"
 	"github.com/AlchemistBro/blood-supply-pet/libs/httpx/auth"
 	"github.com/AlchemistBro/blood-supply-pet/libs/httpx/auth/authtest"
 	"github.com/AlchemistBro/blood-supply-pet/libs/messaging"
@@ -81,6 +82,29 @@ func TestPlanRepeatDoesNotPublishCommandsTwice(t *testing.T) {
 	if commands != 1 || plans != 1 {
 		t.Fatalf("повтор создал команды: %d, планы: %d", commands, plans)
 	}
+	var before string
+	if err := pool.QueryRow(ctx, `SELECT md5(string_agg(input_key||payload::text,'' ORDER BY input_key)) FROM planning_input_projection`).Scan(&before); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `DELETE FROM planning_input_projection WHERE input_key LIKE 'unit:%'`); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := svc.RebuildProjections(ctx, "operator-maintenance"); err != nil || n < 5 {
+		t.Fatalf("восстановление: %d %v", n, err)
+	}
+	var after string
+	if err := pool.QueryRow(ctx, `SELECT md5(string_agg(input_key||payload::text,'' ORDER BY input_key)) FROM planning_input_projection`).Scan(&after); err != nil {
+		t.Fatal(err)
+	}
+	if before != after {
+		t.Fatal("проекция восстановлена не полностью")
+	}
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM outbox WHERE message_type='OpenObligation'`).Scan(&commands); err != nil {
+		t.Fatal(err)
+	}
+	if commands != 1 {
+		t.Fatal("восстановление повторило задания")
+	}
 	// Лишние поля отбрасываются до записи, в том числе внутри строки и территории.
 	idp := authtest.New(t)
 	mux := http.NewServeMux()
@@ -139,5 +163,19 @@ func TestPlanRepeatDoesNotPublishCommandsTwice(t *testing.T) {
 	}
 	if cancels != 1 {
 		t.Fatalf("команд отмены старого плана: %d", cancels)
+	}
+	obligation := uuid.New()
+	version := int64(1)
+	opened := transfer.ObligationOpened{ObligationID: obligation, ObligationVersion: &version, RequestID: id, Origin: transfer.OriginPlanProposal, SourceClinicID: 1, TargetClinicID: 2, ComponentKind: "RBC", RequestedQty: 1, Deadline: now.Add(time.Hour)}
+	send(opened)
+	confirmedVersion := int64(2)
+	send(transfer.TransferConfirmed{ObligationID: obligation, ObligationVersion: &confirmedVersion, RequestID: id, Units: []uuid.UUID{uuid.New()}})
+	send(opened)
+	if _, err := svc.RebuildProjections(ctx, "maintenance"); err != nil {
+		t.Fatal(err)
+	}
+	progress, err := svc.Plan(ctx, id)
+	if err != nil || len(progress.Obligations) != 1 || progress.Obligations[0].ID != obligation || progress.Obligations[0].Status != "CONFIRMED" || progress.Obligations[0].Units != 1 {
+		t.Fatalf("статус плана потерян или устарел: %+v %v", progress.Obligations, err)
 	}
 }

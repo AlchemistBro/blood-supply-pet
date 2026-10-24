@@ -36,26 +36,37 @@ type planProtectedView struct {
 	Remaining int64  `json:"remaining_units"`
 }
 type planView struct {
-	NormVersion          int64               `json:"norm_version"`
-	StockSynced          time.Time           `json:"stock_synced_at"`
-	ForecastID           *uuid.UUID          `json:"emergency_forecast_id"`
-	ScenarioVersion      string              `json:"scenario_version"`
-	DeliveryVersion      int64               `json:"delivery_version"`
-	ObligationsWatermark int64               `json:"obligations_watermark"`
-	RefdataVersion       int                 `json:"refdata_version"`
-	AlgorithmVersion     string              `json:"algorithm_version"`
-	Targets              []planTargetView    `json:"targets"`
-	ID                   uuid.UUID           `json:"replenishment_plan_id"`
-	Demand               uuid.UUID           `json:"demand_estimate_id"`
-	DemandVersion        int                 `json:"demand_version_no"`
-	Watermark            int64               `json:"stock_watermark"`
-	Created              time.Time           `json:"created_at"`
-	Coverage             float64             `json:"coverage_ratio"`
-	Elapsed              int64               `json:"elapsed_ms"`
-	Notice               string              `json:"notice"`
-	Proposals            []planProposalView  `json:"proposals"`
-	Deficits             []planDeficitView   `json:"deficits"`
-	Protected            []planProtectedView `json:"protected"`
+	Obligations          []planObligationView `json:"obligations"`
+	NormVersion          int64                `json:"norm_version"`
+	StockSynced          time.Time            `json:"stock_synced_at"`
+	ForecastID           *uuid.UUID           `json:"emergency_forecast_id"`
+	ScenarioVersion      string               `json:"scenario_version"`
+	DeliveryVersion      int64                `json:"delivery_version"`
+	ObligationsWatermark int64                `json:"obligations_watermark"`
+	RefdataVersion       int                  `json:"refdata_version"`
+	AlgorithmVersion     string               `json:"algorithm_version"`
+	Targets              []planTargetView     `json:"targets"`
+	ID                   uuid.UUID            `json:"replenishment_plan_id"`
+	Demand               uuid.UUID            `json:"demand_estimate_id"`
+	DemandVersion        int                  `json:"demand_version_no"`
+	Watermark            int64                `json:"stock_watermark"`
+	Created              time.Time            `json:"created_at"`
+	Coverage             float64              `json:"coverage_ratio"`
+	Elapsed              int64                `json:"elapsed_ms"`
+	Notice               string               `json:"notice"`
+	Proposals            []planProposalView   `json:"proposals"`
+	Deficits             []planDeficitView    `json:"deficits"`
+	Protected            []planProtectedView  `json:"protected"`
+}
+
+type planObligationView struct {
+	ID      uuid.UUID `json:"obligation_id"`
+	Source  int64     `json:"source_clinic_id"`
+	Target  int64     `json:"target_clinic_id"`
+	Kind    string    `json:"component_kind"`
+	Status  string    `json:"status"`
+	Units   int       `json:"confirmed_units"`
+	Blocked bool      `json:"clinical_use_blocked"`
 }
 type planTargetView struct {
 	Clinic     int64  `json:"clinic_id"`
@@ -72,11 +83,12 @@ type planTargetView struct {
 	Rough      bool   `json:"is_rough_estimate"`
 }
 type planningScreen struct {
-	Forecasts []forecastView
-	Plans     []planView
-	Plan      planView
-	Key       uuid.UUID
-	CanBuild  bool
+	CanViewTasks bool
+	Forecasts    []forecastView
+	Plans        []planView
+	Plan         planView
+	Key          uuid.UUID
+	CanBuild     bool
 }
 
 type forecastView struct {
@@ -197,7 +209,8 @@ func (s *Server) planDetail(w http.ResponseWriter, r *http.Request) {
 		s.renderError(w, r, 400, "Неверный план", "Проверьте адрес.")
 		return
 	}
-	data := planningScreen{}
+	p, _ := auth.FromContext(r.Context())
+	data := planningScreen{CanViewTasks: auth.Allowed(auth.OpViewObligation, p.Roles)}
 	if err := s.planning.GetJSON(r.Context(), "/plans/"+id.String(), &data.Plan); err != nil {
 		s.demandFailure(w, r, err)
 		return

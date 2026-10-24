@@ -22,7 +22,14 @@ func New(pool *pgxpool.Pool) *Store { return &Store{pool: pool} }
 var _ app.Store = (*Store)(nil)
 
 func (s *Store) Project(ctx context.Context, tx pgx.Tx, p app.Projection) error {
-	_, err := tx.Exec(ctx, `INSERT INTO planning_input_projection VALUES($1,$2,$3,$4) ON CONFLICT(input_key) DO UPDATE SET source_version=EXCLUDED.source_version,occurred_at=EXCLUDED.occurred_at,payload=planning_input_projection.payload||EXCLUDED.payload WHERE EXCLUDED.source_version>planning_input_projection.source_version OR (EXCLUDED.source_version=planning_input_projection.source_version AND EXCLUDED.occurred_at>planning_input_projection.occurred_at)`, p.Key, p.Version, p.At, p.Payload)
+	if err := s.LockBuild(ctx, tx); err != nil {
+		return err
+	}
+	tag, err := tx.Exec(ctx, `INSERT INTO planning_input_projection VALUES($1,$2,$3,$4) ON CONFLICT(input_key) DO UPDATE SET source_version=EXCLUDED.source_version,occurred_at=EXCLUDED.occurred_at,payload=planning_input_projection.payload||EXCLUDED.payload WHERE EXCLUDED.source_version>planning_input_projection.source_version OR (EXCLUDED.source_version=planning_input_projection.source_version AND EXCLUDED.occurred_at>planning_input_projection.occurred_at)`, p.Key, p.Version, p.At, p.Payload)
+	if err != nil || tag.RowsAffected() == 0 {
+		return err
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO planning_projection_journal(input_key,source_version,occurred_at,payload) SELECT input_key,source_version,occurred_at,payload FROM planning_input_projection WHERE input_key=$1`, p.Key)
 	return err
 }
 func (s *Store) Projection(ctx context.Context, tx pgx.Tx, key string) (json.RawMessage, error) {

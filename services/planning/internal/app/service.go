@@ -42,7 +42,33 @@ func (s *Service) Deficits(ctx context.Context, clinic int64, kind, reason strin
 	return s.store.Deficits(ctx, clinic, kind, reason)
 }
 func (s *Service) Plan(ctx context.Context, id uuid.UUID) (PlanRecord, error) {
-	return s.store.ReadPlan(ctx, nil, id)
+	var n PlanRecord
+	err := bspgx.WithTx(ctx, s.pool, func(ctx context.Context, tx pgx.Tx) error {
+		var err error
+		n, err = s.store.ReadPlan(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		n.Obligations, err = s.store.PlanObligations(ctx, tx, id)
+		return err
+	})
+	return n, err
+}
+
+func (s *Service) RebuildProjections(ctx context.Context, actor string) (int64, error) {
+	var count int64
+	err := bspgx.WithTx(ctx, s.pool, func(ctx context.Context, tx pgx.Tx) error {
+		if err := s.store.LockBuild(ctx, tx); err != nil {
+			return err
+		}
+		var err error
+		count, err = s.store.RebuildProjections(ctx, tx)
+		if err != nil {
+			return err
+		}
+		return s.journal.Audit(ctx, tx, messaging.AuditEntry{UserID: actor, Role: "SERVICE", Action: "PROJECTIONS_REBUILT", ObjectType: "planning_projection", ObjectID: "all", Result: auditc.ResultSuccess, Details: map[string]any{"rows": count}})
+	})
+	return count, err
 }
 
 // Build сохраняет снимок входов и результат вместе с командами и аудитом. Повтор ключа возвращает прежний план.

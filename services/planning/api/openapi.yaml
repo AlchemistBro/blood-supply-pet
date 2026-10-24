@@ -166,8 +166,22 @@ components:
         algorithm_version: { type: string }
         targets: { type: array, items: { $ref: "#/components/schemas/Target" } }
         proposals: { type: array, items: { $ref: "#/components/schemas/Proposal" } }
+        obligations:
+          type: array
+          items: { $ref: "#/components/schemas/PlanObligation" }
         deficits: { type: array, items: { $ref: "#/components/schemas/Deficit" } }
         protected: { type: array, items: { $ref: "#/components/schemas/Protected" } }
+    PlanObligation:
+      type: object
+      required: [obligation_id, source_clinic_id, target_clinic_id, component_kind, status, confirmed_units, clinical_use_blocked]
+      properties:
+        obligation_id: { type: string, format: uuid }
+        source_clinic_id: { type: integer, format: int64 }
+        target_clinic_id: { type: integer, format: int64 }
+        component_kind: { type: string }
+        status: { type: string }
+        confirmed_units: { type: integer }
+        clinical_use_blocked: { type: boolean }
     Target:
       type: object
       required: [clinic_id, component_kind, blood_group, norm_ml, background_ml, emergency_ml, target_ml, stock_ml, inbound_ml, proposed_ml, uncovered_ml, is_rough_estimate]

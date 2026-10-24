@@ -24,8 +24,19 @@ type Projection struct {
 	Payload json.RawMessage
 }
 type PlanRecord struct {
-	Plan      *domain.Plan
-	ElapsedMS int64
+	Obligations []ObligationProgress
+	Plan        *domain.Plan
+	ElapsedMS   int64
+}
+
+type ObligationProgress struct {
+	ID      uuid.UUID `json:"obligation_id"`
+	Source  int64     `json:"source_clinic_id"`
+	Target  int64     `json:"target_clinic_id"`
+	Kind    string    `json:"component_kind"`
+	Status  string    `json:"status"`
+	Units   int       `json:"confirmed_units"`
+	Blocked bool      `json:"clinical_use_blocked"`
 }
 
 type ForecastRecord struct {
@@ -47,6 +58,8 @@ type DeficitRecord struct {
 	At       time.Time `json:"created_at"`
 }
 type Store interface {
+	RebuildProjections(context.Context, pgx.Tx) (int64, error)
+	PlanObligations(context.Context, pgx.Tx, uuid.UUID) ([]ObligationProgress, error)
 	RecordDeficit(context.Context, pgx.Tx, DeficitRecord) error
 	Deficits(context.Context, int64, string, string) ([]DeficitRecord, error)
 	SupersedePlans(context.Context, pgx.Tx, uuid.UUID) ([]uuid.UUID, error)
@@ -73,6 +86,7 @@ type unitInput struct {
 	Status  string     `json:"status"`
 }
 type obligationInput struct {
+	Request            *uuid.UUID  `json:"request_id,omitempty"`
 	ConditionsViolated *bool       `json:"conditions_violated,omitempty"`
 	ID                 uuid.UUID   `json:"obligation_id"`
 	Source             int64       `json:"source_clinic_id,omitempty"`
