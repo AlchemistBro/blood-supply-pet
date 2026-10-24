@@ -73,11 +73,12 @@ type unitInput struct {
 	Status  string     `json:"status"`
 }
 type obligationInput struct {
-	ID       uuid.UUID   `json:"obligation_id"`
-	Source   int64       `json:"source_clinic_id,omitempty"`
-	Target   int64       `json:"target_clinic_id,omitempty"`
-	Kind     string      `json:"component_kind,omitempty"`
-	Status   string      `json:"status"`
-	Quantity int         `json:"quantity,omitempty"`
-	Units    []uuid.UUID `json:"units,omitempty"`
+	ConditionsViolated *bool       `json:"conditions_violated,omitempty"`
+	ID                 uuid.UUID   `json:"obligation_id"`
+	Source             int64       `json:"source_clinic_id,omitempty"`
+	Target             int64       `json:"target_clinic_id,omitempty"`
+	Kind               string      `json:"component_kind,omitempty"`
+	Status             string      `json:"status"`
+	Quantity           int         `json:"quantity,omitempty"`
+	Units              []uuid.UUID `json:"units,omitempty"`
 }

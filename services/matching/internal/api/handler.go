@@ -142,6 +142,11 @@ func requestView(n app.RequestRecord) gen.Request {
 	r := n.Request
 	out := gen.Request{ClinicalRequestId: r.RequestID, ClinicId: r.ClinicID, CreatedBy: n.CreatedBy, Status: n.Status, ComponentKind: r.ComponentKind, RequestedUnits: r.RequestedUnits, Urgency: r.Urgency, BloodGroup: r.BloodGroup, CreatedAt: r.CreatedAt, StockWatermark: n.Result.StockWatermark, StockSyncedAt: n.Result.StockSyncedAt, Variants: []gen.Variant{}, Notes: append([]string{}, n.Result.Notes...)}
 	out.PatientAllocationStatus = n.PatientAllocationStatus
+	out.ClinicalUseBlocked = n.ClinicalUseBlocked
+	out.Obligations = make([]gen.RequestObligation, 0, len(n.Obligations))
+	for _, o := range n.Obligations {
+		out.Obligations = append(out.Obligations, gen.RequestObligation{ObligationId: o.ID, SourceClinicId: o.Source, Status: o.Status, Units: o.Units, ClinicalUseBlocked: o.ClinicalUseBlocked})
+	}
 	if out.PatientAllocationStatus == "" {
 		out.PatientAllocationStatus = "NOT_REQUESTED"
 	}

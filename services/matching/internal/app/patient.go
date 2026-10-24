@@ -25,6 +25,10 @@ func (s *Service) PatientCase(ctx context.Context, id uuid.UUID, actor Actor) (s
 			return err
 		}
 		permit := err == nil && actor.User == n.CreatedBy && actor.ClinicID == n.Request.ClinicID && slices.Contains(actor.Roles, "PHYSICIAN")
+		basis := ""
+		if permit {
+			basis = "OWN_REQUEST"
+		}
 		if err == nil && slices.Contains(actor.Roles, "CLINIC_OPERATOR") && actor.ClinicID > 0 {
 			rows, err := s.store.RequestInputs(ctx, tx, id)
 			if err != nil {
@@ -40,6 +44,7 @@ func (s *Service) PatientCase(ctx context.Context, id uuid.UUID, actor Actor) (s
 				}
 				if o.Request == id && o.Source == actor.ClinicID && (o.Status == "CONFIRMED" || o.Status == "TRANSPORT_REQUESTED" || o.Status == "DISPATCHED") {
 					permit = true
+					basis = "SOURCE_OBLIGATION"
 					break
 				}
 			}
@@ -48,7 +53,7 @@ func (s *Service) PatientCase(ctx context.Context, id uuid.UUID, actor Actor) (s
 		if permit {
 			result = auditc.ResultSuccess
 		}
-		if err := s.audit(ctx, tx, actor, id, "READ_PATIENT_CASE", result); err != nil {
+		if err := s.audit(ctx, tx, actor, id, "READ_PATIENT_CASE", result, map[string]any{"object_clinic_id": n.Request.ClinicID, "access_basis": basis}); err != nil {
 			return err
 		}
 		if !permit {

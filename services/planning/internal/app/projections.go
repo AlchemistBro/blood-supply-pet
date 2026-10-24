@@ -254,7 +254,21 @@ func (s *Service) inputSnapshot(ctx context.Context, tx pgx.Tx, id uuid.UUID) (i
 			in.Versions.ObligationsWatermark = max(in.Versions.ObligationsWatermark, row.Version)
 		}
 	}
+	unitIndex := make(map[uuid.UUID]int, len(in.Units))
+	for i, u := range in.Units {
+		unitIndex[u.UnitID] = i
+	}
 	for _, o := range obligations {
+		if o.Status == "DELIVERED" {
+			for _, id := range o.Units {
+				if i, ok := unitIndex[id]; ok {
+					u := &in.Units[i]
+					if u.ClinicID == o.Source || (o.ConditionsViolated != nil && *o.ConditionsViolated) {
+						u.Status = "TRANSFERRED"
+					}
+				}
+			}
+		}
 		n := domain.Obligation{ObligationID: o.ID, SourceClinicID: o.Source, TargetClinicID: o.Target, Kind: o.Kind, Units: len(o.Units), UnitIDs: o.Units, Status: o.Status}
 		for _, id := range o.Units {
 			if u, ok := units[id]; ok {

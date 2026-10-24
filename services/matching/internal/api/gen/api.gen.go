@@ -40,10 +40,12 @@ type Request struct {
 	BloodGroup              string              `json:"blood_group"`
 	ClinicId                int64               `json:"clinic_id"`
 	ClinicalRequestId       openapi_types.UUID  `json:"clinical_request_id"`
+	ClinicalUseBlocked      bool                `json:"clinical_use_blocked"`
 	ComponentKind           string              `json:"component_kind"`
 	CreatedAt               time.Time           `json:"created_at"`
 	CreatedBy               string              `json:"created_by"`
 	Notes                   []string            `json:"notes"`
+	Obligations             []RequestObligation `json:"obligations"`
 	PatientAllocationStatus string              `json:"patient_allocation_status"`
 	RequestedUnits          int                 `json:"requested_units"`
 	SelectedVariantId       *openapi_types.UUID `json:"selected_variant_id,omitempty"`
@@ -52,6 +54,15 @@ type Request struct {
 	StockWatermark          int64               `json:"stock_watermark"`
 	Urgency                 string              `json:"urgency"`
 	Variants                []Variant           `json:"variants"`
+}
+
+// RequestObligation defines model for RequestObligation.
+type RequestObligation struct {
+	ClinicalUseBlocked bool               `json:"clinical_use_blocked"`
+	ObligationId       openapi_types.UUID `json:"obligation_id"`
+	SourceClinicId     int64              `json:"source_clinic_id"`
+	Status             string             `json:"status"`
+	Units              int                `json:"units"`
 }
 
 // Rule defines model for Rule.
