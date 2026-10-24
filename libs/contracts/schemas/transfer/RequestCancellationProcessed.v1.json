@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/transfer/RequestCancellationProcessed.v1.json",
+  "title": "RequestCancellationProcessed",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["request_id", "non_cancellable_obligation_ids", "at"],
+  "properties": {
+    "request_id": { "type": "string", "format": "uuid" },
+    "non_cancellable_obligation_ids": { "type": "array", "items": { "type": "string", "format": "uuid" }, "uniqueItems": true },
+    "at": { "type": "string", "format": "date-time" }
+  }
+}

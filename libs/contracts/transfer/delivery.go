@@ -17,10 +17,13 @@ const (
 	ViolationContainer              = "CONTAINER"
 	ViolationDuration               = "DURATION"
 	ViolationTemperatureNotRecorded = "TEMPERATURE_NOT_RECORDED"
+	ViolationUnitExpired            = "UNIT_EXPIRED"
+	ViolationUnitUnavailable        = "UNIT_UNAVAILABLE"
+	ViolationSpecificationChanged   = "SPECIFICATION_CHANGED"
 )
 
 // TransportViolations — все виды нарушений в порядке схемы.
-var TransportViolations = []string{ViolationTemperature, ViolationContainer, ViolationDuration, ViolationTemperatureNotRecorded}
+var TransportViolations = []string{ViolationTemperature, ViolationContainer, ViolationDuration, ViolationTemperatureNotRecorded, ViolationUnitExpired, ViolationUnitUnavailable, ViolationSpecificationChanged}
 
 // Как дежурный закрыл эскалацию (EscalationClosed).
 const (
