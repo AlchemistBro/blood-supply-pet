@@ -11,6 +11,34 @@ servers:
 # x-bs-operation у каждой операции — операция матрицы прав (libs/httpx/auth/policy.go), которую проверяет сервер.
 # Служебные маршруты (/healthz, /readyz, /metrics, /openapi.yaml) здесь не описаны: их отдаёт libs/runtime без токена.
 paths:
+  /dev/seed-norms:
+    post:
+      operationId: seedDemoNorms
+      x-bs-operation: SEED_DEMO
+      summary: Дополнить отсутствующие нормативы синтетическими значениями только в демо-среде
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [consumption_year]
+              properties:
+                consumption_year: { type: integer, minimum: 2000, maximum: 2100 }
+      responses:
+        "200":
+          description: Добавлены только отсутствующие нормативы
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [created]
+                properties:
+                  created: { type: integer }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /internal/sync-status:
     get:
       operationId: getIntegrationSync

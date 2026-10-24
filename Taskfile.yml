@@ -135,9 +135,30 @@ tasks:
     desc: Запустить сервис локально против платформы из compose (task dev:audit)
     vars:
       SVC: "{{index .MATCH 0}}"
+      SERVICE_DB: '{{if eq .SVC "logistics-gateway"}}logistics{{else}}{{.SVC}}{{end}}'
+      SERVICE_PORT: '{{index (dict "web" "8080" "inventory" "8101" "demand" "8102" "planning" "8103" "matching" "8104" "transfer" "8105" "logistics-gateway" "8106" "notification" "8107" "audit" "8108" "sim-aist" "8201" "sim-emergency" "8202" "sim-logistics" "8203") .SVC}}'
+      SERVICE_K1: '{{if or (eq .SVC "inventory") (eq .SVC "matching")}}demo1:ZGVtby1rMS1rZXktbm90LWZvci1wcm9kdWN0aW9uISE={{end}}' # gitleaks:allow (демо-ключ)
     env:
-      BS_HTTP_ADDR: ":0"
-      BS_DB_URL: "postgres://{{.SVC}}:{{.SVC}}@localhost:5433/{{.SVC}}?sslmode=disable"
+      BS_HTTP_ADDR: ":{{.SERVICE_PORT}}"
+      BS_DB_URL: "postgres://{{.SERVICE_DB}}:{{.SERVICE_DB}}@localhost:5433/{{.SERVICE_DB}}?sslmode=disable"
+      BS_ENV: local
+      BS_K1_KEYS: "{{.SERVICE_K1}}"
+      BS_INVENTORY_URL: http://localhost:8101
+      BS_DEMAND_URL: http://localhost:8102
+      BS_PLANNING_URL: http://localhost:8103
+      BS_MATCHING_URL: http://localhost:8104
+      BS_TRANSFER_URL: http://localhost:8105
+      BS_LOGISTICS_URL: http://localhost:8106
+      BS_NOTIFICATION_URL: http://localhost:8107
+      BS_AUDIT_URL: http://localhost:8108
+      BS_AIST_URL: http://localhost:8201
+      BS_C03_URL: http://localhost:8203
+      BS_WEB_PUBLIC_URL: http://localhost:8080
+      BS_OIDC_CLIENT_SECRET: web-demo-secret
+      BS_SESSION_KEY: /SOEjDxUt7nj0eKQL+i7zzr82TvK/a2fNw4TZh596RU=
+      BS_COOKIE_SECURE: "false"
+      BS_HSTS_MAX_AGE: "0"
+      BS_SERVICE_CLIENT_SECRET: services-demo-secret
       BS_KAFKA_BROKERS: "localhost:9092"
       BS_OIDC_ISSUER: "http://localhost:8180/realms/blood-supply"
       BS_OTEL_ENDPOINT: "localhost:4318"
@@ -156,10 +177,31 @@ tasks:
     cmds:
       - go test ./services/planning/internal/domain -run '^$' -bench '^BenchmarkBuildPlanNFR002$' -benchmem -count=1
 
+  load:
+    desc: Нагрузка 50 пользователей на отдельном синтетическом стенде (k6, создаёт демо-заявки)
+    env:
+      BS_LOAD_SYNTHETIC_ONLY: "1"
+      BS_LOAD_INSECURE_TLS: "1"
+    cmds:
+      - mkdir -p tests/load/results
+      - k6 run tests/load/roles.js
+
+  chaos:
+    desc: Сценарии отказов и конкуренции только на отдельном compose-стенде
+    cmds: [bash tests/chaos/run.sh]
+
   planning:rebuild:
     desc: Восстановить проекции planning из локального журнала (BS_DB_URL базы planning)
     cmds:
       - go run ./services/planning/cmd/planning-rebuild
+
+  seed:
+    desc: Наполнить отдельный синтетический compose-стенд через HTTP API
+    cmds: [go run ./tools/seed]
+
+  seed:kind:
+    desc: Наполнить синтетический kind через временные port-forward (без записи в чужие базы)
+    cmds: [bash deploy/k8s/seed.sh]
 
   k8s:up:
     desc: Собрать образы и поднять выделенный kind blood-supply (требует Docker)

@@ -40,6 +40,7 @@
 | `POST /clinics/{id}/sync` | SYNC_ON_DEMAND | 2xx | 403 | 403 | 403 | 403 | 403 |
 | `GET /clinics/{id}/units` | VIEW_STOCK | 2xx | 2xx | 2xx | 2xx | 403 | 403 |
 | `POST /dev/protected-volume` | DEV_PANEL | 2xx | 2xx | 2xx | 2xx | 403 | 2xx |
+| `POST /dev/seed-norms` | SEED_DEMO | 403 | 403 | 2xx | 403 | 403 | 403 |
 | `GET /internal/sync-status` | READ_AUDIT | 403 | 2xx | 2xx | 403 | 403 | 403 |
 | `GET /internal/units/status` | INTERNAL_UNIT_STATUS | 403 | 403 | 403 | 403 | 2xx | 403 |
 | `GET /sync/last` | VIEW_STOCK | 2xx | 2xx | 2xx | 2xx | 403 | 403 |

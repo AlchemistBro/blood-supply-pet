@@ -36,23 +36,29 @@ type NormThreshold struct {
 }
 
 func (s *Service) SetAnnualConsumption(ctx context.Context, actor Actor, clinicID int64, kind string, year int, annual int64) (NormRecord, error) {
+	n, _, err := s.setAnnualConsumption(ctx, actor, clinicID, kind, year, annual, false)
+	return n, err
+}
+
+func (s *Service) setAnnualConsumption(ctx context.Context, actor Actor, clinicID int64, kind string, year int, annual int64, onlyMissing bool) (NormRecord, bool, error) {
 	component, ok := s.ref.Kind(kind)
 	if !ok || !s.ClinicExists(clinicID) || year < 2000 || year > 2100 {
-		return NormRecord{}, fmt.Errorf("%w: неверная клиника, вид или год", ErrInvalid)
+		return NormRecord{}, false, fmt.Errorf("%w: неверная клиника, вид или год", ErrInvalid)
 	}
 	value, err := domain.CalculateNorm(annual, component.TypicalVolumeML)
 	if err != nil {
-		return NormRecord{}, fmt.Errorf("%w: %w", ErrInvalid, err)
+		return NormRecord{}, false, fmt.Errorf("%w: %w", ErrInvalid, err)
 	}
 	id, err := uuid.NewV7()
 	if err != nil {
-		return NormRecord{}, err
+		return NormRecord{}, false, err
 	}
 	annualID, err := uuid.NewV7()
 	if err != nil {
-		return NormRecord{}, err
+		return NormRecord{}, false, err
 	}
 	n := NormRecord{ID: id, ClinicID: clinicID, Kind: kind, Year: year, Annual: annual, MonthlyML: value.MonthlyML, NormML: value.NormML, Minimum: value.Minimum, At: s.clock.Now()}
+	created := false
 	err = bspgx.WithTx(ctx, s.pool, func(ctx context.Context, tx pgx.Tx) error {
 		version, err := s.store.NextNormVersion(ctx, tx)
 		if err != nil {
@@ -63,13 +69,14 @@ func (s *Service) SetAnnualConsumption(ctx context.Context, actor Actor, clinicI
 		if err != nil {
 			return err
 		}
-		if current != nil && current.Year == year && current.Annual == annual {
+		if current != nil && (onlyMissing || current.Year == year && current.Annual == annual) {
 			n = *current
 			return nil
 		}
 		if err := s.store.SaveNorm(ctx, tx, n, annualID, actor.UserID); err != nil {
 			return err
 		}
+		created = true
 		if _, err := s.journal.Publish(ctx, tx, contracts.TopicInventoryEvents, fmt.Sprintf("%d:%s", clinicID, kind), inventory.StockNormPublished{ClinicID: clinicID, ComponentKind: kind, NormML: n.NormML, AvgMonthlyML: n.MonthlyML, IsMinUnitApplied: &n.Minimum, Version: n.Version, CalculatedAt: n.At}); err != nil {
 			return err
 		}
@@ -78,7 +85,7 @@ func (s *Service) SetAnnualConsumption(ctx context.Context, actor Actor, clinicI
 		}
 		return s.journal.Audit(ctx, tx, messaging.AuditEntry{UserID: actor.UserID, Role: actor.Role, ClinicID: &clinicID, Action: "CALCULATE_STOCK_NORM", ObjectType: "stock_norm", ObjectID: id.String(), Result: auditc.ResultSuccess})
 	})
-	return n, err
+	return n, created && err == nil, err
 }
 
 func (s *Service) Norms(ctx context.Context, clinicID int64) ([]NormRecord, error) {

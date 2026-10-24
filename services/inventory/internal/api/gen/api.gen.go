@@ -432,6 +432,11 @@ type ListClinicUnitsParams struct {
 	Offset *int    `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
+// SeedDemoNormsJSONBody defines parameters for SeedDemoNorms.
+type SeedDemoNormsJSONBody struct {
+	ConsumptionYear int `json:"consumption_year"`
+}
+
 // GetUnitStatusesParams defines parameters for GetUnitStatuses.
 type GetUnitStatusesParams struct {
 	// Ids Идентификаторы единиц (unit_id) через запятую, от 1 до 1000.
@@ -456,6 +461,9 @@ type SetAnnualConsumptionJSONRequestBody SetAnnualConsumptionJSONBody
 // PublishProtectedVolumeJSONRequestBody defines body for PublishProtectedVolume for application/json ContentType.
 type PublishProtectedVolumeJSONRequestBody = ProtectedVolumeInput
 
+// SeedDemoNormsJSONRequestBody defines body for SeedDemoNorms for application/json ContentType.
+type SeedDemoNormsJSONRequestBody SeedDemoNormsJSONBody
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// SetAnnualConsumption Годовой расход и новый норматив (демо-формулы FR012)
@@ -476,6 +484,9 @@ type ServerInterface interface {
 	// PublishProtectedVolume ДЕМО: опубликовать защищённый объём источника (только BS_ENV=local, иначе 404)
 	// (POST /dev/protected-volume)
 	PublishProtectedVolume(w http.ResponseWriter, r *http.Request)
+	// SeedDemoNorms Дополнить отсутствующие нормативы синтетическими значениями только в демо-среде
+	// (POST /dev/seed-norms)
+	SeedDemoNorms(w http.ResponseWriter, r *http.Request)
 	// GetIntegrationSync Техническое состояние обмена без сведений о единицах
 	// (GET /internal/sync-status)
 	GetIntegrationSync(w http.ResponseWriter, r *http.Request)
@@ -708,6 +719,20 @@ func (siw *ServerInterfaceWrapper) PublishProtectedVolume(w http.ResponseWriter,
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PublishProtectedVolume(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SeedDemoNorms operation middleware
+func (siw *ServerInterfaceWrapper) SeedDemoNorms(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SeedDemoNorms(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1009,6 +1034,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 		ErrorHandlerFunc:   options.ErrorHandlerFunc,
 	}
 
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/dev/seed-norms", wrapper.SeedDemoNorms)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/internal/sync-status", wrapper.GetIntegrationSync)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/clinics/{id}/annual-consumption", wrapper.SetAnnualConsumption)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/clinics/{id}/norms", wrapper.GetClinicNorms)
@@ -1401,6 +1427,94 @@ type PublishProtectedVolume404ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response PublishProtectedVolume404ApplicationProblemPlusJSONResponse) VisitPublishProtectedVolumeResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SeedDemoNormsRequestObject struct {
+	Body *SeedDemoNormsJSONRequestBody
+}
+
+type SeedDemoNormsResponseObject interface {
+	VisitSeedDemoNormsResponse(w http.ResponseWriter) error
+}
+
+type SeedDemoNorms200JSONResponse struct {
+	Created int `json:"created"`
+}
+
+func (response SeedDemoNorms200JSONResponse) VisitSeedDemoNormsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SeedDemoNorms400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response SeedDemoNorms400ApplicationProblemPlusJSONResponse) VisitSeedDemoNormsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SeedDemoNorms401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response SeedDemoNorms401ApplicationProblemPlusJSONResponse) VisitSeedDemoNormsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SeedDemoNorms403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response SeedDemoNorms403ApplicationProblemPlusJSONResponse) VisitSeedDemoNormsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SeedDemoNorms404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response SeedDemoNorms404ApplicationProblemPlusJSONResponse) VisitSeedDemoNormsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -1818,6 +1932,9 @@ type StrictServerInterface interface {
 	// PublishProtectedVolume ДЕМО: опубликовать защищённый объём источника (только BS_ENV=local, иначе 404)
 	// (POST /dev/protected-volume)
 	PublishProtectedVolume(ctx context.Context, request PublishProtectedVolumeRequestObject) (PublishProtectedVolumeResponseObject, error)
+	// SeedDemoNorms Дополнить отсутствующие нормативы синтетическими значениями только в демо-среде
+	// (POST /dev/seed-norms)
+	SeedDemoNorms(ctx context.Context, request SeedDemoNormsRequestObject) (SeedDemoNormsResponseObject, error)
 	// GetIntegrationSync Техническое состояние обмена без сведений о единицах
 	// (GET /internal/sync-status)
 	GetIntegrationSync(ctx context.Context, request GetIntegrationSyncRequestObject) (GetIntegrationSyncResponseObject, error)
@@ -2039,6 +2156,37 @@ func (sh *strictHandler) PublishProtectedVolume(w http.ResponseWriter, r *http.R
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PublishProtectedVolumeResponseObject); ok {
 		if err := validResponse.VisitPublishProtectedVolumeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SeedDemoNorms operation middleware
+func (sh *strictHandler) SeedDemoNorms(w http.ResponseWriter, r *http.Request) {
+	var request SeedDemoNormsRequestObject
+
+	var body SeedDemoNormsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SeedDemoNorms(ctx, request.(SeedDemoNormsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SeedDemoNorms")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SeedDemoNormsResponseObject); ok {
+		if err := validResponse.VisitSeedDemoNormsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

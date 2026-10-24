@@ -5,6 +5,66 @@
 Последовательности основного пути саги и компенсаций — [saga-confirmation.md](saga-confirmation.md), процесс целиком —
 BPMN [confirm-transfer.bpmn](diagrams/bpmn/confirm-transfer.bpmn).
 
+## Агрегаты передачи и заявки
+
+```mermaid
+classDiagram
+    class Obligation {
+        UUID ID
+        UUID RequestID
+        int64 SourceClinicID
+        int64 TargetClinicID
+        Status Status
+        int64 Version
+        bool ClinicalUseBlocked
+    }
+    class ReplacementSpec {
+        string BloodGroup
+        string Phenotype
+        time MinExpiresAt
+        string RuleVersion
+    }
+    class Allocation {
+        UUID UnitID
+        UUID ObligationID
+        string Status
+    }
+    class Stock {
+        int64 ClinicID
+        string ComponentKind
+        int Available
+        int Reserved
+        int Protected
+    }
+    class ClinicalRequest {
+        UUID RequestID
+        int64 ClinicID
+        string ComponentKind
+        int RequestedUnits
+        string Urgency
+    }
+    class Variant {
+        int Rank
+        int64 SourceClinicID
+        bool IsLocal
+        string RuleVersion
+    }
+    class EncryptedPatientCase {
+        UUID RequestID
+        string KeyID
+        bytes Ciphertext
+    }
+    Obligation *-- ReplacementSpec
+    Obligation "1" -- "0..*" Allocation
+    Stock ..> Obligation : собственный остаток источника
+    ClinicalRequest "1" -- "0..*" Variant
+    ClinicalRequest "1" -- "1" EncryptedPatientCase
+    ClinicalRequest ..> Obligation : только идентификатор через Kafka
+```
+
+`Obligation`, закрепления и остаток хранятся в transfer; заявка, варианты и зашифрованный номер — в matching.
+Связь между базами логическая, без внешнего ключа. Номер случая раскрывается отдельной операцией после аудита.
+
 ## Состояния обязательства O07
 
 Переходы те же, что в каноне; закрепляющие состояния собраны в составное «Единицы закреплены», потому что выход из
