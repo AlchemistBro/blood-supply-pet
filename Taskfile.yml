@@ -71,6 +71,13 @@ tasks:
     cmds:
       - go test -tags integration -count=1 -timeout 15m ./libs/... ./services/...
 
+  test:postgres:
+    desc: Проверки через внешний BS_TEST_DB_URL без запуска Docker; Kafka пропускается без внешнего брокера
+    env:
+      BS_TEST_NO_DOCKER: "true"
+    cmds:
+      - go test -tags integration -count=1 -p 2 -parallel 2 -timeout 25m ./libs/... ./services/...
+
   test:fitness:
     desc: Фитнес-тесты саги (гонки, дубли, kill шлюза); падение любого валит задачу
     cmds:

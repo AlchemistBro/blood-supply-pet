@@ -1,11 +1,13 @@
-// Package testinfra поднимает настоящие PostgreSQL и Kafka в Docker для интеграционных тестов
-// (testcontainers-go). Контейнеры общие на тестовый процесс; каждая проверка получает свою базу
-// и свои топики, чтобы тесты не мешали друг другу.
+// Package testinfra подключает внешние PostgreSQL/Kafka либо запускает Testcontainers.
+// BS_TEST_NO_DOCKER запрещает запуск контейнеров. Каждая проверка получает отдельную временную базу
+// с автоматическим удалением; общие контейнеры и уникальные топики не смешивают данные проверок.
 package testinfra
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -13,7 +15,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/testcontainers/testcontainers-go"
 	tckafka "github.com/testcontainers/testcontainers-go/modules/kafka"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -42,6 +46,9 @@ func Postgres(t testing.TB) string {
 	ctx := context.Background()
 	admin := os.Getenv("BS_TEST_DB_URL")
 	if admin == "" {
+		if noDocker() {
+			t.Fatal("BS_TEST_DB_URL не задан; запуск Docker запрещён BS_TEST_NO_DOCKER")
+		}
 		pgOnce.Do(func() {
 			ctr, err := tcpostgres.Run(ctx, postgresImage,
 				tcpostgres.WithDatabase("postgres"), tcpostgres.WithUsername("postgres"), tcpostgres.WithPassword("postgres"),
@@ -57,16 +64,37 @@ func Postgres(t testing.TB) string {
 		}
 		admin = pgURL
 	}
-	name := fmt.Sprintf("t%d_%d", time.Now().UnixNano()%1_000_000, dbSeq.Add(1))
+	name := "bs_test_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	testURL, err := replaceDatabase(admin, name)
+	if err != nil {
+		t.Fatal("BS_TEST_DB_URL должен быть корректным postgres:// или postgresql:// URL")
+	}
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
 	conn, err := pgx.Connect(ctx, admin)
 	if err != nil {
-		t.Fatalf("подключение к PostgreSQL: %v", err)
+		t.Fatalf("подключение к PostgreSQL: %s", databaseFailure(err))
 	}
 	defer func() { _ = conn.Close(ctx) }()
-	if _, err := conn.Exec(ctx, "CREATE DATABASE "+name); err != nil {
-		t.Fatalf("создание базы %s: %v", name, err)
+	quoted := pgx.Identifier{name}.Sanitize()
+	if _, err := conn.Exec(ctx, "CREATE DATABASE "+quoted); err != nil {
+		t.Fatalf("создание временной базы: %s", databaseFailure(err))
 	}
-	return replaceDatabase(admin, name)
+	// Зарегистрировано раньше закрытия пулов вызывающего теста; cleanup выполняется в обратном порядке.
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		cleanup, err := pgx.Connect(ctx, admin)
+		if err != nil {
+			t.Errorf("подключение для удаления %s: %s", name, databaseFailure(err))
+			return
+		}
+		defer func() { _ = cleanup.Close(ctx) }()
+		if _, err := cleanup.Exec(ctx, "DROP DATABASE "+quoted+" WITH (FORCE)"); err != nil {
+			t.Errorf("удаление %s: %s", name, databaseFailure(err))
+		}
+	})
+	return testURL
 }
 
 // Kafka возвращает адреса брокеров общего контейнера Kafka. BS_TEST_KAFKA_BROKERS переключает на внешний.
@@ -74,6 +102,9 @@ func Kafka(t testing.TB) []string {
 	t.Helper()
 	if env := os.Getenv("BS_TEST_KAFKA_BROKERS"); env != "" {
 		return strings.Split(env, ",")
+	}
+	if noDocker() {
+		t.Skip("Kafka не настроена; запуск Docker запрещён BS_TEST_NO_DOCKER")
 	}
 	kOnce.Do(func() {
 		ctx := context.Background()
@@ -95,15 +126,29 @@ func UniqueTopic(prefix string) string {
 	return fmt.Sprintf("%s.%d.%d", prefix, time.Now().UnixNano()%1_000_000_000, dbSeq.Add(1))
 }
 
-func replaceDatabase(url, db string) string {
-	// postgres://user:pass@host:port/dbname?params
-	q := strings.Index(url, "?")
-	params := ""
-	base := url
-	if q >= 0 {
-		params = url[q:]
-		base = url[:q]
+func replaceDatabase(raw, db string) (string, error) {
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "postgres" && u.Scheme != "postgresql") || u.Host == "" || db == "" {
+		return "", errors.New("неверный URL PostgreSQL")
 	}
-	slash := strings.LastIndex(base, "/")
-	return base[:slash+1] + db + params
+	u.Path, u.RawPath = "/"+db, ""
+	return u.String(), nil
+}
+
+func noDocker() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("BS_TEST_NO_DOCKER"))) {
+	case "", "false", "0":
+		return false
+	default:
+		return true // неизвестное непустое значение не должно случайно разрешать запуск контейнеров
+	}
+}
+
+// Ошибки разбора/подключения могут содержать DSN, поэтому не выводим их текст и пароль сервера.
+func databaseFailure(err error) string {
+	var pgError *pgconn.PgError
+	if errors.As(err, &pgError) {
+		return "SQLSTATE " + pgError.Code + ": " + pgError.Message
+	}
+	return fmt.Sprintf("%T", err)
 }
