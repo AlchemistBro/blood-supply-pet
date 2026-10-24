@@ -83,10 +83,34 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /data
+            # Дашборды и алерты АС (deploy/observability). Провайдер и правила — отдельными файлами через
+            # subPath, чтобы не закрыть собственный provisioning образа. Путь /otel-lgtm/grafana/conf/provisioning —
+            # по образу 0.11.0 (deploy/observability/README.md).
+            - name: grafana-dashboards
+              mountPath: /var/lib/blood-supply/grafana/dashboards
+              readOnly: true
+            - name: grafana-provisioning
+              mountPath: /otel-lgtm/grafana/conf/provisioning/dashboards/blood-supply.yaml
+              subPath: dashboards-provider.yaml
+              readOnly: true
+            - name: grafana-provisioning
+              mountPath: /otel-lgtm/grafana/conf/provisioning/alerting/blood-supply-rules.yaml
+              subPath: alert-rules.yaml
+              readOnly: true
+            - name: grafana-provisioning
+              mountPath: /otel-lgtm/grafana/conf/provisioning/alerting/blood-supply-contact-points.yaml
+              subPath: contact-points.yaml
+              readOnly: true
       volumes:
         - name: data
           persistentVolumeClaim:
             claimName: otel-lgtm-data
+        - name: grafana-dashboards
+          configMap:
+            name: grafana-dashboards
+        - name: grafana-provisioning
+          configMap:
+            name: grafana-provisioning
 ---
 apiVersion: v1
 kind: Service

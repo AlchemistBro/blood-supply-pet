@@ -18,6 +18,7 @@ import (
 // запуска несколькими экземплярами сервиса. Миграции встроены в бинарник (embed).
 //
 // Нумерация: 00001–00099 — платформа (outbox, inbox, аудит, справочники), 00100+ — сервис.
+// Пропущенные платформенные миграции применяются и тогда, когда версия базы уже выше (out-of-order).
 func Migrate(ctx context.Context, pool *pgxpool.Pool, sources ...fs.FS) ([]string, error) {
 	merged, err := MergeFS(sources...)
 	if err != nil {
@@ -30,7 +31,11 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool, sources ...fs.FS) ([]strin
 	if err != nil {
 		return nil, fmt.Errorf("session locker: %w", err)
 	}
-	provider, err := goose.NewProvider(goose.DialectPostgres, db, merged, goose.WithSessionLocker(locker))
+	// Платформенный диапазон 00001–00099 пополняется после того, как у сервисов уже есть свои 00100+:
+	// новая платформенная миграция (например, 00003 справочника статусов единицы) меньше версии базы.
+	// Без разрешения «не по порядку» goose откажется её применять, и сервис не стартует на существующем томе.
+	provider, err := goose.NewProvider(goose.DialectPostgres, db, merged,
+		goose.WithSessionLocker(locker), goose.WithAllowOutofOrder(true))
 	if err != nil {
 		return nil, fmt.Errorf("goose provider: %w", err)
 	}

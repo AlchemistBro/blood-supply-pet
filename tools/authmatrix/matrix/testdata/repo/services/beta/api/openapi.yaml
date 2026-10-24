@@ -1,0 +1,13 @@
+openapi: 3.0.3
+info: { title: beta, version: 0.1.0 }
+paths:
+  /internal/units/status:
+    post:
+      operationId: unitStatus
+      x-bs-operation: INTERNAL_UNIT_STATUS
+      responses: { "200": { description: ok } }
+  /openapi.yaml:
+    get:
+      operationId: openapi
+      x-bs-public: true
+      responses: { "200": { description: ok } }

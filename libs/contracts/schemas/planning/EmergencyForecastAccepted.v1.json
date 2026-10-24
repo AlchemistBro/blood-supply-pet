@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/planning/EmergencyForecastAccepted.v1.json",
+  "title": "EmergencyForecastAccepted",
+  "type": "object",
+  "description": "Событие planning.events: прогноз ЧС принят после фильтра белого списка (ИНТ-02, NFR010, FR024).",
+  "additionalProperties": false,
+  "required": [
+    "emergency_forecast_id",
+    "scenario_version",
+    "territory",
+    "period_start",
+    "period_end",
+    "is_rough_estimate",
+    "lines_count"
+  ],
+  "properties": {
+    "emergency_forecast_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "scenario_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "territory": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "period_start": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "period_end": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "is_rough_estimate": {
+      "type": "boolean"
+    },
+    "lines_count": {
+      "type": "integer",
+      "minimum": 1
+    }
+  }
+}

@@ -31,17 +31,33 @@
 
 ## Данные класса K1
 
-- `patient_case_no` хранится только в `matching` (`clinical_request_patient`, pgcrypto) и в `aist_outbox_message.payload` (`inventory`, до квитанции АИСТ-М, затем затирается).
-- Не попадает в события (кроме команды `AllocateUnitsToPatient`, которая не логируется телом), логи, трассы, письма, объяснения вариантов.
-- Каждое чтение — `READ_PATIENT_CASE` в аудит (NFR016); каждое изменение заявки — аудит с участником (NFR008).
+- `patient_case_no` шифрует приложение (`libs/k1seal`, ADR-0020). Конверт хранится в `matching` (`clinical_request_patient`)
+  и в `aist_outbox_message.payload` (`inventory`, до квитанции АИСТ-М, затем затирается). Ключ `BS_K1_KEYS` есть только
+  у `matching` и `inventory`; `transfer`, Kafka, outbox, аудит и журналы видят только конверт.
+- Показ номера — только `web` → `matching` `GET /requests/{id}/patient-case`: `matching` проверяет роль и клинику
+  (оператору — если его клиника источник активного задания по заявке), в одной транзакции пишет `READ_PATIENT_CASE`
+  и только затем отдаёт номер. `web` получает его по HTTP (TLS в k8s) лишь для экрана: не хранит, не логирует, ключа не имеет.
+- Открытым текстом номер не попадает никуда: ни в события и команды, ни в логи, трассы, письма, объяснения вариантов.
+  Конверт (`patient_case_sealed`, рядом `request_id`) есть только в командах `OpenObligation` и `AllocateUnitsToPatient`.
+- Каждое чтение — `READ_PATIENT_CASE` в аудит (NFR016), пишет только `matching` при выдаче номера; `web` эту запись
+  не дублирует, а свой отказ до запроса к `matching` пишет как `ACCESS_DENIED`. Каждое изменение заявки — аудит
+  с участником (NFR008).
 - Спецификация замены (фенотип) — квазиидентификатор: не логируется, не уходит в письма.
 
 ## NFR010: белый список полей прогноза ЧС
 
-Входной адаптер `planning/internal/adapters/forecastin` декодирует в строгую структуру (`DisallowUnknownFields`), затем
-дополнительно отбрасывает всё, кроме: `scenario_version, territory, period_start, period_end, lines[].clinic_code?, lines[].component_kind,
-lines[].blood_group?, lines[].volume_ml, lines[].share?`. Тест: запрос с полями `snils`, `full_name`, `patients[]` принимается
-без них, в БД и логах их нет.
+Входной адаптер `planning/internal/adapters/forecastin` оставляет из тела ИНТ-02 только поля белого списка и отбрасывает
+всё остальное, затем проверяет результат по схеме `libs/contracts/schemas/int02/EmergencyForecast.v1.json`
+(`additionalProperties: false` на каждом уровне; тип `int02.EmergencyForecast`, реестр `contracts.Inbound`). Белый список
+(все поля без ПДн):
+
+- `scenario_version`, `scenario_kind?`, `scenario_name?`, `demo?`;
+- `territory{name, districts[]?{district_code, weight}}` — название территории и районы справочника с весами;
+- `period_start`, `period_end`;
+- `lines[]{clinic_code?, component_kind, blood_group?, volume_ml, share?}`.
+
+Сведения о пострадавших (`snils`, `full_name`, `patients[]` и любые другие поля вне списка) схема не описывает: тест —
+запрос с такими полями принимается без них, в БД и логах их нет.
 
 ## Платформа
 

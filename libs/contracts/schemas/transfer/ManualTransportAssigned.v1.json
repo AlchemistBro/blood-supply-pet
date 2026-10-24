@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/transfer/ManualTransportAssigned.v1.json",
+  "title": "ManualTransportAssigned",
+  "type": "object",
+  "description": "Событие transfer.events: дежурный назначил перевозку вручную (ADR-0023).",
+  "additionalProperties": false,
+  "required": [
+    "obligation_id",
+    "request_id",
+    "transport_ref",
+    "assigned_by",
+    "at"
+  ],
+  "properties": {
+    "obligation_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "obligation_version": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Версия O07 после перехода; проекции применяют событие, только если версия выше сохранённой"
+    },
+    "source_clinic_id": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Клиника-источник обязательства; для фильтра живых статусов без запроса к transfer"
+    },
+    "target_clinic_id": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Клиника-получатель обязательства; для фильтра живых статусов без запроса к transfer"
+    },
+    "request_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "transport_ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "assigned_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Учётная запись дежурного из токена, не ФИО"
+    },
+    "at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

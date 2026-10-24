@@ -1,0 +1,276 @@
+# Правила алертов АС (Grafana unified alerting, provisioning).
+#
+# Источник данных — Prometheus внутри grafana/otel-lgtm; uid "prometheus" — допущение по образу 0.11.0,
+# сверить при подключении (README рядом). Пороговые значения демонстрационные (ADR-0010).
+# Метрики, которых ещё нет (см. README, раздел «Метрики»), дают «нет данных»: noDataState OK, чтобы
+# отсутствующая метрика не будила дежурного. Когда метрика появится, правило начинает работать само.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: messaging
+    folder: АС распределения компонентов крови
+    interval: 1m
+    rules:
+      - uid: bs-dlt-not-empty
+        title: Сообщения в DLT
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: sum by (topic, type) (increase(messaging_consumer_dead_letters_total[10m]))
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        labels: { severity: critical, area: messaging }
+        annotations:
+          summary: "В DLT ушло сообщение {{ $labels.type }} из топика {{ $labels.topic }}"
+          description: "Consumer исчерпал попытки или сообщение ядовитое. Обработка остального продолжается, но действие по этому сообщению не выполнено."
+          runbook_url: https://github.com/AlchemistBro/blood-supply-pet/blob/main/docs/runbooks/dlt-messages.md
+
+      - uid: bs-consumer-lag
+        title: Лаг consumer-группы
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: max by (group, topic) (messaging_consumer_lag)
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [500] }
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        labels: { severity: warning, area: messaging }
+        annotations:
+          summary: "Группа {{ $labels.group }} отстаёт по {{ $labels.topic }}"
+          description: "Лаг больше 500 сообщений (демо) пять минут подряд: статусы и задания на экранах запаздывают."
+          runbook_url: https://github.com/AlchemistBro/blood-supply-pet/blob/main/docs/runbooks/dlt-messages.md
+
+      - uid: bs-outbox-stuck
+        title: Outbox не выгружается
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: max by (job) (messaging_outbox_oldest_age_seconds)
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [60] }
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        labels: { severity: critical, area: messaging }
+        annotations:
+          summary: "Outbox сервиса {{ $labels.job }} растёт"
+          description: "Старейшая невыгруженная строка старше минуты пять минут подряд: ретранслятор остановился на ошибке или Kafka недоступна. События и команды этого сервиса не уходят."
+          runbook_url: https://github.com/AlchemistBro/blood-supply-pet/blob/main/docs/runbooks/dlt-messages.md
+
+  - orgId: 1
+    name: integrations
+    folder: АС распределения компонентов крови
+    interval: 1m
+    rules:
+      - uid: bs-inventory-breaker-open
+        title: Предохранитель transfer → inventory разомкнут
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              # Имя клиента inventory — допущение, сверить с конфигурацией inventoryclient в transfer.
+              expr: sum(increase(httpx_client_calls_total{job="transfer",client="inventory",outcome="circuit_open"}[5m]))
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        labels: { severity: critical, area: integrations }
+        annotations:
+          summary: "Проверка единиц в АИСТ-М недоступна"
+          description: "Предохранитель inventoryclient разомкнут: подтверждения передачи отвечают «АИСТ-М не ответила, повторите через минуту»."
+          runbook_url: https://github.com/AlchemistBro/blood-supply-pet/blob/main/docs/runbooks/aist-unavailable.md
+
+      - uid: bs-gateway-unknown
+        title: Шлюз C03 - заказ в UNKNOWN
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: sum(logistics_transport_orders{status="UNKNOWN"})
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        labels: { severity: critical, area: logistics }
+        annotations:
+          summary: "Есть заказы перевозки с исходом UNKNOWN: {{ $values.A }}"
+          description: "C03 долго недоступна, дошёл ли заказ — неизвестно. transfer получил OUTCOME_UNKNOWN, сверка продолжается; дежурный решает, заказывать ли машину вручную."
+          runbook_url: https://github.com/AlchemistBro/blood-supply-pet/blob/main/docs/runbooks/gateway-unknown-failed.md
+
+      - uid: bs-gateway-failed
+        title: Шлюз C03 - заказ в FAILED
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 3600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: sum(logistics_transport_orders{status="FAILED"})
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        labels: { severity: critical, area: logistics }
+        annotations:
+          summary: "Есть заказы перевозки с исходом FAILED: {{ $values.A }}"
+          description: "После UNKNOWN сверка заказа в C03 не нашла. Второй заказ шлюз вслепую не шлёт: перевозку организует дежурный."
+          runbook_url: https://github.com/AlchemistBro/blood-supply-pet/blob/main/docs/runbooks/gateway-unknown-failed.md
+
+  - orgId: 1
+    name: security
+    folder: АС распределения компонентов крови
+    interval: 1m
+    rules:
+      - uid: bs-audit-chain-broken
+        title: Разрыв цепочки хешей аудита
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 3600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: min(audit_chain_verify_ok)
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        labels: { severity: critical, area: security }
+        annotations:
+          summary: "Проверка цепочки журнала аудита нашла разрыв"
+          description: "Журнал изменён в обход приложения. Это подозрение на инцидент (ADR-0025): начинается отсчёт 24 ч."
+          runbook_url: https://github.com/AlchemistBro/blood-supply-pet/blob/main/docs/runbooks/audit-chain-break.md
+
+      - uid: bs-audit-chain-not-verified
+        title: Цепочка аудита давно не проверялась
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 3600, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: time() - max(audit_chain_verify_last_run_timestamp_seconds)
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [3600] }
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        labels: { severity: warning, area: security }
+        annotations:
+          summary: "Плановая проверка цепочки аудита не выполнялась больше часа"
+          description: "Без проверки разрыв цепочки может остаться незамеченным. Проверить сервис audit и запустить проверку вручную."
+          runbook_url: https://github.com/AlchemistBro/blood-supply-pet/blob/main/docs/runbooks/audit-chain-break.md
+
+      - uid: bs-pd-incident-suspected
+        title: Подозрение на инцидент с ПДн
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: sum by (rule) (increase(security_incidents_suspected_total[15m]))
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        labels: { severity: critical, area: security }
+        annotations:
+          summary: "Сработало правило {{ $labels.rule }} детектора инцидентов"
+          description: "Событие SecurityIncidentSuspected (ADR-0025). Время обнаружения — начало отсчёта 24 ч до уведомления Роскомнадзора, если оператор признает инцидент. Подробности — в журнале аудита по seq, не в алерте."
+          runbook_url: https://github.com/AlchemistBro/blood-supply-pet/blob/main/docs/runbooks/pd-incident-24h-72h.md

@@ -1,0 +1,12 @@
+<span class="badge badge--info">Ожидает подтверждения</span>
+<span class="badge badge--success">Подтверждено, единицы закреплены</span>
+<span class="badge badge--info">Перевозка запрошена</span>
+<span class="badge badge--success">Отправлено</span>
+<span class="badge badge--success-muted">Доставлено</span>
+<span class="badge badge--danger">Отклонено</span>
+<span class="badge badge--neutral">Не подтверждено в срок</span>
+<span class="badge badge--neutral">Отменено</span>
+<span class="badge badge--danger">Нарушено: единица выбыла</span>
+<span class="badge badge--warning">Частично: 2 из 3</span>
+<span class="badge badge--info"><span class="spinner" aria-hidden="true"></span>Закрепление передаётся в АИСТ-М</span>
+<span class="badge badge--success">Подтверждено АИСТ-М</span>

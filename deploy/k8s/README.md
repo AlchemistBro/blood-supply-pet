@@ -36,7 +36,7 @@ deploy/k8s/
     data/                  CloudNativePG Cluster, Database, ScheduledBackup; MinIO и Job бакета
     platform/kafka/        StatefulSet, сервисы, topics.txt и Job создания топиков
     platform/keycloak/     Deployment, realm ConfigMap (копия realm из compose), адрес KC_HOSTNAME
-    platform/observability/ otel-lgtm
+    platform/observability/ otel-lgtm; дашборды и алерты Grafana из deploy/observability (ConfigMap)
     services/              <svc>/ deployment, service, pdb, hpa; общие ConfigMap окружения
     ingress/               Ingress web, Keycloak (/auth), ИНТ-02; закрытые служебные пути
     networkpolicy/         запрет по умолчанию, DNS, потоки по сегментам, отдельные правила K1

@@ -1,0 +1,9 @@
+{
+  "deficit_record_id": "0192f3a1-7b2c-7d4e-8f90-730000000001",
+  "replenishment_plan_id": "0192f3a1-7b2c-7d4e-8f90-710000000001",
+  "clinic_id": 2,
+  "component_kind": "PLT",
+  "blood_group": "AB-",
+  "uncovered_volume_ml": 400,
+  "reason": "NO_SOURCE"
+}

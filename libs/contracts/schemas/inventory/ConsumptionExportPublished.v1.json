@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://blood-supply.dev/schemas/inventory/ConsumptionExportPublished.v1.json",
+  "title": "ConsumptionExportPublished",
+  "type": "object",
+  "description": "Событие inventory.events: выгрузка расхода вида компонента за период для demand (FR045).",
+  "additionalProperties": false,
+  "required": [
+    "component_kind",
+    "period_start",
+    "period_end",
+    "consumed_volume_ml"
+  ],
+  "properties": {
+    "component_kind": {
+      "type": "string",
+      "enum": [
+        "RBC",
+        "FFP",
+        "PLT",
+        "CRYO"
+      ]
+    },
+    "clinic_id": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Клиника; нет — сумма по всем клиникам"
+    },
+    "period_start": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "period_end": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "consumed_volume_ml": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

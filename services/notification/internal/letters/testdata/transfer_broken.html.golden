@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+</head>
+<body style="margin:0;padding:16px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.4;color:#1a1a1a;background:#ffffff">
+<p style="margin:0 0 4px 0;font-size:12px;color:#5a5a5a">АС распределения компонентов донорской крови · демо</p>
+<h1 style="margin:0 0 12px 0;font-size:18px">Нарушено обязательство на передачу</h1>
+<p style="margin:0 0 12px 0">Закреплённая единица компонента крови стала недоступна: обязательство на передачу нарушено, закрепление единицы снято.</p>
+<table style="border-collapse:collapse;margin:0 0 12px 0">
+<tr><th style="text-align:left;vertical-align:top;padding:4px 16px 4px 0;font-weight:normal;color:#5a5a5a">Задание</th><td style="padding:4px 0">0192f3a1-7b2c-7d4e-8f90-300000000001</td></tr>
+<tr><th style="text-align:left;vertical-align:top;padding:4px 16px 4px 0;font-weight:normal;color:#5a5a5a">Причина</th><td style="padding:4px 0">закреплённая единица переведена на карантин</td></tr>
+</table>
+<p style="margin:0 0 12px 0">Проверьте задание и последствия для заявки на экране «Все задания».</p>
+<p style="margin:0 0 16px 0"><a href="http://localhost:8080/duty/tasks" style="color:#0b5cad">Открыть в системе</a></p>
+<p style="margin:0;font-size:12px;color:#5a5a5a">Письмо отправлено автоматически, отвечать на него не нужно. Демонстрационный стенд: данные и нормативы синтетические.</p>
+</body>
+</html>
