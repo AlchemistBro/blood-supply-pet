@@ -39,5 +39,8 @@
 
 ## web
 
-Защищённых операций нет.
+| Метод и путь | Операция | CLINIC_OPERATOR | DUTY_OFFICER | IT_SERVICE | PHYSICIAN | SERVICE | TERRITORIAL_ANALYST |
+| --- | --- | :---: | :---: | :---: | :---: | :---: | :---: |
+| `GET /events/obligations` | VIEW_OBLIGATION | 2xx | 2xx | 403 | 2xx | 2xx | 403 |
+
 Публичные, без проверки прав: `GET /`, `GET /auth/callback`, `GET /auth/login`, `GET /login`, `POST /logout`.

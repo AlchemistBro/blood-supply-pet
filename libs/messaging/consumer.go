@@ -43,6 +43,11 @@ type ConsumerConfig struct {
 	MaxBackoff time.Duration
 	// PollMax — максимум записей за один опрос.
 	PollMax int
+	// StartAtEnd — новая группа (без закоммиченного offset) читает только новые записи, а не топик с начала.
+	// Нужно потребителям «только для показа» (web: живые статусы по SSE), которым история не нужна и
+	// перечитывать её при первом запуске экземпляра дорого. Бизнес-обработчики оставляют false:
+	// им важна каждая запись.
+	StartAtEnd bool
 }
 
 func (c *ConsumerConfig) defaults() {
@@ -80,13 +85,17 @@ type ConsumerMetrics struct {
 // блокируется на время обработки опрошенных записей, чтобы коммит не ушёл не тому экземпляру.
 func NewConsumer(cfg ConsumerConfig, handler Handler, log *slog.Logger, extra ...kgo.Opt) (*Consumer, error) {
 	cfg.defaults()
+	reset := kgo.NewOffset().AtStart()
+	if cfg.StartAtEnd {
+		reset = kgo.NewOffset().AtEnd()
+	}
 	opts := []kgo.Opt{
 		kgo.SeedBrokers(cfg.Brokers...),
 		kgo.ConsumerGroup(cfg.Group),
 		kgo.ConsumeTopics(cfg.Topics...),
 		kgo.DisableAutoCommit(),
 		kgo.BlockRebalanceOnPoll(),
-		kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()),
+		kgo.ConsumeResetOffset(reset),
 		kgo.RequiredAcks(kgo.AllISRAcks()),
 	}
 	opts = append(opts, extra...)
