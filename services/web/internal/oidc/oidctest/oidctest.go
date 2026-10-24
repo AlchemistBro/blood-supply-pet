@@ -62,9 +62,21 @@ type Provider struct {
 	accessTTL  time.Duration
 	lastHint   string
 	tokenCalls int
+	// personal — класть в токены ФИО и email (как Keycloak со scope profile и email по умолчанию).
+	personal bool
+	// idSubject — подменённый sub в id_token (проверка «токены выданы разным пользователям»).
+	idSubject string
 }
 
-// New поднимает провайдера; закрывается в t.Cleanup. По умолчанию входит оператор клиники 1.
+// FullName и Email — персональные данные, которые выдаёт ненастроенный Keycloak.
+const (
+	FullName = "Иванова Мария Петровна"
+	Email    = "m.ivanova@clinic.example"
+)
+
+// New поднимает провайдера; закрывается в t.Cleanup. По умолчанию входит оператор клиники 1, а токены
+// содержат ФИО и email, как у Keycloak без настройки клиента; SetPersonalClaims(false) — как настроенный
+// realm-blood-supply.json (клиент web без scope profile и email).
 func New(t testing.TB) *Provider {
 	t.Helper()
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -78,6 +90,7 @@ func New(t testing.TB) *Provider {
 		codes:     map[string]grant{},
 		refresh:   map[string]User{},
 		accessTTL: 5 * time.Minute,
+		personal:  true,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /.well-known/openid-configuration", p.discovery)
@@ -89,6 +102,20 @@ func New(t testing.TB) *Provider {
 	p.URL = p.server.URL
 	t.Cleanup(p.server.Close)
 	return p
+}
+
+// SetPersonalClaims включает или выключает ФИО и email (name, given_name, family_name, email) в токенах.
+func (p *Provider) SetPersonalClaims(on bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.personal = on
+}
+
+// ForceIDTokenSubject подменяет sub в следующих id_token.
+func (p *Provider) ForceIDTokenSubject(sub string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.idSubject = sub
 }
 
 // UseIssuer задаёт iss в discovery и токенах, отличный от адреса сервера: так ведёт себя Keycloak в compose,
@@ -285,6 +312,7 @@ func (p *Provider) issue(w http.ResponseWriter, u User, nonce string, withID boo
 	}
 	refresh := random()
 	p.refresh[refresh] = u
+	personal, idSubject := p.personal, p.idSubject
 	p.mu.Unlock()
 
 	access, err := p.sign(p.accessClaims(u, ttl))
@@ -301,6 +329,12 @@ func (p *Provider) issue(w http.ResponseWriter, u User, nonce string, withID boo
 			"iss": p.Issuer(), "sub": "sub-" + u.Username, "aud": ClientID, "azp": ClientID,
 			"iat": now.Add(-time.Minute).Unix(), "exp": now.Add(ttl).Unix(), "nonce": nonce,
 			"preferred_username": u.Username,
+		}
+		if idSubject != "" {
+			claims["sub"] = idSubject
+		}
+		if personal {
+			addPersonal(claims)
 		}
 		id, err := p.sign(claims)
 		if err != nil {
@@ -327,7 +361,22 @@ func (p *Provider) accessClaims(u User, ttl time.Duration) map[string]any {
 	if u.ClinicID != nil {
 		c["clinic_id"] = *u.ClinicID
 	}
+	p.mu.Lock()
+	personal := p.personal
+	p.mu.Unlock()
+	if personal {
+		addPersonal(c)
+	}
 	return c
+}
+
+// addPersonal — claims стандартных scope profile и email Keycloak.
+func addPersonal(c map[string]any) {
+	c["name"] = FullName
+	c["given_name"] = "Мария"
+	c["family_name"] = "Иванова"
+	c["email"] = Email
+	c["email_verified"] = true
 }
 
 func (p *Provider) sign(claims map[string]any) (string, error) {

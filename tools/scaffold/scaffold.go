@@ -194,7 +194,7 @@ var Spec []byte
 info:
   title: [[.Name]]
   version: 0.1.0
-  description: Контракт сервиса [[.Name]]. Источник истины для HTTP: код сервера генерируется из этого файла.
+  description: "Контракт сервиса [[.Name]]. Источник истины для HTTP: код сервера генерируется из этого файла."
 servers:
   - url: http://localhost:[[.Port]]
 paths: {}

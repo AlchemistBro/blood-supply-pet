@@ -41,6 +41,12 @@ func (s *Server) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("прослушивание %s: %w", s.srv.Addr, err)
 	}
+	return s.Serve(ctx, ln)
+}
+
+// Serve обслуживает уже открытый слушатель: так вызывающий узнаёт фактический адрес (порт :0) до старта,
+// например тестовый процесс, запускающий имитатор. Остановка — как у Run.
+func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	s.log.Info("HTTP-сервер запущен", "addr", ln.Addr().String())
 	errCh := make(chan error, 1)
 	go func() { errCh <- s.srv.Serve(ln) }()

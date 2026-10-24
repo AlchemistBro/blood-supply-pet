@@ -1,0 +1,33 @@
+version: "2"
+sql:
+  - engine: postgresql
+    # Миграции перечислены явно: 00111 (функции и представление actual_stock) sqlc не разбирает,
+    # запросы к ним написаны вручную в адаптере postgres (stock.go).
+    schema:
+      - ../migrations/00100_inventory.sql
+      - ../migrations/00110_norm.sql
+    queries: queries
+    gen:
+      go:
+        package: gen
+        out: ../internal/adapters/postgres/gen
+        sql_package: pgx/v5
+        emit_pointers_for_null_types: true
+        emit_empty_slices: true
+        overrides:
+          - db_type: uuid
+            go_type: github.com/google/uuid.UUID
+          - db_type: uuid
+            nullable: true
+            go_type:
+              import: github.com/google/uuid
+              type: UUID
+              pointer: true
+          - db_type: timestamptz
+            go_type: time.Time
+          - db_type: timestamptz
+            nullable: true
+            go_type:
+              import: time
+              type: Time
+              pointer: true

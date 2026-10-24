@@ -3,9 +3,7 @@ package server
 import (
 	"errors"
 	"net/http"
-	"net/url"
 	"regexp"
-	"strings"
 
 	auditc "github.com/AlchemistBro/blood-supply-pet/libs/contracts/audit"
 	"github.com/AlchemistBro/blood-supply-pet/libs/httpx/auth"
@@ -30,24 +28,13 @@ const (
 	msgRetry     = "Вход не выполнен: ссылка входа устарела или открыта в другом окне. Войдите ещё раз."
 	msgCancelled = "Вход не выполнен: Keycloak отклонил или отменил вход. Войдите ещё раз."
 	msgFailed    = "Вход не выполнен: не удалось подтвердить вход в Keycloak. Войдите ещё раз."
+	// msgPersonalData — Keycloak настроен неверно: токен с ФИО или email не хранится (ADR-0018).
+	msgPersonalData = "Вход невозможен: Keycloak передаёт в токене персональные данные (ФИО или email). Обратитесь в ИТ-службу."
 )
-
-// safeNext оставляет только локальный путь: защита от перехода на чужой сайт после входа.
-func safeNext(next string) string {
-	if next == "" || len(next) > 512 || !strings.HasPrefix(next, "/") ||
-		strings.HasPrefix(next, "//") || strings.HasPrefix(next, "/\\") || strings.ContainsAny(next, "\r\n") {
-		return "/"
-	}
-	u, err := url.Parse(next)
-	if err != nil || u.Scheme != "" || u.Host != "" {
-		return "/"
-	}
-	return next
-}
 
 // loginPage — страница входа с блоком «Демо-доступ».
 func (s *Server) loginPage(w http.ResponseWriter, r *http.Request) {
-	s.renderLogin(w, r, http.StatusOK, "", safeNext(r.URL.Query().Get("next")))
+	s.renderLogin(w, r, http.StatusOK, "", s.safeNext(r.URL.Query().Get("next")))
 }
 
 func (s *Server) renderLogin(w http.ResponseWriter, r *http.Request, status int, msg, next string) {
@@ -62,7 +49,7 @@ func (s *Server) renderLogin(w http.ResponseWriter, r *http.Request, status int,
 // startLogin создаёт состояние входа (state, nonce, PKCE) в cookie bs_auth и ведёт в Keycloak.
 func (s *Server) startLogin(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	st, err := oidc.NewLoginState(safeNext(q.Get("next")))
+	st, err := oidc.NewLoginState(s.safeNext(q.Get("next")))
 	if err != nil {
 		s.renderError(w, r, http.StatusInternalServerError, "Вход недоступен", "Не удалось начать вход. Повторите позже.")
 		return
@@ -104,11 +91,14 @@ func (s *Server) callback(w http.ResponseWriter, r *http.Request) {
 	res, err := s.oidc.Exchange(r.Context(), q.Get("code"), st)
 	if err != nil {
 		s.log.InfoContext(r.Context(), "вход не подтверждён", "err", err)
-		reason := "exchange"
-		if errors.Is(err, oidc.ErrNonce) {
+		reason, msg := "exchange", msgFailed
+		switch {
+		case errors.Is(err, oidc.ErrNonce):
 			reason = "nonce"
+		case errors.Is(err, oidc.ErrPersonalData):
+			reason, msg = "personal_data", msgPersonalData
 		}
-		s.loginFailed(w, r, reason, msgFailed)
+		s.loginFailed(w, r, reason, msg)
 		return
 	}
 	csrf, err := session.RandomToken()
@@ -125,7 +115,7 @@ func (s *Server) callback(w http.ResponseWriter, r *http.Request) {
 	p := d.Principal()
 	s.record(r, auditclient.Entry{Action: auditc.ActionLogin, ObjectType: "session", ObjectID: p.Username,
 		Result: auditc.ResultSuccess, Principal: &p})
-	http.Redirect(w, r, safeNext(st.Next), http.StatusSeeOther)
+	http.Redirect(w, r, s.safeNext(st.Next), http.StatusSeeOther)
 }
 
 // loginFailed пишет неудачный вход в аудит и показывает страницу входа с объяснением.

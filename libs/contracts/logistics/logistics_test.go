@@ -1,6 +1,10 @@
 package logistics_test
 
 import (
+	"encoding/json"
+	"os"
+	"sort"
+	"strings"
 	"testing"
 
 	"github.com/AlchemistBro/blood-supply-pet/libs/contracts/logistics"
@@ -8,7 +12,7 @@ import (
 )
 
 // Для каждого вида компонента из справочника известен температурный режим перевозки:
-// без него команду перевозчику не собрать (ПП РФ № 641, условия транспортировки).
+// без него команду перевозчику не собрать (ПП РФ № 641, п. 68 в — перевозка раздельно по температурным режимам).
 func TestEveryComponentKindHasTemperatureRegime(t *testing.T) {
 	allowed := map[string]bool{
 		logistics.RegimeCold2to6: true, logistics.RegimeFrozenMinus25: true, logistics.RegimeRoom20to24: true,
@@ -21,6 +25,32 @@ func TestEveryComponentKindHasTemperatureRegime(t *testing.T) {
 	}
 	if _, ok := logistics.TemperatureRegimeFor("UNKNOWN"); ok {
 		t.Error("неизвестный вид не должен получать режим по умолчанию")
+	}
+}
+
+// Причины снятия заказа в Go и в схеме совпадают; карантин закреплённой единицы снимает заказ (ADR-0027).
+func TestCancelReasonsMatchSchema(t *testing.T) {
+	raw, err := os.ReadFile("../schemas/logistics/CancelTransport.v1.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema struct {
+		Properties map[string]struct {
+			Enum []string `json:"enum"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		t.Fatal(err)
+	}
+	got := append([]string(nil), schema.Properties["reason"].Enum...)
+	want := append([]string(nil), logistics.CancelReasons...)
+	sort.Strings(got)
+	sort.Strings(want)
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("в схеме %v, в Go %v", got, want)
+	}
+	if !strings.Contains(","+strings.Join(want, ",")+",", ","+logistics.CancelUnitQuarantined+",") {
+		t.Fatal("карантин закреплённой единицы должен снимать заказ перевозки")
 	}
 }
 

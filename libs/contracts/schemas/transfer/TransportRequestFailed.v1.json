@@ -8,6 +8,7 @@
   "required": ["obligation_id", "reason"],
   "properties": {
     "obligation_id": { "type": "string", "format": "uuid" },
+    "obligation_version": { "type": "integer", "minimum": 0, "description": "Версия O07 после перехода; проекции применяют событие, только если версия выше сохранённой" },
     "reason": { "type": "string", "enum": ["REFUSED", "OUTCOME_UNKNOWN"] },
     "details": { "type": "string", "maxLength": 512 }
   }

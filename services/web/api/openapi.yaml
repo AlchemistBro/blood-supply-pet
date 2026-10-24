@@ -6,12 +6,14 @@ info:
     Интерфейс и BFF (ADR-0007, ADR-0018). Страницы отдаются HTML; вход через Keycloak (authorization code + PKCE),
     сессия в зашифрованной cookie, каждый POST несёт CSRF-токен (поле csrf_token или заголовок X-CSRF-Token).
     Маршруты входа публичные и операций матрицы прав не имеют; экраны ролей описываются вместе с их операциями.
+    Главная и выход не требуют операции роли (x-bs-public), но требуют сессии; выход также требует CSRF.
 servers:
   - url: http://localhost:8080
 paths:
   /login:
     get:
       operationId: loginPage
+      x-bs-public: true
       summary: Страница входа с блоком «Демо-доступ»
       parameters:
         - { name: next, in: query, description: Локальный путь возврата после входа, schema: { type: string, maxLength: 512 } }
@@ -20,6 +22,7 @@ paths:
   /auth/login:
     get:
       operationId: startLogin
+      x-bs-public: true
       summary: Переход в Keycloak (state, nonce, PKCE S256 в cookie bs_auth на 10 минут)
       parameters:
         - { name: hint, in: query, description: login_hint для Keycloak (логин демо-пользователя), schema: { type: string, pattern: "^[a-z0-9._-]{1,64}$" } }
@@ -29,6 +32,7 @@ paths:
   /auth/callback:
     get:
       operationId: loginCallback
+      x-bs-public: true
       summary: Возврат из Keycloak; проверка state и nonce, создание сессии, LOGIN в аудит
       parameters:
         - { name: code, in: query, schema: { type: string } }
@@ -40,6 +44,7 @@ paths:
   /logout:
     post:
       operationId: logout
+      x-bs-public: true
       summary: Выход - LOGOUT в аудит, удаление cookie, end-session Keycloak
       requestBody:
         required: true
@@ -70,6 +75,7 @@ paths:
   /:
     get:
       operationId: home
+      x-bs-public: true
       summary: Главная после входа
       responses:
         "200": { description: Страница, content: { text/html: { schema: { type: string } } } }

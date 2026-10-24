@@ -2,6 +2,7 @@ package auth_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"sync"
 	"testing"
@@ -17,16 +18,29 @@ const servicesSecret = "services-test-secret"
 func newServiceToken(t *testing.T, idp *authtest.IdP, secret string, clk clock.Clock) *auth.ServiceToken {
 	t.Helper()
 	st, err := auth.NewServiceToken(auth.ClientCredentialsConfig{
-		TokenURL:      auth.TokenURL(idp.Issuer),
-		ClientID:      "services",
-		ClientSecret:  secret,
-		RefreshBefore: 30 * time.Second,
-		Clock:         clk,
+		TokenURL:       auth.TokenURL(idp.Issuer),
+		ClientID:       "services",
+		ClientSecret:   secret,
+		RefreshBefore:  30 * time.Second,
+		RefreshTimeout: time.Second,
+		Clock:          clk,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return st
+}
+
+// waitIssued ждёт, пока фоновое обновление дойдёт до IdP: обновление в окне не блокирует вызывающего.
+func waitIssued(t *testing.T, idp *authtest.IdP, want int) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for idp.IssuedTokens("services") < want {
+		if time.Now().After(deadline) {
+			t.Fatalf("выдано токенов %d, ожидали %d", idp.IssuedTokens("services"), want)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 // Служебный токен проходит проверку подписи и даёт роль SERVICE: с ним transfer вызывает
@@ -49,7 +63,7 @@ func TestServiceTokenIsAcceptedWithServiceRole(t *testing.T) {
 	}
 }
 
-// Токен кэшируется до окна обновления и обновляется заранее, а не после истечения.
+// Токен кэшируется до окна обновления; в окне отдаётся прежний, а новый запрашивается в фоне.
 func TestServiceTokenCachesAndRefreshesAhead(t *testing.T) {
 	idp := authtest.New(t)
 	idp.RegisterClient("services", servicesSecret, []auth.Role{auth.RoleService}, 5*time.Minute)
@@ -66,19 +80,63 @@ func TestServiceTokenCachesAndRefreshesAhead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	time.Sleep(50 * time.Millisecond)
 	if second != first || idp.IssuedTokens("services") != 1 {
 		t.Fatalf("до окна обновления токен должен браться из кэша: выдано %d", idp.IssuedTokens("services"))
 	}
 	clk.Advance(2 * time.Second) // осталось меньше 30 с до истечения
-	if _, err := st.Token(ctx); err != nil {
+	inWindow, err := st.Token(ctx)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if idp.IssuedTokens("services") != 2 {
-		t.Fatalf("в окне обновления токен должен быть получен заранее: выдано %d", idp.IssuedTokens("services"))
+	if inWindow != first {
+		t.Fatal("в окне обновления должен сразу отдаваться действующий токен")
+	}
+	waitIssued(t, idp, 2)
+}
+
+// Зависший Keycloak не задерживает вызов, у которого есть действующий токен; вызов без токена ждёт
+// не дольше своего контекста.
+func TestServiceTokenDoesNotWaitForHangingIdP(t *testing.T) {
+	idp := authtest.New(t)
+	idp.RegisterClient("services", servicesSecret, []auth.Role{auth.RoleService}, 5*time.Minute)
+	clk := clock.NewMutable(time.Date(2026, 10, 23, 10, 0, 0, 0, time.UTC))
+	st := newServiceToken(t, idp, servicesSecret, clk)
+
+	first, err := st.Token(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	release := idp.HoldTokenRequests()
+	t.Cleanup(release)
+
+	clk.Advance(4*time.Minute + 45*time.Second) // окно обновления
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	start := time.Now()
+	got, err := st.Token(ctx)
+	if err != nil || got != first {
+		t.Fatalf("ожидали действующий токен без ожидания: err=%v", err)
+	}
+	if waited := time.Since(start); waited > 200*time.Millisecond {
+		t.Fatalf("вызов с действующим токеном ждал зависший IdP %v", waited)
+	}
+
+	// Пустой кэш у другого источника: ждём не дольше своего контекста.
+	cold := newServiceToken(t, idp, servicesSecret, clock.NewMutable(time.Now()))
+	short, cancelShort := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancelShort()
+	start = time.Now()
+	if _, err := cold.Token(short); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("ожидали истечение контекста вызывающего, получили %v", err)
+	}
+	if waited := time.Since(start); waited > 500*time.Millisecond {
+		t.Fatalf("вызов ждал дольше своего контекста: %v", waited)
 	}
 }
 
-// Сбой Keycloak при обновлении не роняет вызовы, пока прежний токен ещё действует; после истечения — ошибка.
+// Сбой Keycloak при обновлении не роняет вызовы, пока прежний токен ещё действует; после истечения — ошибка;
+// после сбоя следующая попытка не раньше паузы.
 func TestServiceTokenSurvivesRefreshFailureUntilExpiry(t *testing.T) {
 	idp := authtest.New(t)
 	idp.RegisterClient("services", servicesSecret, []auth.Role{auth.RoleService}, 5*time.Minute)
@@ -96,13 +154,18 @@ func TestServiceTokenSurvivesRefreshFailureUntilExpiry(t *testing.T) {
 	if err != nil || got != first {
 		t.Fatalf("при сбое обновления ожидали прежний токен: err=%v", err)
 	}
-	clk.Advance(time.Minute)
+	time.Sleep(100 * time.Millisecond) // фоновая попытка успевает завершиться сбоем
+	clk.Advance(time.Minute)           // токен истёк, пауза после сбоя прошла
 	if _, err := st.Token(ctx); err == nil {
 		t.Fatal("после истечения срока без обновления ожидали ошибку")
 	}
 	idp.FailTokenRequests(false)
+	if _, err := st.Token(ctx); err == nil {
+		t.Fatal("сразу после сбоя ожидали паузу, а не новый запрос")
+	}
+	clk.Advance(time.Minute)
 	if _, err := st.Token(ctx); err != nil {
-		t.Fatalf("после восстановления Keycloak токен должен получаться: %v", err)
+		t.Fatalf("после паузы и восстановления Keycloak токен должен получаться: %v", err)
 	}
 }
 

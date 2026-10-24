@@ -17,6 +17,66 @@ import (
 
 const redirect = "http://localhost:8080/auth/callback"
 
+// newProvider — провайдер, настроенный как realm-blood-supply.json: без ФИО и email в токенах.
+func newProvider(t *testing.T) *oidctest.Provider {
+	t.Helper()
+	p := oidctest.New(t)
+	p.SetPersonalClaims(false)
+	return p
+}
+
+// Ненастроенный Keycloak кладёт ФИО и email в access token: такой токен не попадает в сессию.
+func TestExchangeRejectsPersonalDataInAccessToken(t *testing.T) {
+	p := oidctest.New(t) // по умолчанию с ФИО и email
+	c := newClient(t, p)
+	st := loginState(t)
+	cb := p.Authorize(t, c.AuthURL(st, ""))
+	if _, err := c.Exchange(context.Background(), cb.Query().Get("code"), st); !errors.Is(err, ErrPersonalData) {
+		t.Fatalf("ожидалась ErrPersonalData, получено %v", err)
+	}
+}
+
+// То же при обновлении: если ФИО появилось в токене позже, обновление не принимается.
+func TestRefreshRejectsPersonalData(t *testing.T) {
+	p := newProvider(t)
+	c := newClient(t, p)
+	st := loginState(t)
+	cb := p.Authorize(t, c.AuthURL(st, ""))
+	res, err := c.Exchange(context.Background(), cb.Query().Get("code"), st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.SetPersonalClaims(true)
+	if _, err := c.Refresh(context.Background(), res.RefreshToken); !errors.Is(err, ErrPersonalData) {
+		t.Fatalf("ожидалась ErrPersonalData, получено %v", err)
+	}
+}
+
+// id_token и access token другого пользователя — вход не выполняется.
+func TestExchangeRejectsSubjectMismatch(t *testing.T) {
+	p := newProvider(t)
+	p.ForceIDTokenSubject("sub-кто-то-другой")
+	c := newClient(t, p)
+	st := loginState(t)
+	cb := p.Authorize(t, c.AuthURL(st, ""))
+	_, err := c.Exchange(context.Background(), cb.Query().Get("code"), st)
+	if !errors.Is(err, ErrToken) || errors.Is(err, ErrNonce) {
+		t.Fatalf("ожидалась ErrToken (разные sub), получено %v", err)
+	}
+}
+
+// Запрашивается только openid: scope profile и email принесли бы ФИО и email.
+func TestAuthURLRequestsOnlyOpenID(t *testing.T) {
+	c := newClient(t, newProvider(t))
+	u, err := url.Parse(c.AuthURL(loginState(t), ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := u.Query().Get("scope"); got != "openid" {
+		t.Fatalf("scope: %q", got)
+	}
+}
+
 func newClient(t *testing.T, p *oidctest.Provider) *Client {
 	t.Helper()
 	c, err := New(context.Background(), Config{
@@ -42,7 +102,7 @@ func loginState(t *testing.T) session.LoginState {
 
 // Полный поток: authorization code + PKCE S256, nonce в id_token, роли и клиника из access token.
 func TestAuthorizationCodeFlowWithPKCE(t *testing.T) {
-	p := oidctest.New(t)
+	p := newProvider(t)
 	c := newClient(t, p)
 	st := loginState(t)
 
@@ -84,7 +144,7 @@ func TestAuthorizationCodeFlowWithPKCE(t *testing.T) {
 
 // id_token с чужим nonce отклоняется (повтор ответа провайдера).
 func TestExchangeRejectsWrongNonce(t *testing.T) {
-	p := oidctest.New(t)
+	p := newProvider(t)
 	c := newClient(t, p)
 	st := loginState(t)
 	p.ForceNonce("чужой-nonce")
@@ -96,7 +156,7 @@ func TestExchangeRejectsWrongNonce(t *testing.T) {
 
 // Код с чужим PKCE verifier провайдер не обменивает.
 func TestExchangeRejectsWrongVerifier(t *testing.T) {
-	p := oidctest.New(t)
+	p := newProvider(t)
 	c := newClient(t, p)
 	st := loginState(t)
 	cb := p.Authorize(t, c.AuthURL(st, ""))
@@ -108,7 +168,7 @@ func TestExchangeRejectsWrongVerifier(t *testing.T) {
 
 // Обновление по refresh token: новый access token и новый refresh token; отозванный refresh — ошибка.
 func TestRefresh(t *testing.T) {
-	p := oidctest.New(t)
+	p := newProvider(t)
 	c := newClient(t, p)
 	st := loginState(t)
 	cb := p.Authorize(t, c.AuthURL(st, ""))
@@ -134,7 +194,7 @@ func TestRefresh(t *testing.T) {
 
 // Discovery по внутреннему адресу при публичном issuer (compose: keycloak:8080 против localhost:8180).
 func TestDiscoveryByInternalURL(t *testing.T) {
-	p := oidctest.New(t)
+	p := newProvider(t)
 	p.UseIssuer("http://localhost:8180/realms/blood-supply")
 	c := newClient(t, p)
 	st := loginState(t)
@@ -146,7 +206,7 @@ func TestDiscoveryByInternalURL(t *testing.T) {
 
 // Токены чужого issuer не принимаются.
 func TestExchangeRejectsForeignIssuer(t *testing.T) {
-	p := oidctest.New(t)
+	p := newProvider(t)
 	c, err := New(context.Background(), Config{
 		Issuer: "http://other.example/realms/x", DiscoveryURL: p.URL,
 		ClientID: oidctest.ClientID, ClientSecret: oidctest.ClientSecret, RedirectURL: redirect,
@@ -162,7 +222,7 @@ func TestExchangeRejectsForeignIssuer(t *testing.T) {
 }
 
 func TestLogoutURL(t *testing.T) {
-	p := oidctest.New(t)
+	p := newProvider(t)
 	c := newClient(t, p)
 	u, err := url.Parse(c.LogoutURL())
 	if err != nil {

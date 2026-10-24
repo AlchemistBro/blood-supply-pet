@@ -3,6 +3,8 @@ package server
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -57,6 +59,7 @@ type env struct {
 	audit    *fakeAudit
 	srv      *Server
 	handler  http.Handler
+	mux      *http.ServeMux
 	service  *httptest.Server // сервис-приёмник токена пользователя
 	gotToken string
 	svcCode  int
@@ -65,6 +68,8 @@ type env struct {
 func newEnv(t *testing.T) *env {
 	t.Helper()
 	e := &env{t: t, provider: oidctest.New(t), clock: clock.NewMutable(time.Now()), audit: &fakeAudit{}, svcCode: http.StatusOK}
+	// Как настроенный realm-blood-supply.json: в токенах нет ФИО и email (проверка — TestPersonalData*).
+	e.provider.SetPersonalClaims(false)
 	e.service = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		e.gotToken = strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		w.Header().Set("Content-Type", "application/json")
@@ -110,6 +115,7 @@ func newEnv(t *testing.T) *env {
 		}
 		w.WriteHeader(http.StatusOK)
 	})
+	e.mux = mux
 	e.handler = httpx.Chain(mux, e.srv.Middleware()...)
 	return e
 }
@@ -234,6 +240,12 @@ func TestLoginRedirectsToNextOnlyLocally(t *testing.T) {
 		"//evil.example/x":      "/",
 		"https://evil.example/": "/",
 		"/\\evil.example":       "/",
+		"/x/../\\evil.example":  "/",
+		"/%5C":                  "/",
+		"/..%2F%5C":             "/",
+		"/\t/evil.example":      "/",
+		"/∕evil.example":        "/",
+		"/unknown-page":         "/",
 		"":                      "/",
 	} {
 		e.provider.LoginAs(operator)
@@ -434,6 +446,43 @@ func TestRefreshFailureRedirectsToLogin(t *testing.T) {
 	}
 }
 
+func TestRefreshKeepsAbsoluteSessionDeadline(t *testing.T) {
+	e := newEnv(t)
+	j := e.login(operator, "/")
+	e.clock.Advance(7 * time.Hour)
+	if rec := e.do(http.MethodGet, "/", j, nil); rec.Code != http.StatusOK {
+		t.Fatalf("обновление до срока сессии: %d", rec.Code)
+	}
+	calls := e.provider.TokenCalls()
+	e.clock.Advance(time.Hour + time.Second)
+	rec := e.do(http.MethodGet, "/", j, nil)
+	if rec.Code != http.StatusSeeOther || j.hasPrefix("bs_session.") {
+		t.Fatalf("обновление продлило абсолютный срок: %d", rec.Code)
+	}
+	if e.provider.TokenCalls() != calls {
+		t.Fatal("после абсолютного срока refresh не должен вызываться")
+	}
+}
+
+type changedSubjectOIDC struct{ OIDC }
+
+func (c changedSubjectOIDC) Refresh(ctx context.Context, token string) (oidc.Result, error) {
+	res, err := c.OIDC.Refresh(ctx, token)
+	res.Principal.Subject = "another-user"
+	return res, err
+}
+
+func TestRefreshCannotChangeSessionSubject(t *testing.T) {
+	e := newEnv(t)
+	j := e.login(operator, "/")
+	e.srv.oidc = changedSubjectOIDC{e.srv.oidc}
+	e.clock.Advance(10 * time.Minute)
+	rec := e.do(http.MethodGet, "/", j, nil)
+	if rec.Code != http.StatusSeeOther || j.hasPrefix("bs_session.") {
+		t.Fatalf("токен другого участника принят в сессию: %d", rec.Code)
+	}
+}
+
 // ---------------------------------------------------------------- права, CSRF, сервисы
 
 // Чужая роль: 403 «Недостаточно прав» и запись в аудит.
@@ -596,5 +645,54 @@ func TestHeaderShowsLoginOnly(t *testing.T) {
 		if _, ok := raw[k]; ok {
 			t.Fatalf("в сессии не хранится %s", k)
 		}
+	}
+	assertNoPersonalData(t, raw)
+}
+
+// assertNoPersonalData — в расшифрованной сессии, включая тело access token, нет ФИО и email.
+func assertNoPersonalData(t *testing.T, raw map[string]any) {
+	t.Helper()
+	plain, err := json.Marshal(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	at, _ := raw["at"].(string)
+	parts := strings.Split(at, ".")
+	if len(parts) != 3 {
+		t.Fatalf("в сессии нет access token: %q", at)
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var claims map[string]any
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{"name", "given_name", "family_name", "email"} {
+		if _, ok := claims[k]; ok {
+			t.Fatalf("в access token из cookie есть %s", k)
+		}
+	}
+	for _, s := range []string{oidctest.FullName, oidctest.Email, "Иванова"} {
+		if strings.Contains(string(plain), s) || strings.Contains(string(payload), s) {
+			t.Fatalf("в cookie сессии есть %q", s)
+		}
+	}
+}
+
+// Ненастроенный Keycloak (ФИО и email в токене): сессия не создаётся, пользователь видит причину.
+func TestPersonalDataInTokenRefusesLogin(t *testing.T) {
+	e := newEnv(t)
+	e.provider.SetPersonalClaims(true)
+	j := jar{}
+	rec := e.do(http.MethodGet, "/auth/login", j, nil)
+	cb := e.provider.Authorize(t, rec.Header().Get("Location"))
+	rec = e.do(http.MethodGet, "/auth/callback?"+cb.RawQuery, j, nil)
+	if rec.Code != http.StatusBadRequest || j.hasPrefix("bs_session.") {
+		t.Fatalf("токен с ФИО: %d, сессия %v", rec.Code, j.hasPrefix("bs_session."))
+	}
+	if !strings.Contains(rec.Body.String(), "ИТ-службу") || strings.Contains(rec.Body.String(), oidctest.FullName) {
+		t.Fatalf("сообщение без самих данных: %s", rec.Body.String())
 	}
 }

@@ -1,0 +1,29 @@
+# Топики стенда: <имя> <партиции> <retention.ms>
+# Источник списка — libs/contracts/contracts.go (AllTopics) и messaging.WithDLT (суффикс .dlt).
+# Новый топик в контрактах — новая строка здесь и в DLT-блоке.
+#
+# Партиции: порядок нужен только внутри ключа агрегата (docs/architecture/events.md), три партиции
+# позволяют HPA запускать до трёх потребителей в группе. DLT разбирают вручную — одна партиция.
+# Хранение: 7 суток для рабочих топиков (как окно PITR), 30 суток для DLT (время на разбор).
+inventory.events 3 604800000
+inventory.commands 3 604800000
+demand.events 3 604800000
+planning.events 3 604800000
+matching.events 3 604800000
+transfer.commands 3 604800000
+transfer.events 3 604800000
+logistics.commands 3 604800000
+logistics.replies 3 604800000
+logistics.events 3 604800000
+audit.events 3 604800000
+inventory.events.dlt 1 2592000000
+inventory.commands.dlt 1 2592000000
+demand.events.dlt 1 2592000000
+planning.events.dlt 1 2592000000
+matching.events.dlt 1 2592000000
+transfer.commands.dlt 1 2592000000
+transfer.events.dlt 1 2592000000
+logistics.commands.dlt 1 2592000000
+logistics.replies.dlt 1 2592000000
+logistics.events.dlt 1 2592000000
+audit.events.dlt 1 2592000000
