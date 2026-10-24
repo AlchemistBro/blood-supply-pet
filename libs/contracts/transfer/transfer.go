@@ -95,6 +95,7 @@ type ReplacementSpec struct {
 // OpenObligation — команда «создать задание источнику» (O07 PENDING). Повтор с тем же choice_id
 // не создаёт второе обязательство.
 type OpenObligation struct {
+	ProtectedFloors map[int64]int `json:"protected_floors,omitempty"`
 	ChoiceID       uuid.UUID `json:"choice_id"`
 	RequestID      uuid.UUID `json:"request_id"`
 	Origin         string    `json:"origin"`
