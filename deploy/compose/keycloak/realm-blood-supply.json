@@ -84,7 +84,7 @@
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "https://localhost/*##http://localhost:8080/*"
       },
-      "defaultClientScopes": ["web-origins", "acr", "roles"],
+      "defaultClientScopes": ["basic", "web-origins", "acr", "roles"],
       "optionalClientScopes": [],
       "protocolMappers": [
         {"name":"preferred_username","protocol":"openid-connect","protocolMapper":"oidc-usermodel-property-mapper","consentRequired":false,"config":{"user.attribute":"username","claim.name":"preferred_username","jsonType.label":"String","id.token.claim":"true","access.token.claim":"true","userinfo.token.claim":"true"}},
