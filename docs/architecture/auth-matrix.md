@@ -36,3 +36,8 @@
 | `POST /obligations/{id}/cancel` | CANCEL_OBLIGATION | 403 | 2xx | 403 | 403 | 2xx | 403 |
 | `POST /obligations/{id}/confirm` | CONFIRM_TRANSFER | 2xx | 2xx | 403 | 403 | 403 | 403 |
 | `POST /obligations/{id}/replace` | REPLACE_UNIT | 2xx | 2xx | 403 | 403 | 403 | 403 |
+
+## web
+
+Защищённых операций нет.
+Публичные, без проверки прав: `GET /`, `GET /auth/callback`, `GET /auth/login`, `GET /login`, `POST /logout`.
