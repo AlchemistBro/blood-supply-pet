@@ -272,6 +272,42 @@ func TestIssueInSimulatorBecomesUnitWithdrawn(t *testing.T) {
 	}
 }
 
+// После выбытия новые версии сохраняются вместе с историей, но повторных событий не создают.
+func TestWithdrawnUnitUpdatesCopyAndHistoryWithoutPublishing(t *testing.T) {
+	e := setup(t, 500)
+	e.aist.Add(fakeaist.Unit{AistUnitCode: "U-1"})
+	e.sync(t)
+	e.aist.Withdraw("U-1", "ISSUED")
+	e.sync(t)
+	before := unitByCode(t, e.pool, "U-1")
+	msgs := outbox(t, e.pool)
+	if len(msgs) != 2 || msgs[1].Type != "UnitWithdrawn" {
+		t.Fatalf("события до обновления выбывшей единицы: %+v", msgs)
+	}
+
+	for i, status := range []string{domain.StatusDiscarded, domain.StatusDiscarded, domain.StatusTransferred} {
+		src := e.aist.SetStatus("U-1", status)
+		res := e.sync(t)
+		if res.Applied != 1 || res.Result != app.SyncSuccess {
+			t.Fatalf("обновление выбывшей единицы: %+v", res)
+		}
+		after := unitByCode(t, e.pool, "U-1")
+		if after.ID != before.ID || after.Status != status || after.Version != src.Version || !after.Updated.Equal(e.clock.Now()) {
+			t.Fatalf("новая версия не сохранена: %+v", after)
+		}
+		wantHistory := 3
+		if i == 2 {
+			wantHistory = 4
+		}
+		if n := historyCount(t, e.pool, before.ID); n != wantHistory {
+			t.Fatalf("строк истории %d, ожидали %d", n, wantHistory)
+		}
+		if got := outbox(t, e.pool); len(got) != len(msgs) {
+			t.Fatalf("обновление выбывшей единицы создало событие: %+v", got)
+		}
+	}
+}
+
 // Истёкший срок приходит как DISCARDED с withdrawal_reason=EXPIRED: причина события — EXPIRED.
 func TestExpiryBecomesUnitWithdrawnExpired(t *testing.T) {
 	e := setup(t, 500)

@@ -1,0 +1,26 @@
+# Дашборды, алерты и провайдер Grafana как ConfigMap для Kubernetes.
+# Подключается из deploy/k8s/base/platform/observability; файлы — те же, что монтируются в compose.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: bs-observability
+
+generatorOptions:
+  labels:
+    app.kubernetes.io/name: otel-lgtm
+    app.kubernetes.io/part-of: blood-supply
+
+configMapGenerator:
+  - name: grafana-dashboards
+    files:
+      - grafana/dashboards/services-red.json
+      - grafana/dashboards/saga.json
+      - grafana/dashboards/logistics-gateway.json
+      - grafana/dashboards/messaging.json
+      - grafana/dashboards/http-clients.json
+      - grafana/dashboards/audit.json
+  - name: grafana-provisioning
+    files:
+      - dashboards-provider.yaml=grafana/provisioning/dashboards/blood-supply.yaml
+      - alert-rules.yaml=grafana/provisioning/alerting/rules.yaml
+      - contact-points.yaml=grafana/provisioning/alerting/contact-points.yaml

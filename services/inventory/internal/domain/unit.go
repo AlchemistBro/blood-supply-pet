@@ -212,11 +212,11 @@ func transition(prev Unit, in SourceUnit, receivedAt time.Time) Change {
 		InvalidTransition: !TransitionAllowed(prev.Status, in.Status),
 	}
 	switch wasOut, nowOut := IsWithdrawn(prev.Status), IsWithdrawn(in.Status); {
-	case !wasOut && nowOut:
+	case wasOut:
+		ch.Event = EventSilent
+	case nowOut:
 		ch.Event = EventWithdrawn
 		ch.Reason = WithdrawReason(in.Status, in.WithdrawalReason)
-	case wasOut && nowOut:
-		ch.Event = EventSilent
 	}
 	return ch
 }
