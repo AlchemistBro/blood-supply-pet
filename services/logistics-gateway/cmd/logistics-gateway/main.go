@@ -33,7 +33,8 @@ func main() {
 			estimates := app.Estimates{Pool: rt.Pool, Source: carrier, Journal: rt.Journal, Ref: rt.Refdata, Log: rt.Log}
 			gw := app.New(rt.Pool, postgres.New(rt.Pool), carrier,
 				kafka.Outbox{Journal: rt.Journal, Topic: contracts.TopicLogisticsReplies}, rt.Clock, rt.Log, cfg.settings())
-			workers := []runtime.Worker{estimates.Run}
+			progress := app.ProgressFeed{Store: postgres.ProgressStore{Pool: rt.Pool, Journal: rt.Journal}, Source: carrier, Clock: rt.Clock, Log: rt.Log}
+			workers := []runtime.Worker{estimates.Run, progress.Run}
 			if cfg.ReconcilerEnabled {
 				workers = append(workers, gw.RunReconciler)
 			}

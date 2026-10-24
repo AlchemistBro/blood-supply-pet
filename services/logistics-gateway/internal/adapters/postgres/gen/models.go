@@ -35,4 +35,8 @@ type TransportRequest struct {
 	LastError         *string
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
+	ProgressCheckedAt *time.Time
+	DispatchReported  bool
+	DeliveryReported  bool
+	ProgressPayload   []byte
 }

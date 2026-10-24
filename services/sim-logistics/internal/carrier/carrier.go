@@ -91,6 +91,7 @@ func (o Order) Validate() error {
 
 // Shipment — заказ у перевозчика.
 type Shipment struct {
+	Progress    Progress
 	ShipmentRef string
 	Order
 	Cancelled   bool
