@@ -1,0 +1,348 @@
+{
+  "realm": "blood-supply",
+  "displayName": "АС распределения компонентов донорской крови (демо)",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": false,
+  "duplicateEmailsAllowed": true,
+  "bruteForceProtected": true,
+  "accessTokenLifespan": 900,
+  "ssoSessionIdleTimeout": 28800,
+  "ssoSessionMaxLifespan": 36000,
+  "internationalizationEnabled": true,
+  "supportedLocales": [
+    "ru",
+    "en"
+  ],
+  "defaultLocale": "ru",
+  "attributes": {
+    "physician_mfa_required": "false"
+  },
+  "roles": {
+    "realm": [
+      {
+        "name": "PHYSICIAN",
+        "description": "Врач-трансфузиолог"
+      },
+      {
+        "name": "CLINIC_OPERATOR",
+        "description": "Оператор клинической организации"
+      },
+      {
+        "name": "TERRITORIAL_ANALYST",
+        "description": "Территориальный аналитик"
+      },
+      {
+        "name": "DUTY_OFFICER",
+        "description": "Дежурный смены"
+      },
+      {
+        "name": "IT_SERVICE",
+        "description": "Внешняя ИТ-служба"
+      },
+      {
+        "name": "SERVICE",
+        "description": "Служебный клиент (внутренние вызовы)"
+      }
+    ]
+  },
+  "components": {
+    "org.keycloak.userprofile.UserProfileProvider": [
+      {
+        "providerId": "declarative-user-profile",
+        "subComponents": {},
+        "config": {
+          "kc.user.profile.config": [
+            "{\"attributes\": [{\"name\": \"username\", \"displayName\": \"${username}\", \"validations\": {\"length\": {\"min\": 3, \"max\": 255}}, \"permissions\": {\"view\": [\"admin\", \"user\"], \"edit\": [\"admin\", \"user\"]}}, {\"name\": \"email\", \"displayName\": \"${email}\", \"validations\": {\"email\": {}, \"length\": {\"max\": 255}}, \"permissions\": {\"view\": [\"admin\", \"user\"], \"edit\": [\"admin\", \"user\"]}}, {\"name\": \"firstName\", \"displayName\": \"${firstName}\", \"validations\": {\"length\": {\"max\": 255}}, \"permissions\": {\"view\": [\"admin\", \"user\"], \"edit\": [\"admin\", \"user\"]}}, {\"name\": \"lastName\", \"displayName\": \"${lastName}\", \"validations\": {\"length\": {\"max\": 255}}, \"permissions\": {\"view\": [\"admin\", \"user\"], \"edit\": [\"admin\", \"user\"]}}, {\"name\": \"clinic_id\", \"displayName\": \"Клиника (clinic_id)\", \"validations\": {\"integer\": {\"min\": 1, \"max\": 100000}}, \"permissions\": {\"view\": [\"admin\", \"user\"], \"edit\": [\"admin\"]}}]}"
+          ]
+        }
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "web",
+      "name": "Веб-интерфейс",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "${BS_WEB_CLIENT_SECRET}",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": true,
+      "redirectUris": [
+        "${BS_WEB_PUBLIC_URL}/auth/callback"
+      ],
+      "webOrigins": [
+        "${BS_WEB_PUBLIC_URL}"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "${BS_WEB_PUBLIC_URL}/login"
+      },
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "roles"
+      ],
+      "optionalClientScopes": [],
+      "protocolMappers": [
+        {
+          "name": "preferred_username",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "username",
+            "claim.name": "preferred_username",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience-blood-supply-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "blood-supply-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "clinic_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "clinic_id",
+            "claim.name": "clinic_id",
+            "jsonType.label": "long",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "services",
+      "name": "Служебный клиент сервисов",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "${BS_SERVICE_CLIENT_SECRET}",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "fullScopeAllowed": true,
+      "defaultClientScopes": [
+        "roles"
+      ],
+      "protocolMappers": [
+        {
+          "name": "audience-blood-supply-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "blood-supply-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "blood-supply-cli",
+      "name": "Демо-клиент для тестов и скриптов (вход паролем)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "fullScopeAllowed": true,
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email"
+      ],
+      "protocolMappers": [
+        {
+          "name": "audience-blood-supply-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "blood-supply-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "clinic_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "clinic_id",
+            "claim.name": "clinic_id",
+            "jsonType.label": "long",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "service-account-services",
+      "enabled": true,
+      "serviceAccountClientId": "services",
+      "realmRoles": [
+        "SERVICE"
+      ]
+    },
+    {
+      "username": "physician1",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Врач",
+      "lastName": "Демонстрационный",
+      "email": "physician1@demo.blood-supply.local",
+      "attributes": {
+        "clinic_id": [
+          "2"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "demo",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "PHYSICIAN"
+      ],
+      "requiredActions": []
+    },
+    {
+      "username": "operator-c001",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Оператор",
+      "lastName": "Клиники №1",
+      "email": "operator-c001@demo.blood-supply.local",
+      "attributes": {
+        "clinic_id": [
+          "1"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "demo",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "CLINIC_OPERATOR"
+      ],
+      "requiredActions": []
+    },
+    {
+      "username": "operator-c002",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Оператор",
+      "lastName": "Клиники №2",
+      "email": "operator-c002@demo.blood-supply.local",
+      "attributes": {
+        "clinic_id": [
+          "2"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "demo",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "CLINIC_OPERATOR"
+      ],
+      "requiredActions": []
+    },
+    {
+      "username": "analyst1",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Аналитик",
+      "lastName": "Территориальный",
+      "email": "analyst1@demo.blood-supply.local",
+      "attributes": {},
+      "credentials": [
+        {
+          "type": "password",
+          "value": "demo",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "TERRITORIAL_ANALYST"
+      ],
+      "requiredActions": []
+    },
+    {
+      "username": "duty1",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Дежурный",
+      "lastName": "Смены",
+      "email": "duty1@demo.blood-supply.local",
+      "attributes": {},
+      "credentials": [
+        {
+          "type": "password",
+          "value": "demo",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "DUTY_OFFICER"
+      ],
+      "requiredActions": []
+    },
+    {
+      "username": "it1",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Сотрудник",
+      "lastName": "ИТ-службы",
+      "email": "it1@demo.blood-supply.local",
+      "attributes": {},
+      "credentials": [
+        {
+          "type": "password",
+          "value": "demo",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "IT_SERVICE"
+      ],
+      "requiredActions": []
+    }
+  ]
+}

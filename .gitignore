@@ -28,5 +28,7 @@ Thumbs.db
 
 # Local data
 deploy/compose/.data/
+deploy/railway/prepared/
+__pycache__/
 k6/results/
 tests/load/results/
