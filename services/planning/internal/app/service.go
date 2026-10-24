@@ -46,7 +46,7 @@ func (s *Service) Plan(ctx context.Context, id uuid.UUID) (PlanRecord, error) {
 }
 
 // Build сохраняет снимок входов и результат вместе с командами и аудитом. Повтор ключа возвращает прежний план.
-func (s *Service) Build(ctx context.Context, id uuid.UUID, forecastID *uuid.UUID, actor string) (PlanRecord, error) {
+func (s *Service) Build(ctx context.Context, id uuid.UUID, forecastID *uuid.UUID, actor string, roles ...string) (PlanRecord, error) {
 	if id == uuid.Nil {
 		return PlanRecord{}, fmt.Errorf("%w: нужен ключ идемпотентности", ErrInvalid)
 	}
@@ -110,7 +110,11 @@ func (s *Service) Build(ctx context.Context, id uuid.UUID, forecastID *uuid.UUID
 		if err := s.publishPlan(ctx, tx, input.Input, out, forecastID, version); err != nil {
 			return err
 		}
-		return s.journal.Audit(ctx, tx, messaging.AuditEntry{UserID: actor, Action: "PLAN_BUILT", ObjectType: "replenishment_plan", ObjectID: id.String(), Result: auditc.ResultSuccess})
+		role := "SERVICE"
+		if len(roles) > 0 {
+			role = roles[0]
+		}
+		return s.journal.Audit(ctx, tx, messaging.AuditEntry{UserID: actor, Role: role, Action: "PLAN_BUILT", ObjectType: "replenishment_plan", ObjectID: id.String(), Result: auditc.ResultSuccess})
 	})
 	return out, err
 }

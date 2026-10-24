@@ -137,7 +137,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 
 // home — стартовая страница после входа (экраны ролей подключаются пакетами UI).
 func (s *Server) home(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, http.StatusOK, "home", s.view(r, "Главная"))
+	s.renderScreen(w, r, http.StatusOK, "home.html", "Главная", struct{}{})
 }
 
 // forbidden — страница 403 для authz.Guard.

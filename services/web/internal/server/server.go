@@ -57,6 +57,7 @@ type Config struct {
 
 // Deps — зависимости сервера.
 type Deps struct {
+	Matching  *svcclient.Client
 	Planning  *svcclient.Client
 	Demand    *svcclient.Client
 	Transfer  *svcclient.Client
@@ -70,6 +71,7 @@ type Deps struct {
 
 // Server — обработчики и middleware web.
 type Server struct {
+	matching  *svcclient.Client
 	planning  *svcclient.Client
 	demand    *svcclient.Client
 	transfer  *svcclient.Client
@@ -110,6 +112,7 @@ func New(cfg Config, d Deps) (*Server, error) {
 		return nil, err
 	}
 	s := &Server{
+		matching: d.Matching,
 		planning: d.Planning,
 		demand:   d.Demand,
 		transfer: d.Transfer, inventory: d.Inventory, ui: renderer,
@@ -145,6 +148,9 @@ func (s *Server) Register(mux *http.ServeMux) {
 	}
 	if s.planning != nil {
 		s.registerPlanning(mux)
+	}
+	if s.matching != nil {
+		s.registerPhysician(mux)
 	}
 }
 

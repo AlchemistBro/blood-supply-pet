@@ -151,6 +151,11 @@ tasks:
     cmds:
       - go run ./tools/auditverify
 
+  bench:plan:
+    desc: Измерить NFR002 (100 клиник, 100000 единиц); требует разрешённого запуска тестовых бинарников
+    cmds:
+      - go test ./services/planning/internal/domain -run '^$' -bench '^BenchmarkBuildPlanNFR002$' -benchmem -count=1
+
   authmatrix:
     desc: Проверить x-bs-operation в контрактах и актуальность docs/architecture/auth-matrix.md (NFR011)
     cmds:

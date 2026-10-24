@@ -36,6 +36,11 @@ spec:
             - configMapRef:
                 name: web-config
           env:
+            - name: BS_MATCHING_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: service-endpoints
+                  key: BS_MATCHING_URL
             - name: BS_PLANNING_URL
               valueFrom:
                 configMapKeyRef:
