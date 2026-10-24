@@ -8,7 +8,31 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+type AnnualConsumption struct {
+	AnnualConsumptionID uuid.UUID
+	ClinicID            int64
+	ComponentKindCode   string
+	ConsumptionYear     int16
+	AnnualVolumeMl      int64
+	// Пользователь из токена (без ФИО)
+	EnteredBy string
+	EnteredAt time.Time
+}
+
+type StockNorm struct {
+	StockNormID         uuid.UUID
+	AnnualConsumptionID uuid.UUID
+	ClinicID            int64
+	ComponentKindCode   string
+	AvgMonthlyMl        pgtype.Numeric
+	NormMl              pgtype.Numeric
+	IsMinUnitApplied    bool
+	IsCurrent           bool
+	CalculatedAt        time.Time
+}
 
 type SyncRun struct {
 	SyncRunID    uuid.UUID

@@ -11,6 +11,116 @@ servers:
 # x-bs-operation у каждой операции — операция матрицы прав (libs/httpx/auth/policy.go), которую проверяет сервер.
 # Служебные маршруты (/healthz, /readyz, /metrics, /openapi.yaml) здесь не описаны: их отдаёт libs/runtime без токена.
 paths:
+  /clinics/{id}/stock:
+    get:
+      operationId: getClinicStock
+      x-bs-operation: VIEW_STOCK
+      summary: Фактический запас клиники по виду и группе (FR010, FR011) с водяным знаком (NFR015)
+      description: |
+        В запас входят единицы в доступном статусе по справочнику ref_unit_status (карантин недоступен,
+        ПП РФ № 641, п. 62) с неистёкшим на момент ответа сроком годности (FR007). Оператор и врач видят
+        только свою клинику, дежурный и ИТ-служба — любую.
+      parameters:
+        - $ref: "#/components/parameters/ClinicID"
+      responses:
+        "200":
+          description: Сводка запаса
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ClinicStock" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /clinics/{id}/units:
+    get:
+      operationId: listClinicUnits
+      x-bs-operation: VIEW_STOCK
+      summary: Единицы фактического запаса клиники, по умолчанию FEFO (FR015)
+      description: |
+        Единицы в доступном статусе с неистёкшим сроком. При fefo=true — сначала с ближайшей годностью.
+        Единицы, которые истекут до прибытия к получателю, здесь не исключаются: это делает подбор.
+      parameters:
+        - $ref: "#/components/parameters/ClinicID"
+        - { name: fefo, in: query, schema: { type: boolean, default: true } }
+        - { name: kind, in: query, description: Код вида компонента, schema: { type: string } }
+        - { name: group, in: query, description: "Код группы крови, например O- или A+", schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 100 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        "200":
+          description: Страница единиц
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UnitPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /units/{id}:
+    get:
+      operationId: getUnit
+      x-bs-operation: VIEW_STOCK
+      summary: Карточка единицы (FR002–FR009) в любом статусе
+      parameters:
+        - $ref: "#/components/parameters/UnitID"
+      responses:
+        "200":
+          description: Единица
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UnitCard" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /units/{id}/history:
+    get:
+      operationId: getUnitHistory
+      x-bs-operation: VIEW_STOCK
+      summary: История состояний единицы по данным АИСТ-М (FR008)
+      parameters:
+        - $ref: "#/components/parameters/UnitID"
+      responses:
+        "200":
+          description: История
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UnitHistory" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /sync/last:
+    get:
+      operationId: getLastSync
+      x-bs-operation: VIEW_STOCK
+      summary: Последний сеанс опроса АИСТ-М и последний успешный (время и результат обновления, NFR015)
+      responses:
+        "200":
+          description: Состояние обмена
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SyncOverview" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /sync/runs:
+    get:
+      operationId: listSyncRuns
+      x-bs-operation: VIEW_STOCK
+      summary: Журнал сеансов обмена с АИСТ-М, новые первыми
+      parameters:
+        - name: kind
+          in: query
+          schema: { type: string, enum: [CHANGES, DAILY_SNAPSHOT, ON_DEMAND, UNIT_CHECK] }
+        - { name: before, in: query, description: Курсор — sync_run_id последней строки предыдущей страницы, schema: { type: string, format: uuid } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 50 } }
+      responses:
+        "200":
+          description: Страница журнала
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SyncRunPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /internal/units/status:
     get:
       operationId: getUnitStatuses
@@ -68,6 +178,19 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 components:
+  parameters:
+    ClinicID:
+      name: id
+      in: path
+      required: true
+      description: Идентификатор клиники (clinic_id)
+      schema: { type: integer, format: int64, minimum: 1 }
+    UnitID:
+      name: id
+      in: path
+      required: true
+      description: Идентификатор единицы (unit_id)
+      schema: { type: string, format: uuid }
   responses:
     BadRequest:
       description: Неверный запрос
@@ -90,6 +213,112 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
   schemas:
+    ClinicStock:
+      type: object
+      required: [clinic_id, as_of, is_stale, lines]
+      properties:
+        clinic_id: { type: integer, format: int64 }
+        as_of: { type: string, format: date-time, description: Момент, на который посчитан запас }
+        watermark:
+          type: string
+          format: date-time
+          nullable: true
+          description: Время последнего успешного обновления из АИСТ-М (NFR015); null, если обновлений не было.
+        is_stale: { type: boolean, description: Обновление старше порога актуальности — показать предупреждение (NFR015) }
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/StockLine" }
+    StockLine:
+      type: object
+      required: [component_kind, blood_group, unit_count, volume_ml, volume_l, nearest_expiry]
+      properties:
+        component_kind: { type: string }
+        blood_group: { type: string }
+        unit_count: { type: integer, format: int64, description: Число доступных единиц (FR010) }
+        volume_ml: { type: integer, format: int64 }
+        volume_l: { type: number, format: double, description: Объём в литрах, volume_ml / 1000 (FR011) }
+        nearest_expiry: { type: string, format: date-time }
+    UnitPage:
+      type: object
+      required: [clinic_id, as_of, is_stale, units, has_more]
+      properties:
+        clinic_id: { type: integer, format: int64 }
+        as_of: { type: string, format: date-time }
+        watermark: { type: string, format: date-time, nullable: true }
+        is_stale: { type: boolean }
+        units:
+          type: array
+          items: { $ref: "#/components/schemas/UnitCard" }
+        has_more: { type: boolean }
+    UnitCard:
+      type: object
+      description: Единица компонента крови. Исходный код АИСТ-М не отдаётся (ADR-0010).
+      required: [unit_id, clinic_id, storage_location, component_kind, blood_group, rh_positive, volume_ml, expires_at, status, available, is_expired, version, status_received_at]
+      properties:
+        unit_id: { type: string, format: uuid }
+        clinic_id: { type: integer, format: int64 }
+        storage_location: { type: string, description: Точка хранения (FR009) }
+        component_kind: { type: string }
+        blood_group: { type: string }
+        rh_positive: { type: boolean }
+        phenotype: { type: string, description: Известные характеристики фенотипа без изменений (FR006) }
+        volume_ml: { type: integer, format: int64 }
+        expires_at: { type: string, format: date-time }
+        status:
+          type: string
+          enum: [IN_STOCK, QUARANTINE, ISSUED, DISCARDED, TRANSFERRED]
+        available: { type: boolean, description: Входит в фактический запас — доступный статус и неистёкший срок }
+        is_expired: { type: boolean }
+        version: { type: integer, format: int64, description: Версия записи в АИСТ-М }
+        status_received_at: { type: string, format: date-time, description: Когда получено текущее состояние (FR008) }
+    UnitHistory:
+      type: object
+      required: [unit_id, items]
+      properties:
+        unit_id: { type: string, format: uuid }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/UnitStatusChange" }
+    UnitStatusChange:
+      type: object
+      required: [status, source_version, changed_at, received_at]
+      properties:
+        status:
+          type: string
+          enum: [IN_STOCK, QUARANTINE, ISSUED, DISCARDED, TRANSFERRED]
+        source_version: { type: integer, format: int64 }
+        changed_at: { type: string, format: date-time, description: Время изменения в АИСТ-М }
+        received_at: { type: string, format: date-time, description: Время получения системой }
+    SyncOverview:
+      type: object
+      required: [as_of, is_stale]
+      properties:
+        as_of: { type: string, format: date-time }
+        watermark: { type: string, format: date-time, nullable: true }
+        is_stale: { type: boolean }
+        last_run: { $ref: "#/components/schemas/SyncRun" }
+        last_success: { $ref: "#/components/schemas/SyncRun" }
+    SyncRun:
+      type: object
+      required: [sync_run_id, sync_kind, requested_by, started_at, changes_count, source_version]
+      properties:
+        sync_run_id: { type: string, format: uuid }
+        sync_kind: { type: string, enum: [CHANGES, DAILY_SNAPSHOT, ON_DEMAND, UNIT_CHECK] }
+        requested_by: { type: string }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time, nullable: true }
+        sync_result: { type: string, enum: [SUCCESS, PARTIAL, FAILED], nullable: true }
+        changes_count: { type: integer }
+        error_text: { type: string, nullable: true, description: Ошибка сеанса или примечание (например, пересинхронизация) }
+        source_version: { type: integer, format: int64, description: Курсор опроса — последняя применённая версия АИСТ-М }
+    SyncRunPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SyncRun" }
+        next_before: { type: string, format: uuid, nullable: true, description: Курсор следующей страницы }
     UnitStatusReport:
       type: object
       required: [source, checked_at, units, not_found]

@@ -23,6 +23,7 @@ func TestRejectsBadValues(t *testing.T) {
 		"нулевой интервал":     {"BS_AIST_POLL_INTERVAL", "0s"},
 		"страница больше 5000": {"BS_AIST_PAGE_LIMIT", "5001"},
 		"нулевой таймаут":      {"BS_AIST_STATUS_TIMEOUT", "0s"},
+		"нулевой порог NFR015": {"BS_STOCK_STALE_AFTER", "0s"},
 	}
 	for name, kv := range cases {
 		t.Run(name, func(t *testing.T) {
