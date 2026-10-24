@@ -201,6 +201,21 @@ func (e ReplacementResultCode) Valid() bool {
 	}
 }
 
+// Defines values for RejectObligationJSONBodyReason.
+const (
+	SOURCEREFUSED RejectObligationJSONBodyReason = "SOURCE_REFUSED"
+)
+
+// Valid indicates whether the value is a known member of the RejectObligationJSONBodyReason enum.
+func (e RejectObligationJSONBodyReason) Valid() bool {
+	switch e {
+	case SOURCEREFUSED:
+		return true
+	default:
+		return false
+	}
+}
+
 // CancelInput defines model for CancelInput.
 type CancelInput struct {
 	Reason CancelInputReason `json:"reason"`
@@ -244,6 +259,14 @@ type ConfirmationResult struct {
 
 // ConfirmationResultCode defines model for ConfirmationResult.Code.
 type ConfirmationResultCode string
+
+// HistoryEntry defines model for HistoryEntry.
+type HistoryEntry struct {
+	Action     string    `json:"action"`
+	Id         int64     `json:"id"`
+	OccurredAt time.Time `json:"occurred_at"`
+	Result     string    `json:"result"`
+}
 
 // Obligation defines model for Obligation.
 type Obligation struct {
@@ -388,6 +411,20 @@ type ListObligationsParams struct {
 	Status         *ObligationStatus   `form:"status,omitempty" json:"status,omitempty"`
 }
 
+// GetObligationHistoryParams defines parameters for GetObligationHistory.
+type GetObligationHistoryParams struct {
+	Limit  *int `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// RejectObligationJSONBody defines parameters for RejectObligation.
+type RejectObligationJSONBody struct {
+	Reason RejectObligationJSONBodyReason `json:"reason"`
+}
+
+// RejectObligationJSONBodyReason defines parameters for RejectObligation.
+type RejectObligationJSONBodyReason string
+
 // OpenObligationJSONRequestBody defines body for OpenObligation for application/json ContentType.
 type OpenObligationJSONRequestBody = OpenObligationInput
 
@@ -396,6 +433,9 @@ type CancelObligationJSONRequestBody = CancelInput
 
 // ConfirmTransferJSONRequestBody defines body for ConfirmTransfer for application/json ContentType.
 type ConfirmTransferJSONRequestBody = ConfirmInput
+
+// RejectObligationJSONRequestBody defines body for RejectObligation for application/json ContentType.
+type RejectObligationJSONRequestBody RejectObligationJSONBody
 
 // ReplaceUnitJSONRequestBody defines body for ReplaceUnit for application/json ContentType.
 type ReplaceUnitJSONRequestBody = ReplaceInput
@@ -417,6 +457,12 @@ type ServerInterface interface {
 	// ConfirmTransfer Подтвердить задание единицами (оператор клиники-источника). Ответ — в том же запросе.
 	// (POST /obligations/{id}/confirm)
 	ConfirmTransfer(w http.ResponseWriter, r *http.Request, id ObligationId)
+	// GetObligationHistory История задания без содержимого details
+	// (GET /obligations/{id}/history)
+	GetObligationHistory(w http.ResponseWriter, r *http.Request, id ObligationId, params GetObligationHistoryParams)
+	// RejectObligation Отказ клиники-источника (PENDING → REJECTED, SOURCE_REFUSED)
+	// (POST /obligations/{id}/reject)
+	RejectObligation(w http.ResponseWriter, r *http.Request, id ObligationId)
 	// ReplaceUnit Заменить закреплённую единицу равноценной до отправки (ADR-0011)
 	// (POST /obligations/{id}/replace)
 	ReplaceUnit(w http.ResponseWriter, r *http.Request, id ObligationId)
@@ -582,6 +628,87 @@ func (siw *ServerInterfaceWrapper) ConfirmTransfer(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// GetObligationHistory operation middleware
+func (siw *ServerInterfaceWrapper) GetObligationHistory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ObligationId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetObligationHistoryParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetObligationHistory(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RejectObligation operation middleware
+func (siw *ServerInterfaceWrapper) RejectObligation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id ObligationId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RejectObligation(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ReplaceUnit operation middleware
 func (siw *ServerInterfaceWrapper) ReplaceUnit(w http.ResponseWriter, r *http.Request) {
 
@@ -731,6 +858,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/obligations", wrapper.ListObligations)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/obligations", wrapper.OpenObligation)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/obligations/{id}", wrapper.GetObligation)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/obligations/{id}/history", wrapper.GetObligationHistory)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/obligations/{id}/reject", wrapper.RejectObligation)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/obligations/{id}/confirm", wrapper.ConfirmTransfer)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/obligations/{id}/replace", wrapper.ReplaceUnit)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/obligations/{id}/cancel", wrapper.CancelObligation)
@@ -1192,6 +1321,185 @@ func (response ConfirmTransfer503JSONResponse) VisitConfirmTransferResponse(w ht
 	return err
 }
 
+type GetObligationHistoryRequestObject struct {
+	Id     ObligationId `json:"id"`
+	Params GetObligationHistoryParams
+}
+
+type GetObligationHistoryResponseObject interface {
+	VisitGetObligationHistoryResponse(w http.ResponseWriter) error
+}
+
+type GetObligationHistory200JSONResponse struct {
+	Items []HistoryEntry `json:"items"`
+}
+
+func (response GetObligationHistory200JSONResponse) VisitGetObligationHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetObligationHistory400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response GetObligationHistory400ApplicationProblemPlusJSONResponse) VisitGetObligationHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetObligationHistory401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response GetObligationHistory401ApplicationProblemPlusJSONResponse) VisitGetObligationHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetObligationHistory403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetObligationHistory403ApplicationProblemPlusJSONResponse) VisitGetObligationHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetObligationHistory404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetObligationHistory404ApplicationProblemPlusJSONResponse) VisitGetObligationHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RejectObligationRequestObject struct {
+	Id   ObligationId `json:"id"`
+	Body *RejectObligationJSONRequestBody
+}
+
+type RejectObligationResponseObject interface {
+	VisitRejectObligationResponse(w http.ResponseWriter) error
+}
+
+type RejectObligation200JSONResponse struct {
+	Message  string `json:"message"`
+	Rejected bool   `json:"rejected"`
+}
+
+func (response RejectObligation200JSONResponse) VisitRejectObligationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RejectObligation400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response RejectObligation400ApplicationProblemPlusJSONResponse) VisitRejectObligationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RejectObligation401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response RejectObligation401ApplicationProblemPlusJSONResponse) VisitRejectObligationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RejectObligation403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response RejectObligation403ApplicationProblemPlusJSONResponse) VisitRejectObligationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RejectObligation404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response RejectObligation404ApplicationProblemPlusJSONResponse) VisitRejectObligationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ReplaceUnitRequestObject struct {
 	Id   ObligationId `json:"id"`
 	Body *ReplaceUnitJSONRequestBody
@@ -1338,6 +1646,12 @@ type StrictServerInterface interface {
 	// ConfirmTransfer Подтвердить задание единицами (оператор клиники-источника). Ответ — в том же запросе.
 	// (POST /obligations/{id}/confirm)
 	ConfirmTransfer(ctx context.Context, request ConfirmTransferRequestObject) (ConfirmTransferResponseObject, error)
+	// GetObligationHistory История задания без содержимого details
+	// (GET /obligations/{id}/history)
+	GetObligationHistory(ctx context.Context, request GetObligationHistoryRequestObject) (GetObligationHistoryResponseObject, error)
+	// RejectObligation Отказ клиники-источника (PENDING → REJECTED, SOURCE_REFUSED)
+	// (POST /obligations/{id}/reject)
+	RejectObligation(ctx context.Context, request RejectObligationRequestObject) (RejectObligationResponseObject, error)
 	// ReplaceUnit Заменить закреплённую единицу равноценной до отправки (ADR-0011)
 	// (POST /obligations/{id}/replace)
 	ReplaceUnit(ctx context.Context, request ReplaceUnitRequestObject) (ReplaceUnitResponseObject, error)
@@ -1524,6 +1838,66 @@ func (sh *strictHandler) ConfirmTransfer(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ConfirmTransferResponseObject); ok {
 		if err := validResponse.VisitConfirmTransferResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetObligationHistory operation middleware
+func (sh *strictHandler) GetObligationHistory(w http.ResponseWriter, r *http.Request, id ObligationId, params GetObligationHistoryParams) {
+	var request GetObligationHistoryRequestObject
+
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetObligationHistory(ctx, request.(GetObligationHistoryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetObligationHistory")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetObligationHistoryResponseObject); ok {
+		if err := validResponse.VisitGetObligationHistoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RejectObligation operation middleware
+func (sh *strictHandler) RejectObligation(w http.ResponseWriter, r *http.Request, id ObligationId) {
+	var request RejectObligationRequestObject
+
+	request.Id = id
+
+	var body RejectObligationJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RejectObligation(ctx, request.(RejectObligationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RejectObligation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RejectObligationResponseObject); ok {
+		if err := validResponse.VisitRejectObligationResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

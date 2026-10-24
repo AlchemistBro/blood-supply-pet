@@ -22,6 +22,8 @@ import (
 // Operations — операция матрицы прав для каждого маршрута. Совпадает с x-bs-operation в openapi.yaml
 // (это проверяет тест контракта).
 var Operations = map[string]auth.Operation{
+	"GET /obligations/{id}/history":  auth.OpViewObligation,
+	"POST /obligations/{id}/reject":  auth.OpRejectTransfer,
 	"POST /obligations":              auth.OpOpenObligation,
 	"GET /obligations":               auth.OpViewObligation,
 	"GET /obligations/{id}":          auth.OpViewObligation,
