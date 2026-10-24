@@ -44,6 +44,8 @@ func (t taskView) Replaceable() bool {
 }
 
 type candidateView struct {
+	ClinicID  int64     `json:"clinic_id"`
+	Status    string    `json:"status"`
 	ID        uuid.UUID `json:"unit_id"`
 	Kind      string    `json:"component_kind"`
 	Group     string    `json:"blood_group"`

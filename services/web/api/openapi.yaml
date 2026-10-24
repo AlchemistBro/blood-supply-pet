@@ -24,6 +24,15 @@ paths:
       summary: Единицы FEFO с фильтрами по виду и группе
       responses:
         "200": { description: Экран единиц }
+  /stock/units/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: stockUnit
+      x-bs-operation: VIEW_STOCK
+      summary: Карточка единицы и история статусов без исходного кода АИСТ-М и фенотипа
+      responses:
+        "200": { description: Карточка единицы }
   /stock/sync:
     post:
       operationId: syncStock

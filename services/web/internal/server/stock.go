@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/AlchemistBro/blood-supply-pet/libs/httpx/auth"
 )
 
@@ -30,18 +32,20 @@ type normView struct {
 	Version int64   `json:"version"`
 }
 type stockScreen struct {
-	Clinic  int64
-	Lines   []stockLine
-	Norms   []normView
-	Units   []candidateView
-	Message string
-	CanEdit bool
-	Year    int
+	PrevURL, NextURL string
+	Clinic           int64
+	Lines            []stockLine
+	Norms            []normView
+	Units            []candidateView
+	Message          string
+	CanEdit          bool
+	Year             int
 }
 
 func (s *Server) registerStock(mux *http.ServeMux) {
 	mux.Handle("GET /stock", s.guard.Require(auth.OpViewStock)(http.HandlerFunc(s.stockPage)))
 	mux.Handle("GET /stock/units", s.guard.Require(auth.OpViewStock)(http.HandlerFunc(s.stockUnits)))
+	mux.Handle("GET /stock/units/{id}", s.guard.Require(auth.OpViewStock)(http.HandlerFunc(s.stockUnit)))
 	mux.Handle("POST /stock/sync", s.guard.Require(auth.OpSyncOnDemand)(http.HandlerFunc(s.syncStock)))
 	mux.Handle("POST /stock/annual-consumption", s.guard.Require(auth.OpEnterConsumption)(http.HandlerFunc(s.setConsumption)))
 }
@@ -122,23 +126,76 @@ func (s *Server) stockUnits(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := stockScreen{Clinic: clinic}
+	offset := 0
+	if raw := r.URL.Query().Get("offset"); raw != "" {
+		value, err := strconv.Atoi(raw)
+		if err != nil || value < 0 || value > 1_000_000 {
+			s.renderError(w, r, 400, "Неверная страница", "Откройте список единиц заново.")
+			return
+		}
+		offset = value
+	}
 	if clinic > 0 {
-		q := url.Values{"limit": {"100"}, "fefo": {"true"}}
+		q := url.Values{"limit": {"100"}, "fefo": {"true"}, "offset": {strconv.Itoa(offset)}}
 		for _, key := range []string{"kind", "group"} {
 			if value := r.URL.Query().Get(key); value != "" {
 				q.Set(key, value)
 			}
 		}
 		var page struct {
-			Units []candidateView `json:"units"`
+			Units   []candidateView `json:"units"`
+			HasMore bool            `json:"has_more"`
 		}
 		if err := s.inventory.GetJSON(r.Context(), fmt.Sprintf("/clinics/%d/units?%s", clinic, q.Encode()), &page); err != nil {
 			s.serviceFailure(w, r, err)
 			return
 		}
 		data.Units = page.Units
+		q.Set("clinic", strconv.FormatInt(clinic, 10))
+		if offset > 0 {
+			q.Set("offset", strconv.Itoa(max(offset-100, 0)))
+			data.PrevURL = "/stock/units?" + q.Encode()
+		}
+		if page.HasMore {
+			q.Set("offset", strconv.Itoa(offset+100))
+			data.NextURL = "/stock/units?" + q.Encode()
+		}
 	}
 	s.renderScreen(w, r, 200, "stock-units.html", "Единицы компонента крови (FEFO)", data)
+}
+
+func (s *Server) stockUnit(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		s.renderError(w, r, 400, "Неверная единица", "Откройте единицу из списка.")
+		return
+	}
+	var data struct {
+		Unit    candidateView
+		History []struct {
+			Status  string    `json:"status"`
+			At      time.Time `json:"received_at"`
+			Version int64     `json:"source_version"`
+		}
+	}
+	base := "/units/" + id.String()
+	if err := s.inventory.GetJSON(r.Context(), base, &data.Unit); err != nil {
+		s.serviceFailure(w, r, err)
+		return
+	}
+	var history struct {
+		Items []struct {
+			Status  string    `json:"status"`
+			At      time.Time `json:"received_at"`
+			Version int64     `json:"source_version"`
+		} `json:"items"`
+	}
+	if err := s.inventory.GetJSON(r.Context(), base+"/history", &history); err != nil {
+		s.serviceFailure(w, r, err)
+		return
+	}
+	data.History = history.Items
+	s.renderScreen(w, r, 200, "stock-unit.html", "Карточка единицы компонента крови", data)
 }
 
 func (s *Server) syncStock(w http.ResponseWriter, r *http.Request) {
