@@ -38,9 +38,10 @@ SELECT * FROM unit WHERE aist_unit_code = $1;
 -- name: ListStatusHistory :many
 SELECT * FROM unit_status_history WHERE unit_id = $1 ORDER BY source_version;
 
--- name: StartSyncRun :exec
-INSERT INTO sync_run (sync_run_id, sync_kind, requested_by, started_at, source_version)
-VALUES ($1, $2, $3, $4, $5);
+-- name: StartSyncRun :one
+INSERT INTO sync_run (sync_run_id, sync_kind, requested_by, started_at, source_version, clinic_id)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING sync_seq;
 
 -- name: AdvanceSyncRun :exec
 -- Курсор и счётчик двигаются в транзакции страницы: обрыв не теряет применённое и не повторяет его зря.
@@ -49,26 +50,60 @@ SET source_version = @source_version,
     changes_count  = changes_count + @changes::bigint
 WHERE sync_run_id = @sync_run_id;
 
--- name: FinishSyncRun :exec
+-- name: FinishSyncRun :execrows
 UPDATE sync_run
-SET finished_at = @finished_at,
-    sync_result = @sync_result,
-    error_text  = @error_text
+SET finished_at         = @finished_at,
+    sync_result         = @sync_result,
+    error_text          = @error_text,
+    discrepancies_count = @discrepancies_count::integer
 WHERE sync_run_id = @sync_run_id AND finished_at IS NULL;
 
 -- name: LastSyncCursor :one
--- Курсор — версия последнего сеанса CHANGES (не максимум): после перезапуска АИСТ-М курсор сбрасывается в 0.
+-- Курсор — версия последнего сеанса опроса изменений (CHANGES или ON_DEMAND — тот же опрос вне расписания),
+-- а не максимум: после перезапуска АИСТ-М курсор сбрасывается в 0.
 SELECT source_version FROM sync_run
-WHERE sync_kind = 'CHANGES'
+WHERE sync_kind IN ('CHANGES', 'ON_DEMAND')
 ORDER BY started_at DESC, sync_run_id DESC
 LIMIT 1;
 
 -- name: LastSuccessfulSync :one
--- Водяной знак копии: окончание последнего успешного сеанса CHANGES.
+-- Водяной знак копии: окончание последнего успешного сеанса, получившего данные из АИСТ-М
+-- (изменения по расписанию, по запросу оператора или суточный снимок, FR001).
 SELECT finished_at FROM sync_run
-WHERE sync_kind = 'CHANGES' AND sync_result = 'SUCCESS'
+WHERE sync_kind IN ('CHANGES', 'ON_DEMAND', 'DAILY_SNAPSHOT') AND sync_result = 'SUCCESS'
 ORDER BY finished_at DESC
 LIMIT 1;
+
+-- name: LastDataSyncRun :one
+SELECT * FROM sync_run
+WHERE sync_kind IN ('CHANGES', 'ON_DEMAND', 'DAILY_SNAPSHOT')
+ORDER BY started_at DESC, sync_run_id DESC
+LIMIT 1;
+
+-- name: LastSuccessfulDataSyncRun :one
+SELECT * FROM sync_run
+WHERE sync_kind IN ('CHANGES', 'ON_DEMAND', 'DAILY_SNAPSHOT') AND sync_result = 'SUCCESS'
+ORDER BY finished_at DESC, sync_run_id DESC
+LIMIT 1;
+
+-- name: CorrectUnitFromSnapshot :execrows
+-- Снимок — полный срез АИСТ-М: при той же версии он исправляет копию; старшая версия копии остаётся.
+UPDATE unit
+SET clinic_id           = @clinic_id,
+    storage_location    = @storage_location,
+    component_kind_code = @component_kind_code,
+    volume_ml           = @volume_ml,
+    blood_group_code    = @blood_group_code,
+    phenotype           = @phenotype,
+    expires_at          = @expires_at,
+    unit_status_code    = @unit_status_code,
+    status_received_at  = @status_received_at,
+    source_version      = @source_version
+WHERE unit_id = @unit_id AND source_version <= @source_version;
+
+-- name: ListUnitKeys :many
+-- Все единицы копии для поиска тех, кого нет в снимке.
+SELECT unit_id, aist_unit_code, clinic_id, component_kind_code, blood_group_code FROM unit;
 
 -- name: GetSyncRun :one
 SELECT * FROM sync_run WHERE sync_run_id = $1;

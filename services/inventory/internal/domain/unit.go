@@ -131,9 +131,8 @@ const (
 	EventRegistered
 	EventUpdated
 	EventWithdrawn
-	// EventSilent — копия и история статусов обновляются, событие не публикуется: единица уже выбыла
-	// из учёта, выбытие опубликовано однажды UnitWithdrawn, а UnitUpdated — только для единиц в учёте
-	// (статус IN_STOCK или QUARANTINE, контракт libs/contracts/inventory, ADR-0027).
+	// EventSilent — копия меняется, но событие не публикуется: единица уже выбыла из учёта, а выбытие
+	// публикуется только UnitWithdrawn, однажды; UnitUpdated — только для единиц в учёте (контракт, ADR-0027).
 	EventSilent
 )
 
@@ -153,22 +152,40 @@ func (k EventKind) String() string {
 	return "none"
 }
 
+// transitions — схема состояний единицы (FR008): из наличия — в карантин или выбытие; из карантина — обратно
+// в наличие или в списание (единица на карантине не выдаётся и не передаётся, ПП РФ № 641, п. 62 а).
+// Выбытие окончательно. Демо-схема (ADR-0010): заказчик уточняет её при внедрении.
+var transitions = map[string]map[string]bool{
+	StatusInStock:    {StatusQuarantine: true, StatusIssued: true, StatusDiscarded: true, StatusTransferred: true},
+	StatusQuarantine: {StatusInStock: true, StatusDiscarded: true},
+}
+
+// TransitionAllowed — переход статуса предусмотрен схемой состояний (тот же статус — не переход).
+func TransitionAllowed(from, to string) bool {
+	return from == to || transitions[from][to]
+}
+
 // Change — результат применения записи АИСТ-М к копии.
 type Change struct {
 	Event EventKind
 	// Unit — состояние после применения (при EventNone — прежнее).
 	Unit Unit
+	// From — статус до применения (пусто для новой единицы).
+	From string
 	// StatusChanged — статус новый или изменился: пишется строка unit_status_history.
 	StatusChanged bool
 	// Reason — причина выбытия для EventWithdrawn.
 	Reason string
+	// InvalidTransition — переход не предусмотрен схемой (FR008): копия всё равно принимает состояние
+	// источника (учёт ведётся в C01), а расхождение пишется в журнал аудита.
+	InvalidTransition bool
 }
 
 // Apply применяет запись АИСТ-М к единице из копии (prev = nil — единицы ещё нет).
 // Повтор и устаревшая версия ничего не меняют: версия единицы только растёт.
 // Новая единица — UnitRegistered (со статусом на момент регистрации, даже если она уже выбыла);
-// переход в выбывший статус — UnitWithdrawn; новая версия уже выбывшей единицы — без события (копия и история
-// обновляются); остальное, включая IN_STOCK ↔ QUARANTINE, — UnitUpdated.
+// переход в выбывший статус — UnitWithdrawn; переходы единицы, остающейся в учёте (IN_STOCK ↔ QUARANTINE,
+// место, срок), — UnitUpdated; изменения уже выбывшей единицы — без события.
 func Apply(prev *Unit, in SourceUnit, newID uuid.UUID, receivedAt time.Time) (Change, error) {
 	if err := in.Validate(); err != nil {
 		return Change{}, err
@@ -184,18 +201,87 @@ func Apply(prev *Unit, in SourceUnit, newID uuid.UUID, receivedAt time.Time) (Ch
 		}, nil
 	}
 	if in.Version <= prev.Version {
-		return Change{Event: EventNone, Unit: *prev}, nil
+		return Change{Event: EventNone, Unit: *prev, From: prev.Status}, nil
 	}
+	return transition(*prev, in, receivedAt), nil
+}
+
+// transition — изменение единицы, которое копия принимает (версия уже проверена вызывающим).
+func transition(prev Unit, in SourceUnit, receivedAt time.Time) Change {
 	next := Unit{UnitID: prev.UnitID, SourceUnit: in, StatusReceivedAt: receivedAt}
-	ch := Change{Event: EventUpdated, Unit: next, StatusChanged: prev.Status != in.Status}
-	switch {
-	case IsWithdrawn(prev.Status):
+	ch := Change{
+		Event: EventUpdated, Unit: next, From: prev.Status, StatusChanged: prev.Status != in.Status,
+		InvalidTransition: !TransitionAllowed(prev.Status, in.Status),
+	}
+	switch wasOut, nowOut := IsWithdrawn(prev.Status), IsWithdrawn(in.Status); {
+	case wasOut:
 		ch.Event = EventSilent
-	case IsWithdrawn(in.Status):
+	case nowOut:
 		ch.Event = EventWithdrawn
 		ch.Reason = WithdrawReason(in.Status, in.WithdrawalReason)
 	}
-	return ch, nil
+	return ch
+}
+
+// DiscrepancyKind — вид расхождения копии с суточным снимком АИСТ-М (FR001).
+type DiscrepancyKind string
+
+// Расхождения копии со снимком.
+const (
+	// DiscrepancyNone — копия совпадает со снимком или новее его.
+	DiscrepancyNone DiscrepancyKind = ""
+	// DiscrepancyMissing — единицы нет в копии.
+	DiscrepancyMissing DiscrepancyKind = "MISSING_IN_COPY"
+	// DiscrepancyStale — в копии старая версия: изменение не дошло опросом.
+	DiscrepancyStale DiscrepancyKind = "STALE_IN_COPY"
+	// DiscrepancyMismatch — версия та же, а данные другие: копия исправляется по снимку.
+	DiscrepancyMismatch DiscrepancyKind = "MISMATCH"
+	// DiscrepancyAbsentInSource — единица есть в копии, но её нет в снимке. Строки единиц не удаляются
+	// (ПП РФ № 641), поэтому расхождение только записывается в журнал.
+	DiscrepancyAbsentInSource DiscrepancyKind = "ABSENT_IN_SOURCE"
+)
+
+// Reconcile сверяет единицу копии со строкой суточного снимка. Снимок — полный срез АИСТ-М, поэтому при той же
+// версии он исправляет копию (в отличие от Apply); копия новее снимка (изменение пришло опросом после
+// формирования файла) расхождением не считается.
+func Reconcile(prev *Unit, in SourceUnit, newID uuid.UUID, receivedAt time.Time) (Change, DiscrepancyKind, error) {
+	if err := in.Validate(); err != nil {
+		return Change{}, DiscrepancyNone, err
+	}
+	if !IsWithdrawn(in.Status) {
+		in.WithdrawalReason = ""
+	}
+	switch {
+	case prev == nil:
+		ch, err := Apply(nil, in, newID, receivedAt)
+		return ch, DiscrepancyMissing, err
+	case in.Version > prev.Version:
+		return transition(*prev, in, receivedAt), DiscrepancyStale, nil
+	case in.Version < prev.Version || sameData(prev.SourceUnit, in):
+		return Change{Event: EventNone, Unit: *prev, From: prev.Status}, DiscrepancyNone, nil
+	default:
+		return transition(*prev, in, receivedAt), DiscrepancyMismatch, nil
+	}
+}
+
+// sameData — содержательные поля единицы совпадают (время изменения и причина выбытия не сравниваются:
+// причина в копии не хранится).
+func sameData(a, b SourceUnit) bool {
+	return a.ClinicID == b.ClinicID && a.ComponentKind == b.ComponentKind && a.BloodGroup == b.BloodGroup &&
+		a.Phenotype == b.Phenotype && a.VolumeML == b.VolumeML && a.ExpiresAt.Equal(b.ExpiresAt) &&
+		a.StorageLocation == b.StorageLocation && a.Status == b.Status
+}
+
+// StockKey — разрез фактического запаса: клиника × вид × группа.
+type StockKey struct {
+	ClinicID      int64
+	ComponentKind string
+	BloodGroup    string
+}
+
+// Key — разрез запаса, к которому относится единица.
+func (u Unit) Key() StockKey {
+	return StockKey{ClinicID: u.ClinicID, ComponentKind: u.ComponentKind, BloodGroup: u.BloodGroup}
 }
 
 // ProtectedVolume — защищённый объём источника по виду компонента в единицах (NFR013). На этапе 1
