@@ -21,6 +21,11 @@ jobs:
         run: python3 tools/docs-er/generate.py --check
       - name: Статическая сверка BPMN XML, ссылок и DI
         run: python3 tools/docs-diagrams/check-bpmn.py
+      - name: Схемы C4 и UML для README совпадают с генератором
+        run: |
+          python3 tools/docs-diagrams/c4.py
+          python3 tools/docs-diagrams/sequence.py
+          git diff --exit-code -- docs/architecture/diagrams/c4 docs/architecture/diagrams/uml
       - uses: actions/setup-node@v4
         with:
           node-version: "22"

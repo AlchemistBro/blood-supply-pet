@@ -182,6 +182,12 @@ tasks:
       - python tools/docs-diagrams/extract.py
       - node tools/docs-diagrams/render.mjs
 
+  docs:c4:
+    desc: Перегенерировать схемы C4 и UML для README (только Python, без сети)
+    cmds:
+      - python tools/docs-diagrams/c4.py
+      - python tools/docs-diagrams/sequence.py
+
   docs:er:
     desc: Обновить ER восьми баз из Up-миграций без подключения к PostgreSQL
     cmds: [python tools/docs-er/generate.py]
