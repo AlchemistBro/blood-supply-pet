@@ -3,7 +3,7 @@ name: E2E
 on:
   push:
     branches: [main]
-    paths-ignore: ["docs/**", "README*.md", "CONTRIBUTING.md", "tools/docs-*/**"]
+    paths-ignore: ["docs/**", "README*.md", "**/README*.md", "CONTRIBUTING.md", "tools/docs-*/**"]
   pull_request:
     types: [labeled, synchronize]
   schedule:
