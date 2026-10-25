@@ -63,6 +63,9 @@ jobs:
           kubectl --context kind-blood-supply logs -n bs-edge deployment/keycloak --tail=200 > artifacts/keycloak.log 2>&1 || true
           kubectl --context kind-blood-supply logs -n bs-data job/minio-setup --tail=100 > artifacts/minio-setup.log 2>&1 || true
           kubectl --context kind-blood-supply logs -n bs-data -l cnpg.io/cluster=pg --all-containers --prefix --tail=100 > artifacts/postgres.log 2>&1 || true
+          kubectl --context kind-blood-supply get clusters,backups -n bs-data -o yaml > artifacts/database-status.yaml 2>&1 || true
+          kubectl --context kind-blood-supply logs -n bs-data -l cnpg.io/cluster=pg-drill --all-containers --prefix --tail=200 > artifacts/restore.log 2>&1 || true
+          kubectl --context kind-blood-supply logs -n bs-observability deployment/otel-lgtm --all-containers --tail=100 > artifacts/observability.log 2>&1 || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:

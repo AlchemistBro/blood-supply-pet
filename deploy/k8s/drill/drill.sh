@@ -23,8 +23,18 @@ spec:
   cluster: {name: pg}
   method: barmanObjectStore
 YAML
-"${k[@]}" -n bs-data wait --for=jsonpath='{.status.phase}'=completed "backup/$marker" --timeout=600s
-target_time=$(sql "SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"');")
+backup_ready=false
+for attempt in $(seq 1 120); do
+  phase=$("${k[@]}" -n bs-data get "backup/$marker" -o jsonpath='{.status.phase}')
+  case "$phase" in
+    completed) backup_ready=true; break ;;
+    failed) "${k[@]}" -n bs-data describe "backup/$marker" >&2; exit 1 ;;
+  esac
+  sleep 5
+done
+[[ "$backup_ready" == true ]] || { "${k[@]}" -n bs-data describe "backup/$marker" >&2; exit 1; }
+# PostgreSQL-формат с явным UTC: CNPG 1.27.0 некорректно преобразует RFC3339 Z.
+target_time=$(sql "SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD HH24:MI:SS.US') || '+00';")
 target_epoch=$(date -u +%s)
 sql "INSERT INTO public.drill_marker(run,phase) VALUES('$marker','after');" >/dev/null
 wal=$(sql 'SELECT pg_walfile_name(pg_current_wal_lsn());')
@@ -40,10 +50,16 @@ failure_epoch=$(date -u +%s)
 "${k[@]}" -n bs-data delete pod "$primary" --wait=false
 temporary=$(mktemp)
 trap 'rm -f "$temporary"' EXIT
-[[ "$target_time" =~ ^[0-9TZ:.+-]+$ ]] || { printf '%s\n' 'Неверная целевая точка PITR.' >&2; exit 1; }
+pitr_time_pattern='^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}[.][0-9]{6}[+]00$'
+[[ "$target_time" =~ $pitr_time_pattern ]] || { printf '%s\n' 'Неверная целевая точка PITR.' >&2; exit 1; }
+printf 'Копия %s завершена, WAL %s сохранён, цель PITR: %s\n' "$marker" "$wal" "$target_time"
 sed "s/__TARGET_TIME__/$target_time/" deploy/k8s/drill/restore.yaml.template > "$temporary"
 "${k[@]}" apply --server-side -f "$temporary"
-"${k[@]}" -n bs-data wait --for=condition=Ready cluster/pg-drill --timeout=1800s
+if ! "${k[@]}" -n bs-data wait --for=condition=Ready cluster/pg-drill --timeout=1800s; then
+  "${k[@]}" -n bs-data describe cluster/pg-drill >&2 || true
+  "${k[@]}" -n bs-data logs -l cnpg.io/cluster=pg-drill --all-containers --prefix --tail=200 >&2 || true
+  exit 1
+fi
 restored=$("${k[@]}" -n bs-data get cluster pg-drill -o jsonpath='{.status.currentPrimary}')
 [[ "$restored" =~ ^pg-drill-[0-9]+$ ]] || exit 1
 counts=$("${k[@]}" -n bs-data exec "$restored" -c postgres -- psql -X -A -t -v ON_ERROR_STOP=1 -U postgres -d postgres -c "SELECT count(*) FILTER(WHERE phase='before'),count(*) FILTER(WHERE phase='after') FROM public.drill_marker WHERE run='$marker';")
