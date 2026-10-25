@@ -81,81 +81,196 @@
 Микросервисы по ограниченным контекстам DDD. Между сервисами только события и команды через Kafka (transactional outbox → inbox);
 единственный синхронный вызов — проверка статуса единиц перед закреплением. У каждого сервиса своя база.
 
-```mermaid
-flowchart LR
-    subgraph users[Пользователи]
-        U[Врач · Оператор · Аналитик · Дежурный]
-    end
-    subgraph edge[Сегмент доступа]
-        NG[Nginx / ingress]
-        KC[Keycloak · OIDC]
-    end
-    subgraph app[Сервисы Go]
-        WEB[web · SSR + HTMX]
-        INV[inventory · ФП1]
-        DEM[demand · ФП2]
-        PLN[planning · ФП3]
-        MAT[matching · ФП4]
-        TRF[transfer · сага O07]
-        LOG[logistics-gateway]
-        NTF[notification]
-        AUD[audit]
-    end
-    K{{Kafka}}
-    PG[(PostgreSQL · база на сервис)]
-    subgraph ext[Смежные системы · имитаторы]
-        C01[C01 АИСТ-М]
-        C02[C02 Моделирование ЧС]
-        C03[C03 Логистика]
-        C04[C04 Почта]
-    end
+### C4 · уровень 1: контекст
 
-    U --> NG --> WEB
-    U -. вход .-> KC
-    WEB -->|HTTP/JSON · JWT| INV & DEM & PLN & MAT & TRF & LOG & NTF & AUD
-    TRF -->|статус единиц · 3 с| INV
-    INV & DEM & PLN & MAT & TRF & LOG -->|outbox → события → inbox| K
-    K --> NTF & AUD
-    app --> PG
-    INV <--> C01
-    C02 --> PLN
-    LOG <--> C03
-    NTF --> C04
+```mermaid
+flowchart TB
+    classDef person fill:#08427B,stroke:#052E56,color:#ffffff,stroke-width:1px
+    classDef system fill:#1168BD,stroke:#0B4884,color:#ffffff,stroke-width:2px
+    classDef external fill:#8C8496,stroke:#6E6678,color:#ffffff,stroke-width:1px
+
+    phys["<b>Врач-трансфузиолог</b><br/>[Пользователь]<br/><br/>заявка с номером случая,<br/>выбор варианта"]:::person
+    op["<b>Оператор клиники</b><br/>[Пользователь]<br/><br/>запас, норматив,<br/>подтверждение передачи"]:::person
+    an["<b>Территориальный аналитик</b><br/>[Пользователь]<br/><br/>CSV районов,<br/>версии оценки"]:::person
+    duty["<b>Дежурный смены</b><br/>[Пользователь]<br/><br/>эскалации,<br/>ручная перевозка"]:::person
+    it["<b>ИТ-служба</b><br/>[Пользователь]<br/><br/>правила подбора,<br/>аудит, интеграции"]:::person
+
+    as["<b>АС распределения компонентов донорской крови</b><br/>[Программная система]<br/><br/>запас против норматива · потребность районов<br/>план пополнения по прогнозу ЧС<br/>заявки врачей · реестр дефицита"]:::system
+
+    c01["<b>C01 АИСТ-М</b><br/>[Внешняя система]<br/><br/>учёт единиц<br/>от донации до выдачи"]:::external
+    c02["<b>C02 Моделирование ЧС</b><br/>[Внешняя система]<br/><br/>агрегированный прогноз<br/>без персональных данных"]:::external
+    c03["<b>C03 Логистика</b><br/>[Внешняя система]<br/><br/>служба перевозки<br/>субъекта обращения крови"]:::external
+    c04["<b>C04 Почта</b><br/>[Внешняя система]<br/><br/>уведомления<br/>операторам и врачам"]:::external
+
+    phys & op & an & duty & it -->|"HTTPS · вход через OIDC"| as
+    as <-->|"ИНТ-01 изменения, снимок, статус<br/>ИНТ-05 закрепление за пациентом"| c01
+    c02 -->|"ИНТ-02 прогноз ЧС"| as
+    as <-->|"ИНТ-03 оценка времени,<br/>заказ перевозки"| c03
+    as -->|"ИНТ-04 SMTP/TLS"| c04
+
+    linkStyle default stroke:#8A8A8A,stroke-width:1.5px
 ```
 
-Сага подтверждения передачи:
+### C4 · уровень 2: контейнеры
+
+```mermaid
+flowchart TB
+    classDef person fill:#08427B,stroke:#052E56,color:#ffffff
+    classDef container fill:#438DD5,stroke:#2E6295,color:#ffffff
+    classDef platform fill:#2F6FAB,stroke:#1F4E7A,color:#ffffff
+    classDef bus fill:#1F5C99,stroke:#143D66,color:#ffffff
+    classDef external fill:#8C8496,stroke:#6E6678,color:#ffffff
+
+    users["<b>Пользователи</b><br/>[5 ролей]<br/>врач · оператор · аналитик · дежурный · ИТ-служба"]:::person
+
+    subgraph AS["АС распределения компонентов донорской крови"]
+        proxy["<b>Nginx / ingress</b><br/>[обратный прокси]<br/>TLS, единственный вход"]:::platform
+        web["<b>web</b><br/>[Go · SSR + HTMX]<br/>интерфейс пяти ролей, SSE<br/>к сервисам: HTTP/JSON + JWT"]:::container
+        kc["<b>Keycloak</b><br/>[IdP · OIDC]<br/>роли, clinic_id, 2FA"]:::platform
+
+        inv["<b>inventory</b> · ФП1<br/>[Go · своя БД]<br/>копия АИСТ-М, запас, норматив"]:::container
+        dem["<b>demand</b> · ФП2<br/>[Go · своя БД]<br/>CSV, версии оценки"]:::container
+        pln["<b>planning</b> · ФП3<br/>[Go · своя БД]<br/>прогноз ЧС, план, дефицит"]:::container
+        mat["<b>matching</b> · ФП4<br/>[Go · своя БД]<br/>заявки, правила, варианты"]:::container
+        trf["<b>transfer</b><br/>[Go · своя БД]<br/>обязательства O07, сага"]:::container
+        lg["<b>logistics-gateway</b><br/>[Go · своя БД]<br/>заказы без дублей"]:::container
+
+        kafka{{"<b>Kafka</b> · KRaft<br/>события и команды<br/>outbox → топики → inbox"}}:::bus
+
+        ntf["<b>notification</b><br/>[Go · своя БД]<br/>письма, эскалации"]:::container
+        aud["<b>audit</b><br/>[Go · своя БД]<br/>журнал с цепочкой хешей"]:::container
+    end
+
+    c01["<b>C01 АИСТ-М</b><br/>[Внешняя система]"]:::external
+    c02["<b>C02 Моделирование ЧС</b><br/>[Внешняя система]"]:::external
+    c03["<b>C03 Логистика</b><br/>[Внешняя система]"]:::external
+    c04["<b>C04 Почта</b><br/>[Внешняя система]"]:::external
+
+    users -->|HTTPS| proxy
+    proxy --> web
+    web -.->|"OIDC + PKCE"| kc
+    web --> inv & dem & pln & mat & trf
+    trf -->|"статус единиц · 3 с"| inv
+    inv & dem & pln & mat & trf & lg --> kafka
+    kafka --> ntf & aud
+    inv <-->|"ИНТ-01 · ИНТ-05"| c01
+    c02 -->|ИНТ-02| pln
+    lg <-->|ИНТ-03| c03
+    ntf -->|ИНТ-04| c04
+
+    style AS fill:none,stroke:#438DD5,stroke-width:2px,stroke-dasharray:6 4
+    linkStyle default stroke:#8A8A8A,stroke-width:1.5px
+```
+
+### Сквозной сценарий: от заявки врача до заказа перевозки
+
+UML sequence. Врач клиники C002 выбирает вариант из C001, оператор C001 подтверждает единицы, система заказывает
+перевозку и закрепляет единицы за пациентом в АИСТ-М. Номер случая нигде не передаётся открытым текстом.
 
 ```mermaid
 sequenceDiagram
-    actor Op as Оператор источника
-    participant T as transfer
-    participant I as inventory → АИСТ-М
-    participant K as Kafka
-    participant L as logistics-gateway → C03
-    Op->>T: Подтвердить единицы
-    T->>I: статус единиц (синхронно, вне блокировки)
-    I-->>T: на месте / выбыли
-    Note over T: одна транзакция: блокировка Остатка · защищённый объём ·<br/>CAS PENDING→CONFIRMED · закрепления (UNIQUE unit_id) · outbox
-    T-->>Op: «Закреплено, готовьте» в том же запросе
-    T->>K: TransferConfirmed · RequestTransport (ключ = O07)
-    K->>L: RequestTransport
-    L->>L: сверка с C03 вместо повтора, аренда строки
-    L->>K: TransportAccepted
-    K->>T: inbox · CAS CONFIRMED→TRANSPORT_REQUESTED
+    autonumber
+    box rgba(8,66,123,0.10) Пользователи
+        actor D as Врач<br/>клиника C002
+        actor O as Оператор<br/>клиника C001
+    end
+    box rgba(67,141,213,0.12) АС · сервисы Go
+        participant W as web
+        participant M as matching
+        participant T as transfer
+        participant K as Kafka
+        participant I as inventory
+        participant L as logistics-gateway
+        participant N as notification
+    end
+    box rgba(140,132,150,0.15) Смежные системы
+        participant A as C01 АИСТ-М
+        participant C as C03 Логистика
+        participant P as C04 Почта
+    end
+
+    rect rgba(46,160,67,0.10)
+        Note over D,M: ① Заявка и подбор
+        D->>+W: Новая заявка: номер случая, вид, группа, срочность
+        W->>+M: POST /requests [JWT врача]
+        Note over M: одна транзакция: номер случая шифруется,<br/>подбор по версиям правил на проекциях запаса,<br/>outbox: ClinicalRequestCreated, VariantsOffered
+        M-->>-W: варианты с рангом и объяснением
+        W-->>-D: местный вариант и вариант из C001
+        D->>+W: Выбрать вариант из C001
+        W->>+M: POST /requests/{id}/select
+        M->>M: переоценка единиц по свежим проекциям
+        M-)K: transfer.commands: OpenObligation (ключ choice_id)
+        M-->>-W: TASK_OPENED
+        W-->>-D: «Задание отправлено в C001»
+    end
+
+    rect rgba(210,153,34,0.10)
+        Note over T,P: ② Задание оператору источника
+        K-)T: OpenObligation → inbox
+        T->>T: O07 PENDING, срок по срочности (долговечный таймер)
+        T-)K: transfer.events: ObligationOpened
+        K-)N: ObligationOpened
+        N-)P: ИНТ-04: письмо оператору C001
+    end
+
+    rect rgba(67,141,213,0.10)
+        Note over O,A: ③ Подтверждение: сага с оркестратором transfer
+        O->>+W: Подтвердить единицы (FEFO)
+        W->>+T: POST /obligations/{id}/confirm
+        T->>+I: GET /internal/units/status · 3 с, вне блокировки
+        I->>A: точечный статус единиц
+        A-->>I: статусы
+        I-->>-T: на месте / выбыли
+        alt все единицы выбыли
+            T-->>W: Rejected: задание снято
+        else АИСТ-М не ответила за 3 с
+            T-->>W: SourceSystemUnavailable: повторите
+        else единицы на месте
+            Note over T: одна транзакция: блокировка Остатка источника,<br/>проверка защищённого объёма, CAS PENDING → CONFIRMED,<br/>закрепления (UNIQUE unit_id),<br/>outbox: TransferConfirmed, RequestTransport, AllocateUnitsToPatient
+            T-->>W: Confirmed
+        end
+        deactivate T
+        W-->>-O: «Закреплено, готовьте» в том же запросе
+    end
+
+    rect rgba(163,113,247,0.10)
+        Note over K,C: ④ Перевозка и закрепление за пациентом
+        par заказ перевозки без дублей
+            K-)L: logistics.commands: RequestTransport
+            L->>L: inbox и строка REQUESTING, аренда строки
+            L->>C: заказ clientRef = o07-… уже есть? (сверка)
+            C-->>L: нет
+            L->>C: создать заказ
+            C-->>L: shipmentRef
+            L-)K: logistics.replies: TransportAccepted
+            K-)T: TransportAccepted → inbox
+            T->>T: CAS CONFIRMED → TRANSPORT_REQUESTED
+            T-)K: transfer.events: TransportRequested
+        and закрепление в АИСТ-М
+            K-)I: inventory.commands: AllocateUnitsToPatient
+            I->>A: ИНТ-05: закрепление (конверт номера случая)
+            A-->>I: принято
+            I-)K: PatientAllocationAcknowledged
+        end
+        K-)W: transfer.events
+        W-)D: SSE: статус заявки обновлён
+        W-)O: SSE: перевозка заказана
+    end
 ```
 
-Подробно: [C4 контекст](docs/architecture/c4-context.md) · [C4 контейнеры](docs/architecture/c4-containers.md) ·
-[C4 компоненты transfer и шлюза](docs/architecture/c4-components.md) ·
-[карта контекстов](docs/domain/context-map.md) · [состояния O07](docs/domain/obligation-states.md) ·
-[сага](docs/architecture/saga-confirmation.md) · [UML: состояния и сверка шлюза](docs/architecture/uml.md) ·
-[события и команды](docs/architecture/events.md) ·
-[модель данных](docs/architecture/data-model.md) · [развёртывание](docs/architecture/deployment.md) · [ADR](docs/adr/README.md).
+Компенсации при выбытии единицы, долговечный таймер срока и поведение при сбоях — в [описании саги](docs/architecture/saga-confirmation.md).
 
-Процессы в BPMN 2.0 (открываются в bpmn.io и Camunda Modeler): [подтверждение передачи](docs/architecture/diagrams/bpmn/confirm-transfer.bpmn) ·
-[план пополнения по прогнозу ЧС](docs/architecture/diagrams/bpmn/replenishment-plan.bpmn) ·
-[заявка врача](docs/architecture/diagrams/bpmn/clinical-request.bpmn) ·
-[загрузка CSV и публикация оценки](docs/architecture/diagrams/bpmn/csv-demand.bpmn). Перечень всех схем:
-[docs/architecture/diagrams](docs/architecture/diagrams/README.md).
+### Схемы подробно
+
+| Вид | Схемы |
+| --- | --- |
+| C4 | [контекст](docs/architecture/c4-context.md) · [контейнеры](docs/architecture/c4-containers.md) · [компоненты transfer и шлюза](docs/architecture/c4-components.md) |
+| DDD | [карта контекстов](docs/domain/context-map.md) · [состояния O07](docs/domain/obligation-states.md) |
+| UML | [сага и компенсации](docs/architecture/saga-confirmation.md) · [состояния и сверка шлюза](docs/architecture/uml.md) |
+| BPMN 2.0 | [подтверждение передачи](docs/architecture/diagrams/bpmn/confirm-transfer.bpmn) · [план пополнения](docs/architecture/diagrams/bpmn/replenishment-plan.bpmn) · [заявка врача](docs/architecture/diagrams/bpmn/clinical-request.bpmn) · [загрузка CSV](docs/architecture/diagrams/bpmn/csv-demand.bpmn) |
+| Данные и платформа | [события и команды](docs/architecture/events.md) · [модель данных](docs/architecture/data-model.md) · [развёртывание](docs/architecture/deployment.md) · [ADR](docs/adr/README.md) |
+
+Полный перечень и способы открыть — [docs/architecture/diagrams](docs/architecture/diagrams/README.md).
 
 ### Стек
 
