@@ -84,18 +84,25 @@ func (e *env) unpublished(t *testing.T) int {
 
 // collector — consumer, который складывает полученные действия по порядку и считает дубли через inbox.
 type collector struct {
-	mu       sync.Mutex
-	actions  []string
-	dupes    int
-	handled  int
-	db       *pgxpool.Pool
-	clk      clock.Clock
-	failWith error
+	mu         sync.Mutex
+	actions    []string
+	dupes      int
+	handled    int
+	db         *pgxpool.Pool
+	clk        clock.Clock
+	failWith   error
+	failAction string
 }
 
 func (c *collector) handle(ctx context.Context, msg messaging.Message) error {
 	if c.failWith != nil {
-		return c.failWith
+		var rec audit.AuditRecorded
+		if err := msg.Decode(&rec); err != nil {
+			return err
+		}
+		if c.failAction == "" || rec.Action == c.failAction {
+			return c.failWith
+		}
 	}
 	return bspgx.WithTx(ctx, c.db, func(ctx context.Context, tx pgx.Tx) error {
 		first, err := messaging.FirstTime(ctx, tx, msg, c.clk.Now())
@@ -350,7 +357,7 @@ func TestRelayCrashBetweenSendAndMarkIsDeduplicatedByInbox(t *testing.T) {
 func TestConsumerSendsPoisonToDLT(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
-	e.publishTyped(t, "P1")
+	e.publishTyped(t, "P1", "A2")
 	real, err := messaging.NewProducerClient(e.brokers)
 	if err != nil {
 		t.Fatal(err)
@@ -361,7 +368,7 @@ func TestConsumerSendsPoisonToDLT(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c := &collector{db: e.db, clk: e.clk, failWith: messaging.Permanent(errors.New("неизвестный тип"))}
+	c := &collector{db: e.db, clk: e.clk, failWith: messaging.Permanent(errors.New("неизвестный тип")), failAction: "P1"}
 	startConsumer(t, e, "g-dlt", c)
 
 	dlt, err := kgo.NewClient(kgo.SeedBrokers(e.brokers...), kgo.ConsumeTopics(e.topic+contracts.DLTSuffix), kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()))
@@ -381,5 +388,13 @@ func TestConsumerSendsPoisonToDLT(t *testing.T) {
 	}
 	if header(recs[0], messaging.HeaderDLTError) == "" || header(recs[0], messaging.HeaderDLTTopic) != e.topic {
 		t.Fatalf("заголовки DLT не заполнены: %+v", recs[0].Headers)
+	}
+	waitFor(t, 60*time.Second, func() bool {
+		actions, _, _ := c.snapshot()
+		return len(actions) == 1
+	}, "корректное сообщение после ядовитого")
+	actions, _, handled := c.snapshot()
+	if handled != 1 || actions[0] != "A2" {
+		t.Fatalf("после DLT обработано %v (%d доставок), ожидали только A2", actions, handled)
 	}
 }
