@@ -13,10 +13,10 @@
 </div>
 {{if .Content.CanAct}}
 {{if $t.Pending}}
-<h2>Выбор единиц компонента крови</h2><p>Первыми показаны единицы с ближайшим сроком годности (FEFO). Демо-правила; клиническое решение принимает врач.</p>
+<h2>Выбор единиц компонента крови</h2><p>Первыми показаны единицы с ближайшим сроком годности (FEFO), нужное количество отмечено заранее. Вы можете изменить выбор: например, если пакет повреждён или лежит не там. Демо-правила; клиническое решение принимает врач.</p>
 <form method="post" action="/tasks/{{$t.ID}}/confirm" class="wide">
 <input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><input type="hidden" name="idempotency_key" value="{{.Content.Key}}">
-<table class="data-table"><thead><tr><th>Выбор</th><th>Единица</th><th>Группа</th><th>Объём, мл</th><th>Годна до</th><th>Место хранения</th></tr></thead><tbody>{{range .Content.Candidates}}<tr><td><input type="checkbox" name="unit_ids" value="{{.ID}}" aria-label="Выбрать единицу {{.ID}}"></td><td class="mono">{{.ID}}</td><td>{{.Group}}</td><td>{{.Volume}}</td><td>{{datetime .Expires}}</td><td>{{.Location}}</td></tr>{{else}}<tr><td colspan="6">Доступных единиц не найдено.</td></tr>{{end}}</tbody></table>
+<table class="data-table"><thead><tr><th>Выбор</th><th>Единица</th><th>Группа</th><th>Объём, мл</th><th>Годна до</th><th>Место хранения</th></tr></thead><tbody>{{range $i, $_ := .Content.Candidates}}<tr><td><input type="checkbox" name="unit_ids" value="{{.ID}}"{{if lt $i $t.Need}} checked{{end}} aria-label="Выбрать единицу {{.ID}}"></td><td class="mono">{{.ID}}</td><td>{{.Group}}</td><td>{{.Volume}}</td><td>{{datetime .Expires}}</td><td>{{.Location}}</td></tr>{{else}}<tr><td colspan="6">Доступных единиц не найдено.</td></tr>{{end}}</tbody></table>
 <label><input type="checkbox" name="accept_partial" value="true"> Подтвердить частично, если часть выбранных единиц уже недоступна</label>
 <button class="btn btn--primary" type="submit">Подтвердить передачу</button></form>
 <h2>Отказать в передаче</h2><form method="post" action="/tasks/{{$t.ID}}/reject"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><label>Причина <select name="reason" required><option value="SOURCE_REFUSED">Клиника-источник не может выполнить передачу</option></select></label><button class="btn btn--danger" type="submit">Отказать в передаче</button></form>

@@ -105,3 +105,13 @@ func TestHistoryLabelsCoverDispatchAndDelivery(t *testing.T) {
 		}
 	}
 }
+
+// Единицы, первые по FEFO, предвыбраны (оператор вправе изменить выбор): нужное число отмечено в форме.
+func TestOperatorCardPreselectsFEFOUnits(t *testing.T) {
+	e, _ := operatorEnv(t, http.StatusOK, "Закреплено")
+	j := e.login(operator, "/tasks/"+taskID)
+	body := e.do(http.MethodGet, "/tasks/"+taskID, j, nil).Body.String()
+	if !strings.Contains(body, `value="`+unitID+`" checked`) {
+		t.Fatalf("единица %s должна быть предвыбрана: %s", unitID, body)
+	}
+}

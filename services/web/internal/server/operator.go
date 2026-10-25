@@ -42,6 +42,9 @@ type taskView struct {
 	} `json:"spec"`
 }
 
+// Need — сколько единиц ещё осталось подтвердить: столько первых по FEFO предвыбираются в форме.
+func (t taskView) Need() int { return max(t.Requested-t.Confirmed, 0) }
+
 func (t taskView) StatusBadge() ui.Badge { return ui.StatusBadge(ui.ObligationStatus(t.Status)) }
 
 func (t taskView) PatientDeliveryLabel() string { return patientDeliveryLabel(t.PatientStatus) }
