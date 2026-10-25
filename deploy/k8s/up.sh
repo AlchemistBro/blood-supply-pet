@@ -39,6 +39,8 @@ done
 "${k[@]}" wait -n bs-data --for=condition=Ready cluster/pg --timeout=600s
 "${k[@]}" wait -n bs-app --for=condition=complete job/kafka-topics --timeout=300s
 "${k[@]}" rollout status -n bs-edge deployment/keycloak --timeout=600s
+"${k[@]}" rollout status -n bs-observability deployment/otel-lgtm --timeout=600s
+"${k[@]}" wait -n bs-sims --for=condition=Available deployment --all --timeout=300s
 go run ./tools/k8sphase -phase application < "$temporary/overlay.yaml" | "${k[@]}" apply --server-side -f -
 "${k[@]}" wait -n bs-app --for=condition=Available deployment --all --timeout=600s
 printf '%s\n' 'Стенд: https://localhost; Keycloak: https://localhost/auth; демо-пароль: demo.'

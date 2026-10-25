@@ -2,32 +2,42 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 k=(kubectl --context kind-blood-supply)
-"${k[@]}" -n bs-app delete job bs-smoke --ignore-not-found >/dev/null
-"${k[@]}" -n bs-app create configmap bs-smoke --from-file=check.sh=deploy/k8s/smoke-check.sh --dry-run=client -o yaml | "${k[@]}" apply -f -
-"${k[@]}" -n bs-app apply -f - <<'YAML'
-apiVersion: batch/v1
-kind: Job
-metadata: {name: bs-smoke}
-spec:
-  backoffLimit: 0
-  activeDeadlineSeconds: 240
-  ttlSecondsAfterFinished: 3600
-  template:
-    metadata:
-      labels: {blood-supply.io/runtime: go-service, app.kubernetes.io/name: bs-smoke}
-    spec:
-      restartPolicy: Never
-      containers:
-        - name: check
-          image: curlimages/curl:8.12.1
-          command: [sh, /checks/check.sh]
-          volumeMounts: [{name: checks, mountPath: /checks, readOnly: true}]
-          resources: {requests: {cpu: 10m, memory: 32Mi}, limits: {memory: 64Mi}}
-          securityContext: {runAsNonRoot: true, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
-      volumes: [{name: checks, configMap: {name: bs-smoke}}]
-YAML
-if ! "${k[@]}" -n bs-app wait --for=condition=complete job/bs-smoke --timeout=260s; then
-  "${k[@]}" -n bs-app logs job/bs-smoke || true
+# Пробы выполняются внутри существующих подов. Отдельный Job не имеет права
+# обращаться к web и данным K1; ради проверки NetworkPolicy не расширяются.
+for target in web:8080 inventory:8101 demand:8102 planning:8103 matching:8104 transfer:8105 logistics-gateway:8106 notification:8107 audit:8108; do
+  MSYS_NO_PATHCONV=1 "${k[@]}" -n bs-app exec "deployment/${target%:*}" -- /healthcheck "http://127.0.0.1:${target#*:}/readyz"
+done
+
+temporary=$(mktemp -d)
+matching_pid= audit_pid=
+cleanup() {
+  for pid in "$matching_pid" "$audit_pid"; do
+    if [[ -n "$pid" ]]; then kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; fi
+  done
+  rm -f "$temporary/matching.log" "$temporary/audit.log" "$temporary/tls.crt"
+  rmdir "$temporary"
+}
+trap cleanup EXIT
+"${k[@]}" -n bs-app get secret bs-tls -o jsonpath='{.data.tls\.crt}' | base64 --decode > "$temporary/tls.crt"
+
+# Port-forward проверяет JWT и прикладные права через API Kubernetes. Исполнение
+# NetworkPolicy проверяется отдельно в network-check.sh до развёртывания приложения.
+"${k[@]}" -n bs-app port-forward --address=127.0.0.1 service/matching 18104:8104 > "$temporary/matching.log" 2>&1 &
+matching_pid=$!
+"${k[@]}" -n bs-app port-forward --address=127.0.0.1 service/audit 18108:8108 > "$temporary/audit.log" 2>&1 &
+audit_pid=$!
+ready=false
+for attempt in $(seq 1 60); do
+  if curl -fsS --connect-timeout 1 --max-time 2 http://127.0.0.1:18104/readyz >/dev/null 2>&1 &&
+     curl -fsS --connect-timeout 1 --max-time 2 http://127.0.0.1:18108/readyz >/dev/null 2>&1; then
+    ready=true
+    break
+  fi
+  if ! kill -0 "$matching_pid" "$audit_pid" 2>/dev/null; then break; fi
+  sleep 1
+done
+if [[ "$ready" != true ]]; then
+  cat "$temporary/matching.log" "$temporary/audit.log" >&2
   exit 1
 fi
-"${k[@]}" -n bs-app logs job/bs-smoke
+BS_SMOKE_CA_BUNDLE="$temporary/tls.crt" bash deploy/k8s/smoke-check.sh

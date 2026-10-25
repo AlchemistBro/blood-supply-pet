@@ -39,6 +39,11 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Установить kind
         run: go install sigs.k8s.io/kind@v0.29.0
+      - name: Освободить место для образов и архива PostgreSQL
+        run: |
+          df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet
+          df -h /
       - name: Развернуть платформу и сервисы
         run: task k8s:up
       - name: Проверить готовность и права

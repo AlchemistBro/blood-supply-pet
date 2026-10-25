@@ -333,8 +333,8 @@ kubectl create secret tls bs-tls -n bs-edge --cert tls.crt --key tls.key
    Существующим топикам Job партиции и хранение не меняет.
 8. **Realm** лежит в двух местах (`deploy/compose/keycloak` и `base/platform/keycloak`): kustomize не читает файлы
    вне своего каталога без `--load-restrictor`. Правка realm — в обоих файлах; сверку `cmp` стоит добавить в CI.
-9. **MinIO**: образ закреплён на последнем выпуске с публичной сборкой в Docker Hub; клиент `mc` берётся из того же
-   образа. При замене образа — проверить наличие `mc` или вынести Job на `minio/mc`.
+  9. **MinIO**: сервер и клиент `mc` собираются из официальных исходников закреплённых выпусков
+     (`deploy/docker/Minio.Dockerfile`). `task k8s:up` загружает собранный образ в kind без публикации в реестр.
 10. **Роль `audit_writer`** (только INSERT, security.md) не создана: сервис `audit` пока её не использует.
 11. **Пробы**: у Kafka и otel-lgtm — TCP и HTTP-проверки порта; пробы сервисов задаёт `components/go-service`.
 12. Ни один образ и ни один CRD при подготовке манифестов не скачивались; теги образов `minio/minio`,
