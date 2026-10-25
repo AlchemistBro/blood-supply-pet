@@ -74,7 +74,8 @@ var codeLabels = map[string]string{
 	"BLOOD_GROUP": "Группа крови", "PHENOTYPE": "Фенотип", "EXPIRY": "Срок годности", "KIND": "Вид компонента", "SOURCE": "Источник",
 	"SOURCE_REFUSED": "Источник отказал", "NOT_ALLOCATED": "Не закреплено", "UNKNOWN_UNIT": "Единица неизвестна", "SAME_UNIT": "Та же единица",
 	"PLAN_RECALCULATED": "План пересчитан", "REQUEST_CANCELLED": "Заявка отменена", "DUTY_OFFICER_DECISION": "Решение дежурного",
-	"RESOLVED": "Проблема решена", "NO_ACTION_REQUIRED": "Действий не требуется",
+	"RESOLVED": "Проблема решена", "TEMPERATURE": "нарушен температурный режим", "TEMPERATURE_EXCURSION": "Нарушение температурного режима в перевозке",
+	"EXPIRED_NO_FALLBACK": "Срок подтверждения истёк, запасных источников нет", "ALWAYS": "Всегда", "NO_ACTION_REQUIRED": "Действий не требуется",
 }
 
 // deref разворачивает указатели (nullable-поля ответов сервисов), nil даёт пустую строку.
@@ -100,6 +101,44 @@ func label(m map[string]string, v any) string {
 	return code
 }
 
+var conditionTokens = map[string]string{
+	"URGENCY": "срочность", "CONSTRAINT": "у заявки есть ограничение", "NOT_CONSTRAINT": "у заявки нет ограничения",
+	"NO_GROUP_SUBSTITUTION": "запрет замены группы", "IRRADIATED": "облучённые единицы", "MIN_REMAINING_HOURS": "минимальная годность",
+	"PLANNED": "плановая", "URGENT": "срочная", "EMERGENCY": "экстренная",
+}
+
+// ruleCondition переводит условие применения правила («URGENCY=PLANNED; NOT_CONSTRAINT=IRRADIATED») в читаемый текст.
+// Неизвестные части остаются как есть.
+func ruleCondition(v any) string {
+	text := strings.TrimSpace(deref(v))
+	if text == "" {
+		return "Всегда"
+	}
+	tr := func(s string) string {
+		if t, ok := conditionTokens[s]; ok {
+			return t
+		}
+		if t, ok := codeLabels[s]; ok {
+			return t
+		}
+		return s
+	}
+	var parts []string
+	for _, clause := range strings.Split(text, ";") {
+		key, value, found := strings.Cut(strings.TrimSpace(clause), "=")
+		if !found {
+			parts = append(parts, tr(key))
+			continue
+		}
+		var values []string
+		for _, one := range strings.Split(value, "|") {
+			values = append(values, tr(one))
+		}
+		parts = append(parts, tr(key)+": "+strings.Join(values, " или "))
+	}
+	return strings.Join(parts, "; ")
+}
+
 func labelFuncs() map[string]any {
 	return map[string]any{
 		"kindLabel": func(v any) string {
@@ -116,7 +155,8 @@ func labelFuncs() map[string]any {
 		"auditModules": func() []string {
 			return []string{"web", "matching", "transfer", "logistics", "inventory", "demand", "planning", "notification"}
 		},
-		"code":        func(v any) string { return label(codeLabels, v) },
-		"auditResult": func(v any) string { return label(auditResultLabels, v) },
+		"ruleCondition": ruleCondition,
+		"code":          func(v any) string { return label(codeLabels, v) },
+		"auditResult":   func(v any) string { return label(auditResultLabels, v) },
 	}
 }

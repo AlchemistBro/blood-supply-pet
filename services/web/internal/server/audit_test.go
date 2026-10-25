@@ -65,3 +65,11 @@ func TestAuditCSVNeutralizesSpreadsheetFormulas(t *testing.T) {
 		}
 	}
 }
+
+func TestAuditAPIQueryUsesServiceParameterNames(t *testing.T) {
+	got := auditAPIQuery(url.Values{"object_type": {"x"}, "object_id": {"y"}, "user_id": {"z"}, "after_seq": {"5"}, "module": {"web"}, "limit": {"100"}})
+	want := url.Values{"objectType": {"x"}, "objectId": {"y"}, "userId": {"z"}, "afterSeq": {"5"}, "module": {"web"}, "limit": {"100"}}
+	if got.Encode() != want.Encode() {
+		t.Fatalf("параметры сервиса аудита: %s, ожидалось %s", got.Encode(), want.Encode())
+	}
+}

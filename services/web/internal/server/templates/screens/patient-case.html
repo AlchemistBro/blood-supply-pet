@@ -1,3 +1,3 @@
 {{define "content"}}
-<p>Чтение номера случая записано в аудит. Страница не кэшируется.</p><dl><dt>Заявка</dt><dd>{{.Content.RequestID}}</dd><dt>Номер случая</dt><dd>{{.Content.Plain}}</dd></dl><p><a href="/">Вернуться на главную</a></p>
+<p>Чтение номера случая записано в аудит. Страница не кэшируется.</p><dl><dt>Заявка</dt><dd>{{.Content.RequestID}}</dd><dt>Номер случая</dt><dd>{{.Content.Plain}}</dd></dl><p><a href="/requests/{{.Content.RequestID}}">← Вернуться к заявке</a></p>
 {{end}}

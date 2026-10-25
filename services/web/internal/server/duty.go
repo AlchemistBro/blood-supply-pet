@@ -69,6 +69,7 @@ func (s *Server) closeEscalation(w http.ResponseWriter, r *http.Request) {
 		s.demandFailure(w, r, err)
 		return
 	}
+	ui.SetFlash(w, s.cfg.CookieSecure, ui.Flash{Tone: ui.ToneSuccess, Text: "Обращение закрыто. Запрет использования компонентов закрытие не снимает."})
 	http.Redirect(w, r, "/duty/escalations", http.StatusSeeOther)
 }
 func (s *Server) allTasks(w http.ResponseWriter, r *http.Request) {

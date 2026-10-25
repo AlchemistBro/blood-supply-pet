@@ -161,6 +161,7 @@ func (s *Server) screenPage(r *http.Request, title string) ui.Page {
 func (s *Server) renderScreen(w http.ResponseWriter, r *http.Request, status int, name, title string, data any) {
 	p := s.screenPage(r, title)
 	p.Content = data
+	p.Flashes = ui.TakeFlashes(w, r, s.cfg.CookieSecure)
 	var buf bytes.Buffer
 	if err := s.ui.Page(&buf, name, p); err != nil {
 		s.log.ErrorContext(r.Context(), "экран не отрисован", "page", name, "err", err)
@@ -318,7 +319,13 @@ func (s *Server) taskAction(w http.ResponseWriter, r *http.Request, action strin
 		s.renderError(w, r, resp.StatusCode, "Действие не выполнено", "Обновите карточку задания.")
 		return
 	}
-	// После изменения перечитывается состояние: повтор формы сохраняет ключ идемпотентности transfer.
+	// Успех — перенаправление на карточку: F5 не повторяет форму, а сообщение показывается один раз.
+	if resp.StatusCode == http.StatusOK {
+		ui.SetFlash(w, s.cfg.CookieSecure, ui.Flash{Tone: ui.ToneSuccess, Text: result.Message})
+		http.Redirect(w, r, "/tasks/"+task.ID.String(), http.StatusSeeOther) // #nosec G710 -- ID разобран uuid и сериализован канонически; префикс фиксирован.
+		return
+	}
+	// При отказе перечитывается состояние: повтор формы сохраняет ключ идемпотентности transfer.
 	if fresh, ok := s.loadTask(w, r); ok {
 		s.showTask(w, r, resp.StatusCode, fresh, result.Message)
 	}

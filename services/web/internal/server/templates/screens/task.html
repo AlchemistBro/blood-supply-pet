@@ -2,7 +2,7 @@
 {{$t := .Content.Task}}
 <p><a href="/tasks?clinic={{$t.Source}}">← Задания клиники-источника</a></p>
 <p role="status">{{$t.PatientDeliveryLabel}}</p>
-{{if $t.ClinicalUseBlocked}}<div class="alert alert--danger" role="alert">Клиническое использование компонентов запрещено: {{range $t.Violations}}{{.}} {{end}}. Решение о дальнейшей судьбе оформляется в АИСТ-М.</div>{{end}}
+{{if $t.ClinicalUseBlocked}}<div class="alert alert--danger" role="alert">Клиническое использование компонентов запрещено: {{range $i, $v := $t.Violations}}{{if $i}}, {{end}}{{code $v}}{{end}}. Решение о дальнейшей судьбе оформляется в АИСТ-М.</div>{{end}}
 {{with .Content.Message}}<div class="alert" role="status">{{.}}</div>{{end}}
 <div class="summary-grid">
 <section><h2>Задание</h2>

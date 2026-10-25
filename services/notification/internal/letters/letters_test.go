@@ -71,9 +71,9 @@ func TestLettersMatchGolden(t *testing.T) {
 func TestSubjects(t *testing.T) {
 	r := renderer(t)
 	want := map[string]string{
-		"urgent_task":     "[демо] Срочное задание на передачу № 0192f3a1",
-		"escalation":      "[демо] Эскалация по заданию № 0192f3a1",
-		"transfer_broken": "[демо] Нарушено обязательство на передачу № 0192f3a1",
+		"urgent_task":     "[демо] Срочное задание на передачу № 00000001",
+		"escalation":      "[демо] Эскалация по заданию № 00000001",
+		"transfer_broken": "[демо] Нарушено обязательство на передачу № 00000001",
 	}
 	for name, d := range drafts(t) {
 		if got := r.Subject(d.Kind, d.Facts); got != want[name] {

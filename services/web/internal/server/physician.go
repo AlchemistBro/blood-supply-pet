@@ -1,6 +1,10 @@
 package server
 
 import (
+	"errors"
+	"fmt"
+	"github.com/AlchemistBro/blood-supply-pet/services/web/internal/svcclient"
+	"github.com/AlchemistBro/blood-supply-pet/services/web/internal/ui"
 	"net/http"
 	"strconv"
 	"time"
@@ -97,8 +101,8 @@ func (s *Server) createClinicalRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	quantity, err := strconv.Atoi(r.FormValue("requested_units"))
-	if err != nil {
-		s.renderError(w, r, 400, "Неверное количество", "Введите целое число единиц.")
+	if err != nil || quantity < 1 || quantity > maxRequestUnits {
+		s.renderError(w, r, 400, "Неверное количество", fmt.Sprintf("Введите целое число единиц от 1 до %d.", maxRequestUnits))
 		return
 	}
 	constraints := []map[string]string{}
@@ -157,6 +161,10 @@ func (s *Server) selectRequestVariant(w http.ResponseWriter, r *http.Request) {
 	}
 	http.Redirect(w, r, "/requests/"+id.String(), http.StatusSeeOther) // #nosec G710 -- id разобран uuid.Parse и сериализован канонически; префикс фиксирован.
 }
+
+// maxRequestUnits — предел количества в одной заявке врача: больше требует решения не одной заявки, а плана.
+const maxRequestUnits = 50
+
 func (s *Server) cancelClinicalRequest(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
@@ -164,9 +172,15 @@ func (s *Server) cancelClinicalRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.matching.PostJSON(r.Context(), "/requests/"+id.String()+"/cancel", struct{}{}, nil); err != nil {
+		var statusErr *svcclient.StatusError
+		if errors.As(err, &statusErr) && statusErr.Code == http.StatusConflict {
+			s.renderError(w, r, http.StatusConflict, "Отмена невозможна", "Заявка изменилась или поставка уже отправлена либо доставлена. Откройте заявку и проверьте задания.")
+			return
+		}
 		s.demandFailure(w, r, err)
 		return
 	}
+	ui.SetFlash(w, s.cfg.CookieSecure, ui.Flash{Tone: ui.ToneSuccess, Text: "Отмена заявки запрошена. Результат придёт от источников."})
 	http.Redirect(w, r, "/requests/"+id.String(), http.StatusSeeOther) // #nosec G710 -- id разобран uuid.Parse и сериализован канонически; префикс фиксирован.
 }
 func (s *Server) patientCase(w http.ResponseWriter, r *http.Request) {

@@ -62,10 +62,24 @@ func auditQuery(r *http.Request) url.Values {
 	}
 	return q
 }
+
+// auditAPIQuery переименовывает ключи формы в имена параметров API журнала (camelCase): иначе сервис молча
+// игнорирует фильтры по объекту, учётной записи и курсор страницы.
+func auditAPIQuery(q url.Values) url.Values {
+	rename := map[string]string{"object_type": "objectType", "object_id": "objectId", "user_id": "userId", "after_seq": "afterSeq"}
+	out := url.Values{}
+	for key, values := range q {
+		if name, ok := rename[key]; ok {
+			key = name
+		}
+		out[key] = values
+	}
+	return out
+}
 func (s *Server) auditPage(w http.ResponseWriter, r *http.Request) {
 	q := auditQuery(r)
 	data := auditScreen{Filters: q, ExportURL: "/audit/export.csv?" + q.Encode()}
-	if err := s.auditReader.GetJSON(r.Context(), "/records?"+q.Encode(), &data); err != nil {
+	if err := s.auditReader.GetJSON(r.Context(), "/records?"+auditAPIQuery(q).Encode(), &data); err != nil {
 		s.demandFailure(w, r, err)
 		return
 	}
@@ -87,7 +101,7 @@ func (s *Server) auditVerify(w http.ResponseWriter, r *http.Request) {
 // auditCSV выгружает одну страницу: курсор исключает неограниченный ответ и удержание памяти BFF.
 func (s *Server) auditCSV(w http.ResponseWriter, r *http.Request) {
 	var data auditScreen
-	if err := s.auditReader.GetJSON(r.Context(), "/records?"+auditQuery(r).Encode(), &data); err != nil {
+	if err := s.auditReader.GetJSON(r.Context(), "/records?"+auditAPIQuery(auditQuery(r)).Encode(), &data); err != nil {
 		s.demandFailure(w, r, err)
 		return
 	}

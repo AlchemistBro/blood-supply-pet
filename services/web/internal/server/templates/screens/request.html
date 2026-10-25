@@ -8,7 +8,8 @@
 {{with .Content.Request}}<h2>Заявка</h2><dl><dt>Заявка</dt><dd>{{.ID}}</dd><dt>Статус</dt><dd>{{template "badge" (requestBadge .Status)}}</dd><dt>Компонент</dt><dd>{{kindLabel .Kind}} {{.Group}} — {{.Requested}} ед.</dd><dt>Срочность</dt><dd>{{urgencyLabel .Urgency}}</dd><dt>Запас обновлён</dt><dd>{{datetime .Synced}}; водяной знак {{.Watermark}}</dd></dl>{{end}}
 {{if .Content.CanReadCase}}<p><a href="/requests/{{.Content.Request.ID}}/patient-case">Показать номер случая с записью в аудит</a></p>{{end}}
 {{with .Content.Request.Notes}}<h2>Что исключено из подбора</h2>{{range .}}<p role="status">{{.}}</p>{{end}}{{end}}
-{{with .Content.Request.Obligations}}<h2>Передачи по заявке</h2><table class="data-table"><caption class="visually-hidden">Передачи по заявке</caption><thead><tr><th>Задание</th><th>Источник</th><th>Единиц</th><th>Статус</th><th>Использование запрещено</th></tr></thead><tbody>{{range .}}<tr><td><a href="/tasks/{{.ID}}">{{.ID}}</a></td><td>{{.Source}}</td><td>{{.Units}}</td><td>{{template "badge" (statusBadge .Status)}}</td><td>{{if .Blocked}}Да{{else}}Нет{{end}}</td></tr>{{end}}</tbody></table>{{end}}
+{{with .Content.Request.Obligations}}<h2>Передачи по заявке</h2><table class="data-table"><caption class="visually-hidden">Передачи по заявке</caption><thead><tr><th>Задание</th><th>Источник</th><th>Единиц</th><th>Статус</th><th>Использование запрещено</th></tr></thead><tbody>{{range .}}<tr><td><a href="/tasks/{{.ID}}">{{.ID}}</a></td><td>Клиника № {{.Source}}</td><td>{{.Units}}</td><td>{{template "badge" (statusBadge .Status)}}</td><td>{{if .Blocked}}Да{{else}}Нет{{end}}</td></tr>{{end}}</tbody></table>{{end}}
+</div>
 <h2>Варианты подбора</h2>
 {{if gt (len .Content.Request.Variants) 6}}<input type="checkbox" id="all-variants" class="variants-toggle"><label for="all-variants" class="variants-more">Показать все варианты ({{len .Content.Request.Variants}})</label>{{end}}
 <div class="variants">
@@ -16,5 +17,4 @@
 {{if $.Content.CanSelect}}<form method="post" action="/requests/{{$.Content.Request.ID}}/select"><input type="hidden" name="csrf_token" value="{{$.CSRFToken}}"><input type="hidden" name="choice_id" value="{{$.Content.Key}}"><input type="hidden" name="variant_offer_id" value="{{.ID}}"><button class="btn btn--primary" type="submit">Выбрать вариант</button></form>{{end}}</section>{{else}}<p>Допустимых вариантов нет. Нехватка запаса не отменяет ограничений заявки.</p>{{end}}
 </div>
 {{if .Content.CanCancel}}<form method="post" action="/requests/{{.Content.Request.ID}}/cancel"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><button class="btn btn--danger" type="submit">Отменить заявку</button></form>{{end}}
-</div>
 {{end}}

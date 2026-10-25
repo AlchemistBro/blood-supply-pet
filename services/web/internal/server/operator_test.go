@@ -76,6 +76,13 @@ func TestOperatorConfirmWorksWithoutJavaScript(t *testing.T) {
 			if status == http.StatusServiceUnavailable {
 				want = "Сервис временно недоступен"
 			}
+			if status == http.StatusOK {
+				// Успех: перенаправление на карточку (F5 не повторяет форму), сообщение — в одноразовом уведомлении.
+				if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/tasks/"+taskID || *calls != 1 {
+					t.Fatalf("успешное подтверждение: %d, %q, вызовов %d", rec.Code, rec.Header().Get("Location"), *calls)
+				}
+				return
+			}
 			if rec.Code != status || *calls != 1 || !strings.Contains(rec.Body.String(), want) {
 				t.Fatalf("ответ формы: %d, вызовов %d, %s", rec.Code, *calls, rec.Body.String())
 			}

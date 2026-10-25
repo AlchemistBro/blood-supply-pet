@@ -90,9 +90,10 @@ func New(ref *refdata.Set, webBaseURL string) (*Renderer, error) {
 	return r, nil
 }
 
-// Subject — тема письма: вид и короткий номер задания (первые 8 знаков идентификатора).
+// Subject — тема письма: вид и короткий номер задания (последние 8 знаков идентификатора: начало UUIDv7 — время).
 func (r *Renderer) Subject(kind domain.Kind, f domain.Facts) string {
-	short := f.ObligationID.String()[:8]
+	id := f.ObligationID.String()
+	short := id[len(id)-8:] // хвост UUIDv7 случайный; начало — время, у заданий одной минуты оно одинаково
 	switch kind {
 	case domain.KindTransferTerminal:
 		return "[демо] Изменение задания на передачу № " + short
