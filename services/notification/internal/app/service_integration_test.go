@@ -186,7 +186,7 @@ func TestDoctorChoiceLetterReachesSourceOperator(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if l.Subject != "[демо] Срочное задание на передачу № 0192f3a1" {
+	if l.Subject != "[демо] Срочное задание на передачу № 00000001" {
 		t.Fatalf("тема %q", l.Subject)
 	}
 	if !strings.Contains(l.Text, obligationID.String()) || !strings.Contains(l.HTML, "/tasks/"+obligationID.String()) {
@@ -322,7 +322,7 @@ func TestEscalationAndBrokenGoToDutyOfficer(t *testing.T) {
 		}
 		subjects[l.Subject] = true
 	}
-	for _, want := range []string{"[демо] Эскалация по заданию № 0192f3a1", "[демо] Нарушено обязательство на передачу № 0192f3a1"} {
+	for _, want := range []string{"[демо] Эскалация по заданию № 00000001", "[демо] Нарушено обязательство на передачу № 00000001"} {
 		if !subjects[want] {
 			t.Errorf("нет письма %q; получены %v", want, subjects)
 		}
