@@ -3,6 +3,8 @@ package ui
 import (
 	"fmt"
 	"reflect"
+	"strconv"
+	"strings"
 )
 
 // Русские подписи для кодов, которые приходят из сервисов. Неизвестный код показывается как есть:
@@ -110,7 +112,11 @@ func labelFuncs() map[string]any {
 		"auditModule":  func(v any) string { return label(auditModuleLabels, v) },
 		"auditAction":  func(v any) string { return label(auditActionLabels, v) },
 		"auditObject":  func(v any) string { return label(auditObjectLabels, v) },
-		"code":         func(v any) string { return label(codeLabels, v) },
-		"auditResult":  func(v any) string { return label(auditResultLabels, v) },
+		"dec":          func(v float64) string { return strings.ReplaceAll(strconv.FormatFloat(v, 'f', -1, 64), ".", ",") },
+		"auditModules": func() []string {
+			return []string{"web", "matching", "transfer", "logistics", "inventory", "demand", "planning", "notification"}
+		},
+		"code":        func(v any) string { return label(codeLabels, v) },
+		"auditResult": func(v any) string { return label(auditResultLabels, v) },
 	}
 }

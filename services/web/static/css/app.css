@@ -1420,3 +1420,32 @@ th[aria-sort] .sort-arrow {
 .summary-grid dl {
   margin-bottom: 16px;
 }
+
+/* Длинный список вариантов: по умолчанию первые шесть, остальные — по флажку без JavaScript. */
+.variants-toggle {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.variants-more {
+  display: inline-block;
+  margin-bottom: 12px;
+  color: var(--bs-primary);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.variants-toggle:focus-visible + .variants-more {
+  outline: var(--bs-focus);
+  outline-offset: 2px;
+}
+
+.variants-toggle:not(:checked) ~ .variants .card:nth-of-type(n + 7) {
+  display: none;
+}
+
+.variants-toggle:checked + .variants-more::after {
+  content: " — скрыть";
+}
