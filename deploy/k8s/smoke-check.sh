@@ -6,6 +6,10 @@ matching=${BS_SMOKE_MATCHING_URL:-http://127.0.0.1:18104}
 audit=${BS_SMOKE_AUDIT_URL:-http://127.0.0.1:18108}
 ca_bundle=${BS_SMOKE_CA_BUNDLE:?Укажите сертификат локального стенда}
 curl --cacert "$ca_bundle" -fsS --connect-timeout 3 --max-time 15 "$web/login" >/dev/null
+status=$(curl --cacert "$ca_bundle" -sS --connect-timeout 3 --max-time 15 -o /dev/null -w '%{http_code}' "$web/auth/login?hint=physician1&next=/requests")
+[ "$status" = 302 ] || { echo "Начало входа BFF: ожидали 302, HTTP $status" >&2; exit 1; }
+status=$(curl --cacert "$ca_bundle" -sS --connect-timeout 3 --max-time 15 -o /dev/null -w '%{http_code}' "$web/auth/callback")
+[ "$status" = 400 ] || { echo "Callback без состояния должен отклоняться BFF: HTTP $status" >&2; exit 1; }
 token=$(curl --cacert "$ca_bundle" -fsS --connect-timeout 3 --max-time 15 -X POST "$keycloak" \
   -d grant_type=password -d client_id=blood-supply-cli -d username=physician1 -d password=demo | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
 [ -n "$token" ] || { echo 'Keycloak не выдал токен демо-врачу' >&2; exit 1; }

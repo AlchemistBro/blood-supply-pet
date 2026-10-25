@@ -90,6 +90,43 @@ func setup(t *testing.T) harness {
 	return harness{svc: svc, pool: pool, ctx: ctx, at: now}
 }
 
+func TestRequestSummaryExcludesLargeVariantsWithoutChangingDetail(t *testing.T) {
+	h := setup(t)
+	actor := app.Actor{User: "doctor-1", ClinicID: 1, Roles: []string{"PHYSICIAN"}}
+	r := domain.Request{RequestID: uuid.New(), ClinicID: 1, ComponentKind: "RBC", RequestedUnits: 1, Urgency: "PLANNED", BloodGroup: "O+", Phenotype: "K-"}
+	n, err := h.svc.Create(h.ctx, r, "CASE_SECRET", actor)
+	if err != nil || len(n.Result.Variants) != 1 {
+		t.Fatalf("создание заявки: %v", err)
+	}
+	n.Result.Variants[0].Explanation = strings.Repeat("x", 9<<20)
+	raw, err := json.Marshal(n.Result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.pool.Exec(h.ctx, `UPDATE clinical_request SET match_result=$2 WHERE clinical_request_id=$1`, r.RequestID, raw); err != nil {
+		t.Fatal(err)
+	}
+	full, err := h.svc.Requests(h.ctx, actor, false)
+	if err != nil || len(full) != 1 || len(full[0].Result.Variants) != 1 || len(full[0].Result.Variants[0].Explanation) != 9<<20 {
+		t.Fatalf("полный список потерял варианты: %v", err)
+	}
+	compact, err := h.svc.Requests(h.ctx, actor, true)
+	if err != nil || len(compact) != 1 {
+		t.Fatalf("компактный список: %v", err)
+	}
+	if len(compact[0].Result.Variants) != 0 || compact[0].Request.RequestID != r.RequestID || compact[0].Result.StockWatermark != n.Result.StockWatermark {
+		t.Fatal("компактный список должен сохранять заявку и водяной знак без вариантов")
+	}
+	detail, err := h.svc.Request(h.ctx, r.RequestID, actor)
+	if err != nil || len(detail.Result.Variants) != 1 || len(detail.Result.Variants[0].Explanation) != 9<<20 {
+		t.Fatalf("полная карточка изменена: %v", err)
+	}
+	other := app.Actor{User: "other-doctor", ClinicID: 2, Roles: []string{"PHYSICIAN"}}
+	if items, err := h.svc.Requests(h.ctx, other, true); err != nil || len(items) != 0 {
+		t.Fatalf("компактный список раскрыл чужую клинику: %v", err)
+	}
+}
+
 func TestRequestSelectionSealsCaseAndIsIdempotent(t *testing.T) {
 	h := setup(t)
 	actor := app.Actor{User: "doctor-1", ClinicID: 1, Roles: []string{"PHYSICIAN"}}

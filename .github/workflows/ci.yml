@@ -5,6 +5,7 @@ on:
   pull_request:
   push:
     branches: [main]
+    paths-ignore: ["docs/**", "README*.md", "CONTRIBUTING.md", "tools/docs-*/**"]
 
 concurrency:
   group: ci-${{ github.ref }}

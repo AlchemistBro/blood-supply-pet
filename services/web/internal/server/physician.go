@@ -86,7 +86,7 @@ func (s *Server) registerPhysician(mux *http.ServeMux) {
 func (s *Server) requestList(w http.ResponseWriter, r *http.Request) {
 	p, _ := auth.FromContext(r.Context())
 	data := physicianScreen{CanCreate: auth.Allowed(auth.OpCreateRequest, p.Roles)}
-	if err := s.matching.GetJSON(r.Context(), "/requests", &data.Requests); err != nil {
+	if err := s.matching.GetJSON(r.Context(), "/requests?summary=true", &data.Requests); err != nil {
 		s.demandFailure(w, r, err)
 		return
 	}

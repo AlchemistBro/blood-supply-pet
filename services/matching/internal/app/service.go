@@ -154,14 +154,14 @@ func (s *Service) Request(ctx context.Context, id uuid.UUID, actor Actor) (Reque
 	}
 	return n, nil
 }
-func (s *Service) Requests(ctx context.Context, actor Actor) ([]RequestRecord, error) {
+func (s *Service) Requests(ctx context.Context, actor Actor, summary bool) ([]RequestRecord, error) {
 	clinic := actor.ClinicID
 	if slices.Contains(actor.Roles, "DUTY_OFFICER") {
 		clinic = 0
 	} else if clinic <= 0 {
 		return nil, ErrForbidden
 	}
-	items, err := s.store.Requests(ctx, clinic)
+	items, err := s.store.Requests(ctx, clinic, summary)
 	if err != nil {
 		return nil, err
 	}

@@ -67,7 +67,7 @@ type Store interface {
 	ClaimFollowUp(context.Context, pgx.Tx, uuid.UUID, int64, string) (bool, error)
 	InsertRequest(context.Context, pgx.Tx, RequestRecord, k1seal.Sealed) error
 	Request(context.Context, pgx.Tx, uuid.UUID, bool) (RequestRecord, error)
-	Requests(context.Context, int64) ([]RequestRecord, error)
+	Requests(context.Context, int64, bool) ([]RequestRecord, error)
 	Patient(context.Context, pgx.Tx, uuid.UUID) (k1seal.Sealed, error)
 	Rules(context.Context, pgx.Tx) ([]domain.Rule, error)
 	InsertRule(context.Context, pgx.Tx, domain.Rule) error

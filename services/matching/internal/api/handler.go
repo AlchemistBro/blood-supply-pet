@@ -89,8 +89,9 @@ func (h *Handler) CreateRequest(ctx context.Context, req gen.CreateRequestReques
 	}
 	return gen.CreateRequest201JSONResponse(requestView(n)), nil
 }
-func (h *Handler) ListRequests(ctx context.Context, _ gen.ListRequestsRequestObject) (gen.ListRequestsResponseObject, error) {
-	items, err := h.svc.Requests(ctx, Actor(ctx))
+func (h *Handler) ListRequests(ctx context.Context, req gen.ListRequestsRequestObject) (gen.ListRequestsResponseObject, error) {
+	summary := req.Params.Summary != nil && *req.Params.Summary
+	items, err := h.svc.Requests(ctx, Actor(ctx), summary)
 	if err != nil {
 		return nil, err
 	}

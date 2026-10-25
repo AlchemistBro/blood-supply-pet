@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -103,6 +104,12 @@ type Variant struct {
 	VariantOfferId     openapi_types.UUID   `json:"variant_offer_id"`
 }
 
+// ListRequestsParams defines parameters for ListRequests.
+type ListRequestsParams struct {
+	// Summary Компактный список без вариантов; variants возвращается пустым массивом. Полная карточка доступна по /requests/{id}.
+	Summary *bool `form:"summary,omitempty" json:"summary,omitempty"`
+}
+
 // SelectVariantJSONBody defines parameters for SelectVariant.
 type SelectVariantJSONBody struct {
 	ChoiceId       openapi_types.UUID `json:"choice_id"`
@@ -122,7 +129,7 @@ type AddRuleVersionJSONRequestBody = Rule
 type ServerInterface interface {
 
 	// (GET /requests)
-	ListRequests(w http.ResponseWriter, r *http.Request)
+	ListRequests(w http.ResponseWriter, r *http.Request, params ListRequestsParams)
 
 	// (POST /requests)
 	CreateRequest(w http.ResponseWriter, r *http.Request)
@@ -161,8 +168,27 @@ type MiddlewareFunc func(http.Handler) http.Handler
 // ListRequests operation middleware
 func (siw *ServerInterfaceWrapper) ListRequests(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRequestsParams
+
+	// ------------- Optional query parameter "summary" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "summary", r.URL.Query(), &params.Summary, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "summary"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "summary", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListRequests(w, r)
+		siw.Handler.ListRequests(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -490,6 +516,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 }
 
 type ListRequestsRequestObject struct {
+	Params ListRequestsParams
 }
 
 type ListRequestsResponseObject interface {
@@ -748,8 +775,10 @@ type strictHandler struct {
 }
 
 // ListRequests operation middleware
-func (sh *strictHandler) ListRequests(w http.ResponseWriter, r *http.Request) {
+func (sh *strictHandler) ListRequests(w http.ResponseWriter, r *http.Request, params ListRequestsParams) {
 	var request ListRequestsRequestObject
+
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListRequests(ctx, request.(ListRequestsRequestObject))

@@ -32,6 +32,21 @@ spec:
     - host: localhost
       http:
         paths:
+          # Эти два маршрута принадлежат BFF; более общий /auth ведёт в Keycloak.
+          - path: /auth/login
+            pathType: Exact
+            backend:
+              service:
+                name: web
+                port:
+                  name: http
+          - path: /auth/callback
+            pathType: Exact
+            backend:
+              service:
+                name: web
+                port:
+                  name: http
           - path: /
             pathType: Prefix
             backend:

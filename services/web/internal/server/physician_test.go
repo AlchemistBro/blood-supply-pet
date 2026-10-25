@@ -11,6 +11,29 @@ import (
 	"github.com/AlchemistBro/blood-supply-pet/services/web/internal/svcclient"
 )
 
+func TestPhysicianListUsesCompactRequestSummary(t *testing.T) {
+	e := newEnv(t)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Query().Get("summary") == "true" {
+			_, _ = io.WriteString(w, `[{"clinical_request_id":"`+taskID+`","status":"OFFERS_READY","variants":[]}]`)
+			return
+		}
+		// Полный список с вариантами превышает лимит ответа BFF в 8 МиБ.
+		_, _ = io.WriteString(w, `[{"variants":[{"explanation":"`+strings.Repeat("x", 9<<20)+`"}]}]`)
+	}))
+	defer upstream.Close()
+	e.srv.matching = svcclient.New("matching", upstream.URL)
+	mux := http.NewServeMux()
+	e.srv.Register(mux)
+	e.handler = httpx.Chain(mux, e.srv.Middleware()...)
+	j := e.login(physician, "/requests")
+	response := e.do(http.MethodGet, "/requests", j, nil)
+	if response.Code != 200 || !strings.Contains(response.Body.String(), taskID) {
+		t.Fatalf("список должен загружаться без графа вариантов: HTTP %d", response.Code)
+	}
+}
+
 func TestPhysicianScreensKeepCaseSeparateAndRejectUnprotectedPost(t *testing.T) {
 	e := newEnv(t)
 	writes := 0

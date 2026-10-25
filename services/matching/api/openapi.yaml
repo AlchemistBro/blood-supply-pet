@@ -10,6 +10,11 @@ paths:
     get:
       operationId: listRequests
       x-bs-operation: VIEW_REQUESTS
+      parameters:
+        - name: summary
+          in: query
+          description: Компактный список без вариантов; variants возвращается пустым массивом. Полная карточка доступна по /requests/{id}.
+          schema: { type: boolean, default: false }
       responses:
         "200": { description: Доступные заявки, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Request" } } } } }
     post:

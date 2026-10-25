@@ -83,6 +83,7 @@ func check(docs []doc) []string {
 		problems = append(problems, checkService(d, idx)...)
 	}
 	problems = append(problems, checkDefaultDeny(docs)...)
+	problems = append(problems, checkOIDCRoutes(docs)...)
 	sort.Strings(problems)
 	return problems
 }

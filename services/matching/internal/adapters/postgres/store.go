@@ -109,8 +109,8 @@ func (s *Store) Request(ctx context.Context, tx pgx.Tx, id uuid.UUID, lock bool)
 	n.Selection = &selection
 	return n, nil
 }
-func (s *Store) Requests(ctx context.Context, clinic int64) ([]app.RequestRecord, error) {
-	rows, err := s.pool.Query(ctx, `SELECT payload,match_result,created_by,request_status_code,version FROM clinical_request WHERE ($1::bigint=0 OR clinic_id=$1) ORDER BY created_at DESC,clinical_request_id DESC LIMIT 100`, clinic)
+func (s *Store) Requests(ctx context.Context, clinic int64, summary bool) ([]app.RequestRecord, error) {
+	rows, err := s.pool.Query(ctx, `SELECT payload,CASE WHEN $2::boolean THEN match_result - 'Variants' ELSE match_result END,created_by,request_status_code,version FROM clinical_request WHERE ($1::bigint=0 OR clinic_id=$1) ORDER BY created_at DESC,clinical_request_id DESC LIMIT 100`, clinic, summary)
 	if err != nil {
 		return nil, err
 	}
