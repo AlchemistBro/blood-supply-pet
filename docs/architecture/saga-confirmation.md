@@ -18,7 +18,7 @@ sequenceDiagram
 
     Op->>Web: Подтвердить (единицы, acceptPartial, idempotency key)
     Web->>T: POST /obligations/{id}/confirm [JWT]
-    T->>DBt: find O07; status == PENDING?
+    T->>DBt: find O07, status == PENDING?
     alt задание снято
         T-->>Web: TaskWithdrawn(status) → «не отправляйте»
     end
@@ -65,14 +65,14 @@ sequenceDiagram
 
     Inv->>K: UnitWithdrawn или UnitUpdated(QUARANTINE) (unit закреплена за O07)
     K->>T: UnitWithdrawn / UnitUpdated
-    T->>T: TX: lock Остаток → unit_copy; если O07 CONFIRMED/TRANSPORT_REQUESTED → CAS → BROKEN, закрепления RELEASED, reserved −k, outbox: TransferBroken(reason), CancelTransport
+    T->>T: TX: lock Остаток → unit_copy, если O07 CONFIRMED/TRANSPORT_REQUESTED → CAS → BROKEN, закрепления RELEASED, reserved −k, outbox: TransferBroken(reason), CancelTransport
     T->>K: logistics.commands: CancelTransport
     K->>LG: CancelTransport
     alt заказ уже создан
         LG->>C03: снять заказ
         LG->>K: TransportCancelled
     else отмена обогнала заказ
-        LG->>LG: надгробие CANCELLED; поздний RequestTransport ничего не создаст
+        LG->>LG: надгробие CANCELLED, поздний RequestTransport ничего не создаст
     end
     K->>N: TransferBroken → врач и оператор (FR049)
 ```

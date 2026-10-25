@@ -115,9 +115,24 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
-          scanners: vuln,secret,misconfig
+          scanners: vuln,secret
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          exit-code: "1"
+      - name: Собрать конфигурации для статической проверки
+        run: |
+          mkdir -p dist/security-config
+          cp deploy/docker/Dockerfile dist/security-config/Dockerfile
+          for overlay in local ci prod-example; do
+            mkdir -p "dist/security-config/$overlay"
+            kubectl kustomize "deploy/k8s/overlays/$overlay" -o "dist/security-config/$overlay"
+          done
+      - name: trivy (Dockerfile и полные манифесты Kubernetes)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: dist/security-config
+          severity: HIGH,CRITICAL
           exit-code: "1"
 
   build:
