@@ -38,6 +38,9 @@ patches:
       - op: replace
         path: /spec/minReplicas
         value: 1
+      - op: replace
+        path: /spec/maxReplicas
+        value: 1
   - target:
       group: postgresql.cnpg.io
       kind: Cluster
@@ -46,7 +49,7 @@ patches:
       - op: replace
         path: /spec/resources
         value:
-          requests: { cpu: 100m, memory: 256Mi }
+          requests: { cpu: 25m, memory: 256Mi }
           limits: { memory: 512Mi }
       - op: replace
         path: /spec/storage/size
@@ -54,6 +57,22 @@ patches:
       - op: replace
         path: /spec/walStorage/size
         value: 1Gi
+  # На 2-vCPU раннере часть CPU зарезервирована control plane, Calico и операторами.
+  # Requests задают резерв, а не ограничение CPU: тестовые сервисы могут использовать свободный CPU.
+  - target:
+      kind: Deployment
+      labelSelector: blood-supply.io/runtime=go-service
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 10m
+  - target:
+      kind: Deployment
+      name: ^(sim-aist|sim-emergency|sim-logistics|mailpit)$
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 10m
   - target:
       kind: StatefulSet
       name: kafka

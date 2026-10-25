@@ -17,6 +17,9 @@ if [[ ${BS_K8S_BUILD_IMAGES:-1} == 1 ]]; then
     docker build -f deploy/docker/Dockerfile --build-arg "SERVICE=$service" --build-arg VERSION=kind -t "$image" .
     kind load docker-image --name blood-supply "$image"
   done
+  image=ghcr.io/alchemistbro/blood-supply-minio:source-2025-10-15
+  docker build -f deploy/docker/Minio.Dockerfile -t "$image" .
+  kind load docker-image --name blood-supply "$image"
 fi
 "${k[@]}" apply --server-side -f https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.27/releases/cnpg-1.27.0.yaml
 "${k[@]}" rollout status -n cnpg-system deployment/cnpg-controller-manager --timeout=180s

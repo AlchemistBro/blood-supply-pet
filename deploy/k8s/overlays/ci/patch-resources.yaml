@@ -10,7 +10,7 @@ spec:
       containers:
         - name: kafka
           resources:
-            requests: { cpu: 100m, memory: 256Mi }
+            requests: { cpu: 10m, memory: 256Mi }
             limits: { memory: 768Mi }
 ---
 apiVersion: apps/v1
@@ -24,7 +24,7 @@ spec:
       containers:
         - name: keycloak
           resources:
-            requests: { cpu: 100m, memory: 512Mi }
+            requests: { cpu: 10m, memory: 512Mi }
             limits: { memory: 1Gi }
 ---
 apiVersion: apps/v1
@@ -38,7 +38,7 @@ spec:
       containers:
         - name: otel-lgtm
           resources:
-            requests: { cpu: 100m, memory: 512Mi }
+            requests: { cpu: 10m, memory: 512Mi }
             limits: { memory: 1Gi }
 ---
 apiVersion: apps/v1
@@ -52,7 +52,7 @@ spec:
       containers:
         - name: minio
           resources:
-            requests: { cpu: 50m, memory: 128Mi }
+            requests: { cpu: 10m, memory: 128Mi }
             limits: { memory: 384Mi }
 ---
 apiVersion: v1

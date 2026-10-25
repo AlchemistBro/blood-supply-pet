@@ -10,7 +10,7 @@ overlays `local`, `ci` и `prod-example`.
 | Компонент | Namespace (сегмент) | Образ | Адрес внутри кластера |
 | --- | --- | --- | --- |
 | PostgreSQL 16, 2 экземпляра (CloudNativePG `Cluster pg`) | `bs-data` (данные) | `ghcr.io/cloudnative-pg/postgresql:16.9` | `pg-rw.bs-data.svc:5432` (запись), `pg-ro.bs-data.svc:5432` (реплика) |
-| MinIO: архив WAL и базовые копии | `bs-data` | `minio/minio:RELEASE.2025-04-22T22-12-26Z` | `minio.bs-data.svc:9000`, консоль `:9001` |
+| MinIO: архив WAL и базовые копии | `bs-data` | `ghcr.io/alchemistbro/blood-supply-minio:source-2025-10-15` (сборка из исходников) | `minio.bs-data.svc:9000`, консоль `:9001` |
 | Kafka 3.9.1, один брокер KRaft | `bs-app` (основная сеть) | `apache/kafka-native:3.9.1` | `kafka.bs-app.svc:9092` |
 | Job создания топиков | `bs-app` | `apache/kafka:3.9.1` | — |
 | Keycloak 26.4, realm `blood-supply` | `bs-edge` (доступ) | `quay.io/keycloak/keycloak:26.4` | `keycloak.bs-edge.svc:8080/auth`, служебный `:9000` |
@@ -348,3 +348,11 @@ kubectl create secret tls bs-tls -n bs-edge --cert tls.crt --key tls.key
     стоит подменять его на собранный тег (`kustomize edit set image`, `kind load docker-image`).
 15. **Имитаторы**: состояние в памяти, одна реплика, без PDB; `/dev/*` маршруты открыты внутри кластера —
     закрывает NetworkPolicy и ingress (наружу не публикуются).
+## Сборка образа хранилища
+
+Публичные готовые образы `minio/minio` больше недоступны. Для демонстрационного
+кластера `up.sh` собирает сервер и клиент из официальных исходников с фиксированными
+версиями (`deploy/docker/Minio.Dockerfile`) и загружает образ
+`ghcr.io/alchemistbro/blood-supply-minio:source-2025-10-15` непосредственно в kind.
+Публикация в реестр для локального/CI-прогона не требуется.
+При `BS_K8S_BUILD_IMAGES=0` этот образ тоже должен быть заранее загружен в kind.

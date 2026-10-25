@@ -53,6 +53,11 @@ jobs:
           kubectl --context kind-blood-supply get pods -A -o wide > artifacts/pods.txt 2>&1 || true
           kubectl --context kind-blood-supply get events -A --sort-by=.lastTimestamp > artifacts/events.txt 2>&1 || true
           kubectl --context kind-blood-supply logs -n bs-app -l blood-supply.io/runtime=go-service --all-containers --prefix --max-log-requests=20 --tail=200 > artifacts/services.log 2>&1 || true
+          kubectl --context kind-blood-supply describe nodes > artifacts/nodes.txt 2>&1 || true
+          kubectl --context kind-blood-supply describe pods -n bs-data > artifacts/data-pods.txt 2>&1 || true
+          kubectl --context kind-blood-supply logs -n bs-edge deployment/keycloak --tail=200 > artifacts/keycloak.log 2>&1 || true
+          kubectl --context kind-blood-supply logs -n bs-data job/minio-setup --tail=100 > artifacts/minio-setup.log 2>&1 || true
+          kubectl --context kind-blood-supply logs -n bs-data -l cnpg.io/cluster=pg --all-containers --prefix --tail=100 > artifacts/postgres.log 2>&1 || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:

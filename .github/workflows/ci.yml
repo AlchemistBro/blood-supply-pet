@@ -123,6 +123,8 @@ jobs:
         run: |
           mkdir -p dist/security-config
           cp deploy/docker/Dockerfile dist/security-config/Dockerfile
+          mkdir -p dist/security-config/minio
+          cp deploy/docker/Minio.Dockerfile dist/security-config/minio/Dockerfile
           for overlay in local ci prod-example; do
             mkdir -p "dist/security-config/$overlay"
             kubectl kustomize "deploy/k8s/overlays/$overlay" -o "dist/security-config/$overlay"
