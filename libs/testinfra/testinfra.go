@@ -22,6 +22,7 @@ import (
 	tckafka "github.com/testcontainers/testcontainers-go/modules/kafka"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
+	"github.com/twmb/franz-go/pkg/kgo"
 )
 
 var (
@@ -114,11 +115,45 @@ func Kafka(t testing.TB) []string {
 			return
 		}
 		kBrokers, kErr = ctr.Brokers(ctx)
+		if kErr == nil {
+			kErr = kafkaReady(ctx, kBrokers)
+		}
 	})
 	if kErr != nil {
 		t.Fatal(kErr)
 	}
 	return kBrokers
+}
+
+// Лог запуска контейнера появляется раньше, чем брокер принимает запросы Kafka.
+// TCP-соединения недостаточно: во время старта брокер может закрыть ApiVersions.
+func kafkaReady(ctx context.Context, brokers []string) error {
+	client, err := kgo.NewClient(kgo.SeedBrokers(brokers...))
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	return waitKafkaProbe(ctx, client.Ping)
+}
+
+func waitKafkaProbe(ctx context.Context, probe func(context.Context) error) error {
+	for {
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("готовность API Kafka: %w", err)
+		}
+		if err := probe(ctx); err == nil {
+			return nil
+		}
+		timer := time.NewTimer(100 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return fmt.Errorf("готовность API Kafka: %w", ctx.Err())
+		case <-timer.C:
+		}
+	}
 }
 
 // UniqueTopic даёт уникальное имя топика для теста.
