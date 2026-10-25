@@ -1,6 +1,7 @@
 name: Документация
 
 on:
+  workflow_dispatch:
   pull_request:
     paths: ["docs/**", "README*.md", "CONTRIBUTING.md", "services/*/migrations/**", "libs/*/migrations/**", "tools/docs-*/**", "deploy/compose/keycloak/**", "Taskfile.yml", ".github/workflows/docs.yml"]
   push:
