@@ -503,17 +503,35 @@ func TestPropertyZeroDistrictSharesAreRejected(t *testing.T) {
 	})
 }
 
-// Обязательство вида с группой без группы отклоняется, как и единица без группы.
-func TestPropertyObligationWithoutGroupIsRejected(t *testing.T) {
+// Удерживающее запас обязательство вида с группой без группы отклоняется, как и единица без группы:
+// его не отнести ни к одной ячейке запаса.
+func TestPropertyHeldObligationWithoutGroupIsRejected(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
 		in := genInput(t)
 		in.Obligations = append(in.Obligations, Obligation{
 			ObligationID: unitN(5999), SourceClinicID: 1, TargetClinicID: 2, Kind: "RBC",
 			VolumeML: rapid.Int64Range(0, 1500).Draw(t, "ml"), Units: rapid.IntRange(0, 5).Draw(t, "qty"),
-			Status: rapid.SampledFrom([]string{ObligationConfirmed, ObligationPending, "CANCELLED"}).Draw(t, "status"),
+			Status: rapid.SampledFrom([]string{ObligationConfirmed, ObligationTransportRequested, ObligationDispatched}).Draw(t, "status"),
 		})
 		if _, err := NewPlanner(clock.NewMutable(t0)).Build(in); !errors.Is(err, ErrInvalidInput) {
-			t.Fatalf("обязательство без группы принято: %v", err)
+			t.Fatalf("удерживающее обязательство без группы принято: %v", err)
+		}
+	})
+}
+
+// Обязательство, которое запас не удерживает (ожидает подтверждения, отклонено, истекло, отменено, нарушено,
+// доставлено), не имеет закреплённых единиц, поэтому группа у него пустая. Это не ошибка входа:
+// иначе одна такая запись, даже отклонённая, навсегда блокирует построение любого плана.
+func TestPropertyNotHeldObligationWithoutGroupDoesNotBlockPlan(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		in := genInput(t)
+		in.Obligations = append(in.Obligations, Obligation{
+			ObligationID: unitN(5999), SourceClinicID: 1, TargetClinicID: 2, Kind: "RBC",
+			VolumeML: rapid.Int64Range(0, 1500).Draw(t, "ml"), Units: rapid.IntRange(0, 5).Draw(t, "qty"),
+			Status: rapid.SampledFrom([]string{ObligationPending, "REJECTED", "EXPIRED", "CANCELLED", "BROKEN", "DELIVERED"}).Draw(t, "status"),
+		})
+		if _, err := NewPlanner(clock.NewMutable(t0)).Build(in); err != nil {
+			t.Fatalf("обязательство без группы, не удерживающее запас, заблокировало расчёт: %v", err)
 		}
 	})
 }

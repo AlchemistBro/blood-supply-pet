@@ -330,15 +330,18 @@ func (st *state) addObligations(obligations []Obligation) (map[uuid.UUID]bool, e
 			units = int64(len(o.UnitIDs))
 		}
 		group := st.groupKey(kind, o.Group)
-		// Как у единицы: у вида с группой обязательство без группы не отнести ни к одной ячейке запаса.
-		if kind.GroupApplicable && group == "" {
-			return nil, fmt.Errorf("%w: обязательство %s вида %s без группы", ErrInvalidInput, o.ObligationID, o.Kind)
-		}
 		if err := checkGroup(kind, group, st.groups); err != nil {
 			return nil, fmt.Errorf("обязательство %s: %w", o.ObligationID, err)
 		}
 		if !heldOutgoing(o.Status) {
+			// Группа обязательства известна только по закреплённым единицам, а их нет до подтверждения и после
+			// отказа, истечения срока или отмены. Такое обязательство запас не удерживает, ячейка ему не нужна:
+			// требовать группу значило бы заблокировать расчёт любого плана одной отклонённой записью.
 			continue
+		}
+		// Как у единицы: у вида с группой удерживающее обязательство без группы не отнести ни к одной ячейке запаса.
+		if kind.GroupApplicable && group == "" {
+			return nil, fmt.Errorf("%w: обязательство %s вида %s без группы", ErrInvalidInput, o.ObligationID, o.Kind)
 		}
 		for _, id := range o.UnitIDs {
 			if reserved[id] {
