@@ -133,7 +133,19 @@ jobs:
           scan-type: config
           scan-ref: dist/security-config
           severity: HIGH,CRITICAL
-          exit-code: "1"
+          format: json
+          output: dist/trivy-config.json
+          # Решение принимает следующий обязательный шаг; полный отчёт сохраняется.
+          exit-code: "0"
+      - name: Проверить границы исключений Trivy
+        run: python3 -m unittest discover -s tools/security -p 'test_*.py'
+      - name: Проверить все находки Trivy
+        run: python3 tools/security/check_trivy_config.py dist/trivy-config.json dist/security-config
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trivy-config
+          path: dist/trivy-config.json
 
   build:
     name: Сборка бинарников и образов
