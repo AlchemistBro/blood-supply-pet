@@ -97,14 +97,14 @@ def containers():
     c.box("c02", 1920, 468, 280, 110, "C02 Моделирование ЧС", "Software System", kind="external", size=18)
     c.box("c04", 1920, 596, 280, 110, "C04 Почтовый сервис", "Software System", kind="external", size=18)
 
-    c.edge(("users", "r", 0.35), ("proxy", "l", 0.4), both=True, at=(315, 465), label=("Запросы", "Ответ: страницы", "[HTTPS]"))
+    c.edge(("users", "r", 0.35), ("proxy", "l", 0.4), both=True, at=(315, 465), label=("Запросы", "Ответ: страницы"))
     c.edge(("users", "r", 0.75), ("kc", "l", 0.5), both=True, label=("Вход, второй фактор", "Ответ: сессия", "[OIDC через прокси]"))
     c.edge(("proxy", "r", 0.5), ("web", "l", 0.5), both=True, at=(680, 480), label=("Запросы", "[HTTP]"))
     c.edge(("web", "b", 0.35), ("kc", "r", 0.5), via=[(800.5, 780)], both=True, at=(740, 680),
            label=("Обмен кода на токены", "Ответ: JWT", "[OIDC code + PKCE]"))
     c.edge(("web", "r", 0.5), ("svc", "l", 0.411), both=True, at=(1005, 480), label=("Команды", "[HTTP/JSON, JWT]"))
     c.edge(("transfer", "t", 0.5), ("inventory", "b", 0.5), at=(1250, 182), label=("Статус единиц, 3 с", "[HTTP, внутренний]"))
-    c.edge(("svc", "l", 0.8289), ("kafka", "r", 0.5), both=True, at=(1005, 965), label=("События", "[outbox → inbox]"))
+    c.edge(("svc", "l", 0.8289), ("kafka", "r", 0.5), both=True, dashed=True, at=(1005, 932), label=("События, команды", "[асинхронно]"))
     c.edge(("svc", "r", 0.8063), ("pg", "l", 0.5), at=(1510, 930), label=("SQL", "[своя база]"))
     c.edge(("inventory", "r", 0.5), ("c01", "l", 0.5), both=True, at=(1680, 102),
            label=("Изменения, статус, закрепление", "Ответ: изменения, статусы, CSV", "[ИНТ-01, ИНТ-05 · HTTPS/JSON]"))
@@ -119,6 +119,7 @@ def containers():
         ("external", "Смежная система [Software System]"),
         ("both", "Запрос и ответ: 1-я строка — запрос, «Ответ:» — что возвращается"),
         ("line", "Передача в одну сторону"),
+        ("dashed", "Асинхронно: события и команды через Kafka (outbox → inbox)"),
     ], width=560)
     return c.write(f"{OUT}/c4-containers.drawio.svg")
 
@@ -160,7 +161,7 @@ def deployment():
     c.edge(("ing", "r", 0.5), ("kc", "l", 0.5), at=(745, 235), label=("/auth",))
     c.edge(("ing", "b", 0.85), ("web", "t", 0.5), via=[(652, 440), (520, 440)], at=(652, 395), label=("/", "[HTTP]"))
     c.edge(("web", "r", 0.5), ("svc", "l", 0.3043), at=(685, 550), label=("HTTP", "[JWT]"))
-    c.edge(("svc", "r", 0.3), ("kafka", "l", 0.5), both=True, at=(1845, 548), label=("События",))
+    c.edge(("svc", "r", 0.3), ("kafka", "l", 0.5), both=True, dashed=True, at=(1845, 548), label=("События",))
     c.edge(("svc", "t", 0.9), ("otel", "b", 0.3), via=[(1700, 360), (1772, 360)], dashed=True, at=(1735, 360), label=("OTLP", "[трассы, метрики, логи]"))
     c.edge(("svc", "b", 0.12), ("pg1", "t", 0.95), via=[(842, 930), (627, 930)], at=(735, 930), label=("SQL · 5432", "[только из bs-app]"))
     c.edge(("pg1", "r", 0.5), ("pg2", "l", 0.5), at=(700, 1120), label=("Репликация",))
@@ -173,7 +174,7 @@ def deployment():
         ("container", "Экземпляр контейнера АС [Container]"),
         ("external", "Имитатор смежной системы, только стенд разработки"),
         ("line", "Поток данных"),
-        ("dashed", "Телеметрия, только приём"),
+        ("dashed", "Асинхронно: события Kafka, телеметрия OTLP"),
     ], width=620)
     return c.write(f"{OUT}/c4-deployment.drawio.svg")
 

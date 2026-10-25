@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Blood Supply">
+  <title>Blood Supply</title>
+  <defs>
+    <linearGradient id="drop" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F2647A"/>
+      <stop offset="1" stop-color="#C8193A"/>
+    </linearGradient>
+  </defs>
+  <path d="M64 6 C64 6 20 57 20 82 A44 44 0 0 0 108 82 C108 57 64 6 64 6 Z" fill="url(#drop)"/>
+  <path d="M44 50 Q35 62 33 74" fill="none" stroke="#FFFFFF" stroke-opacity="0.35" stroke-width="5" stroke-linecap="round"/>
+  <g stroke="#FFFFFF" stroke-width="4.5" stroke-linecap="round">
+    <path d="M64 80 L64 52 M64 80 L42 98 M64 80 L86 98"/>
+    <path d="M42 98 L86 98" stroke-opacity="0.55" stroke-dasharray="2 8"/>
+  </g>
+  <circle cx="64" cy="80" r="9" fill="#0B1F33" stroke="#FFFFFF" stroke-width="4"/>
+  <g fill="#FFFFFF">
+    <circle cx="64" cy="50" r="6.5"/>
+    <circle cx="42" cy="99" r="6.5"/>
+    <circle cx="86" cy="99" r="6.5"/>
+  </g>
+</svg>
