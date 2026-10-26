@@ -7,6 +7,18 @@ on:
         description: Выполнить учебный отказ primary и PITR
         type: boolean
         default: false
+      images_run_id:
+        description: Candidate release run с images.json; пусто — сборка исходников
+        type: string
+        default: ""
+      candidate_version:
+        description: Версия кандидата образов
+        type: string
+        default: v1.0.0
+      chaos:
+        description: Выполнить отказы и проверить реальные алерты
+        type: boolean
+        default: true
   pull_request:
     types: [labeled, synchronize]
   schedule:
@@ -14,6 +26,8 @@ on:
 
 permissions:
   contents: read
+  actions: read
+  packages: read
 
 concurrency:
   group: k8s-${{ github.ref }}
@@ -44,13 +58,42 @@ jobs:
           df -h /
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet
           df -h /
+      - name: Загрузить точные образы кандидата
+        if: inputs.images_run_id != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: release-candidate-${{ inputs.candidate_version }}
+          run-id: ${{ inputs.images_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: dist/release
+      - name: Доступ к приватным образам
+        if: inputs.images_run_id != ''
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Развернуть платформу и сервисы
+        env:
+          BS_K8S_RELEASE_MANIFEST: ${{ inputs.images_run_id != '' && 'dist/release/images.json' || '' }}
+          BS_K8S_REGISTRY_CONFIG: ${{ inputs.images_run_id != '' && '/home/runner/.docker/config.json' || '' }}
         run: task k8s:up
       - name: Проверить готовность и права
         run: task k8s:smoke
+      - name: Сценарии отказов и реальные алерты
+        if: github.event_name == 'schedule' || inputs.chaos
+        env:
+          BS_CHAOS_EPHEMERAL: "1"
+        run: task k8s:chaos
       - name: Выполнить учение PITR
         if: github.event_name == 'schedule' || inputs.drill
         run: task k8s:drill
+      - name: Связать приёмку с точными образами кандидата
+        if: inputs.images_run_id != ''
+        env:
+          IMAGES_RUN_ID: ${{ inputs.images_run_id }}
+          CANDIDATE_VERSION: ${{ inputs.candidate_version }}
+        run: python3 tools/k8sdrill/evidence.py
       - name: Собрать диагностику
         if: always()
         run: |
@@ -72,5 +115,12 @@ jobs:
           name: kubernetes-diagnostics
           path: |
             artifacts/
+            dist/k8s-startup.json
+            dist/k8s-pod-metrics.json
+            dist/k8s-hpa.json
+            dist/k8s-readiness.json
+            dist/k8s-release-evidence.json
+            dist/drill-application.json
+            dist/drill-saga.json
             docs/perf/drill-*.md
           if-no-files-found: ignore

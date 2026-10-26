@@ -13,6 +13,10 @@ resources:
   - sim-logistics/deployment.yaml
   - sim-logistics/service.yaml
   - networkpolicy.yaml
+  - alert-network.yaml
+
+patches:
+  - path: grafana-mailpit.yaml
 
 # Стандарт пода имитаторов тот же, что у сервисов. Патч компонента идемпотентен, повторное
 # применение к сервисам base ничего не меняет.

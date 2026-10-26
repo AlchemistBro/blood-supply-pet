@@ -41,6 +41,11 @@ jobs:
           go vet -tags integration,e2e ./... ./libs/testdata
           go run ./tools/authmatrix -check
           go test ./tools/archtest/...
+      - name: Проверки инструментов восстановления
+        run: |
+          python3 -B -m unittest discover -s tools/k8sdrill -p 'test_*.py'
+          python3 -B -m unittest discover -s tools/chaos -p 'test_*.py'
+          python3 -B -m unittest discover -s tools/release -p 'test_*.py'
       - uses: golangci/golangci-lint-action@v8
         with:
           version: v2.14.0

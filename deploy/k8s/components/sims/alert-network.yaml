@@ -1,0 +1,34 @@
+# Demo alert delivery: only Grafana -> Mailpit SMTP, no external mail service.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: grafana-mailpit-egress
+  namespace: bs-observability
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: otel-lgtm}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: bs-sims}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: mailpit}
+      ports: [{protocol: TCP, port: 1025}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mailpit-grafana-ingress
+  namespace: bs-sims
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: mailpit}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: bs-observability}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: otel-lgtm}
+      ports: [{protocol: TCP, port: 1025}]

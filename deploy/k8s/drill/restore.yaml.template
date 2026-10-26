@@ -8,6 +8,22 @@ spec:
   instances: 1
   imageName: ghcr.io/cloudnative-pg/postgresql:16.9
   enableSuperuserAccess: false
+  postgresql:
+    parameters:
+      max_connections: "200"
+      log_parameter_max_length: "0"
+      log_statement: "none"
+    pg_hba:
+      - host inventory inventory all scram-sha-256
+      - host demand demand all scram-sha-256
+      - host planning planning all scram-sha-256
+      - host matching matching all scram-sha-256
+      - host transfer transfer all scram-sha-256
+      - host logistics logistics all scram-sha-256
+      - host notification notification all scram-sha-256
+      - host audit audit all scram-sha-256
+      - host keycloak keycloak all scram-sha-256
+      - host all all all reject
   bootstrap:
     recovery:
       source: pg

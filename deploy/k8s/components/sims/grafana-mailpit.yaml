@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-lgtm
+  namespace: bs-observability
+spec:
+  template:
+    spec:
+      containers:
+        - name: otel-lgtm
+          env:
+            - name: GF_SMTP_ENABLED
+              value: "true"
+            - name: GF_SMTP_HOST
+              value: mailpit.bs-sims.svc:1025
+            - name: GF_SMTP_FROM_ADDRESS
+              value: grafana@demo.invalid

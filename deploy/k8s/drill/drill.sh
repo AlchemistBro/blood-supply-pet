@@ -10,6 +10,7 @@ fi
 instances=$("${k[@]}" -n bs-data get cluster pg -o jsonpath='{.spec.instances}')
 [[ "$instances" =~ ^[0-9]+$ ]] && (( instances >= 2 )) || { printf '%s\n' 'До отказа primary нужны минимум два экземпляра PostgreSQL.' >&2; exit 2; }
 "${k[@]}" -n bs-data wait --for=condition=Ready cluster/pg --timeout=300s
+python3 tools/k8sdrill/application.py prepare
 primary=$("${k[@]}" -n bs-data get cluster pg -o jsonpath='{.status.currentPrimary}')
 [[ "$primary" =~ ^pg-[0-9]+$ ]] || { printf '%s\n' 'Не удалось определить primary pg.' >&2; exit 2; }
 sql() { "${k[@]}" -n bs-data exec "$primary" -c postgres -- psql -X -A -t -v ON_ERROR_STOP=1 -U postgres -d postgres -c "$1"; }
@@ -67,6 +68,7 @@ counts=$("${k[@]}" -n bs-data exec "$restored" -c postgres -- psql -X -A -t -v O
 "${k[@]}" -n bs-data wait --for=condition=Ready cluster/pg --timeout=600s
 rto=$(( $(date -u +%s) - failure_epoch ))
 window=$(( failure_epoch - target_epoch ))
+python3 tools/k8sdrill/application.py verify
 mkdir -p docs/perf
 report="docs/perf/$marker.md"
 cat > "$report" <<REPORT
@@ -80,7 +82,10 @@ cat > "$report" <<REPORT
 - Маркер до цели присутствует, маркер после цели отсутствует: $counts.
 - Наличие WAL до удаления primary проверено по pg_stat_archiver.
 - Это управляемое учение PITR; интервал до выбранной точки не является общей гарантией RPO.
-- Полный прикладной smoke против восстановленной копии этим сценарием не выполняется.
+- Прикладной smoke восстановленной копии: сохранённая заявка, расшифровка номера случая,
+  новая запись только в pg-drill, 9 readiness-проб, полный OIDC-вход и страницы трёх ролей.
+- Все девять подключений к БД временно переведены на pg-drill; исходные подключения возвращены.
+- Подробный результат приложения: dist/drill-application.json.
 
 Ресурсы pg-drill и исходный архив сохранены для проверки результата.
 REPORT

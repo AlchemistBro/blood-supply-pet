@@ -252,6 +252,10 @@ tasks:
     desc: Учение PITR только в демо-kind, с отказом primary и отдельной восстановленной копией
     cmds: [bash deploy/k8s/drill/drill.sh]
 
+  k8s:chaos:
+    desc: Проверить отказы и реальные алерты только в одноразовом kind
+    cmds: [bash deploy/k8s/chaos.sh]
+
   k8s:logs:
     desc: Логи сервисов выделенного kind-кластера
     cmds: [kubectl --context kind-blood-supply logs -n bs-app -l blood-supply.io/runtime=go-service --all-containers --prefix --max-log-requests=20 --tail=100]

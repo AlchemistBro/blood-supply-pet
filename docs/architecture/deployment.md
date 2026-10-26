@@ -63,14 +63,15 @@ NetworkPolicy: `bs-data` принимает только из `bs-app`; `bs-obse
 deploy/k8s/
   base/
     namespaces.yaml
-    platform/   kafka (StatefulSet, 1 брокер), keycloak (Deployment + realm ConfigMap), otel, mailpit
+    platform/   kafka (StatefulSet, 1 брокер), keycloak (Deployment + realm ConfigMap), otel-lgtm
     data/       cnpg Cluster (instances: 2, backup → MinIO, retention 7d), ScheduledBackup, Database/Role на сервис
-    services/   <svc>/deployment.yaml, service.yaml, hpa.yaml, pdb.yaml, networkpolicy.yaml, servicemonitor.yaml
-    ingress/    ingress-nginx values, Ingress для web и ИНТ-02
+    services/   девять Deployment/Service/PDB, три HPA; общий стандарт в components/go-service
+    networkpolicy/  сегменты и отдельные правила для сервисов с данными K1
+    ingress/    Ingress для web, ИНТ-02 и Keycloak, Exact-маршруты BFF /auth/login и /auth/callback
     kustomization.yaml
   overlays/
     local/      kind: NodePort, самоподписанный TLS, демо-секреты (secretGenerator), имитаторы включены
-    ci/         то же, минимальные ресурсы, e2e Job
+    ci/         то же, минимальные ресурсы, проверки с runner через port-forward и ingress
     prod-example/  пример: реплики 2, ресурсы, внешний Secret-менеджер, без имитаторов (не разворачивается)
 ```
 
@@ -80,8 +81,21 @@ deploy/k8s/
 ретранслятор outbox один на сервис через advisory lock.
 
 CloudNativePG: `Cluster` с 2 экземплярами (primary + replica), непрерывный архив WAL в MinIO (`barmanObjectStore`),
-PITR до любой точки за 7 дней. Учение восстановления (`task k8s:drill`): останавливает запись, восстанавливает кластер
-на `targetTime`, запускает smoke и измеряет RTO/RPO (цели 60 мин / 15 мин, NFR006–NFR007, NFR012).
+Retention копий — 7 дней. Учение восстановления (`task k8s:drill`): создаёт прикладную заявку и SQL-маркеры,
+проверяет завершённую копию и архив WAL, удаляет primary и восстанавливает отдельный `pg-drill` на `targetTime`.
+После проверки маркеров девять подключений к БД временно переводятся на копию: проверяются чтение и расшифровка
+старой заявки, новая запись только в копию, здоровая сага с перевозкой, readiness и OIDC-вход трёх ролей.
+Исходные подключения возвращаются даже при ошибке проверки. RTO и интервал до цели измеряются отдельно;
+контролируемый интервал не является общей гарантией RPO.
+
+`up.sh` устанавливает metrics-server для CPU HPA; на тестовом kind допускается kubelet TLS с самоподписанным
+сертификатом. После запуска проверяются `ScalingActive` всех трёх HPA и реальный ответ metrics API.
+Сетевое разделение баз внутри общего PostgreSQL обеспечивают роли и `pg_hba`, а не NetworkPolicy на отдельную БД.
+
+Исходники можно собрать во время `task k8s:up`. Для готового релиза задаётся `BS_K8S_RELEASE_MANIFEST`:
+все 13 образов фиксируются по digest, приватный GHCR использует `BS_K8S_REGISTRY_CONFIG`. Время такого запуска
+включает создание kind, загрузку образов, сетевую проверку, готовность платформы, сервисов и HPA; предел — 600 с.
+Полная сборка исходников учитывается отдельным режимом. [Публикация и проверка релиза](../release.md).
 
 ## Конфигурация сервисов
 
@@ -91,6 +105,7 @@ PITR до любой точки за 7 дней. Учение восстанов
 
 ## Образы
 
-Многостадийный Dockerfile один на все сервисы с `ARG SERVICE`; финальный образ `gcr.io/distroless/static`, пользователь 65532,
-`-trimpath -ldflags "-s -w -X main.version=…"`. Публикация в `ghcr.io/alchemistbro/blood-supply-<service>:<tag>`,
-подпись cosign (keyless), SBOM syft в attestation.
+Многостадийный Dockerfile один на все сервисы с `ARG SERVICE`; финальный образ
+`gcr.io/distroless/static-debian12:nonroot`, пользователь 65532, версия в `libs/runtime.Version`.
+Кандидат содержит 12 сервисов и отдельный MinIO из официальных исходников. После проверок выпускаются
+версионные ссылки GHCR с теми же digest, подписями cosign, SPDX SBOM и provenance; состав — в `images.json`.

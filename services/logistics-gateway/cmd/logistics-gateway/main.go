@@ -6,9 +6,12 @@ package main
 import (
 	"context"
 
+	"go.opentelemetry.io/otel"
+
 	"github.com/AlchemistBro/blood-supply-pet/libs/contracts"
 	auditc "github.com/AlchemistBro/blood-supply-pet/libs/contracts/audit"
 	"github.com/AlchemistBro/blood-supply-pet/libs/messaging"
+	"github.com/AlchemistBro/blood-supply-pet/libs/observability"
 	"github.com/AlchemistBro/blood-supply-pet/libs/runtime"
 	apispec "github.com/AlchemistBro/blood-supply-pet/services/logistics-gateway/api"
 	"github.com/AlchemistBro/blood-supply-pet/services/logistics-gateway/internal/adapters/c03"
@@ -52,6 +55,12 @@ func main() {
 				if err != nil {
 					return nil, err
 				}
+				metrics, err := observability.ConsumerMetrics(otel.Meter("logistics-gateway/messaging"))
+				if err != nil {
+					consumer.Close()
+					return nil, err
+				}
+				consumer.WithMetrics(metrics)
 				workers = append(workers, consumer.Run)
 			}
 			return workers, nil
