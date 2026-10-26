@@ -99,12 +99,25 @@ func TestRequestSummaryExcludesLargeVariantsWithoutChangingDetail(t *testing.T) 
 		t.Fatalf("создание заявки: %v", err)
 	}
 	n.Result.Variants[0].Explanation = strings.Repeat("x", 9<<20)
+	n.Result.StockWatermark = 42
+	n.Result.Notes = []string{"summary survives result updates"}
 	raw, err := json.Marshal(n.Result)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := h.pool.Exec(h.ctx, `UPDATE clinical_request SET match_result=$2 WHERE clinical_request_id=$1`, r.RequestID, raw); err != nil {
 		t.Fatal(err)
+	}
+	var generated string
+	var size int
+	if err := h.pool.QueryRow(h.ctx, `SELECT attgenerated::text FROM pg_attribute WHERE attrelid='clinical_request'::regclass AND attname='match_summary'`).Scan(&generated); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.pool.QueryRow(h.ctx, `SELECT pg_column_size(match_summary) FROM clinical_request WHERE clinical_request_id=$1`, r.RequestID).Scan(&size); err != nil {
+		t.Fatal(err)
+	}
+	if generated != "s" || size > 4096 {
+		t.Fatalf("summary must be stored and small despite a 9 MiB variant: generated=%q bytes=%d", generated, size)
 	}
 	full, err := h.svc.Requests(h.ctx, actor, false)
 	if err != nil || len(full) != 1 || len(full[0].Result.Variants) != 1 || len(full[0].Result.Variants[0].Explanation) != 9<<20 {
@@ -116,6 +129,9 @@ func TestRequestSummaryExcludesLargeVariantsWithoutChangingDetail(t *testing.T) 
 	}
 	if len(compact[0].Result.Variants) != 0 || compact[0].Request.RequestID != r.RequestID || compact[0].Result.StockWatermark != n.Result.StockWatermark {
 		t.Fatal("компактный список должен сохранять заявку и водяной знак без вариантов")
+	}
+	if len(compact[0].Result.Notes) != 1 || compact[0].Result.Notes[0] != n.Result.Notes[0] {
+		t.Fatal("summary was not recomputed after changing the matching result")
 	}
 	detail, err := h.svc.Request(h.ctx, r.RequestID, actor)
 	if err != nil || len(detail.Result.Variants) != 1 || len(detail.Result.Variants[0].Explanation) != 9<<20 {

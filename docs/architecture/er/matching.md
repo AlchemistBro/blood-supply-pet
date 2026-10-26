@@ -2,7 +2,7 @@
 
 Сгенерировано `task docs:er` из Up-миграций. Не редактировать вручную.
 
-SHA-256 исходников: `3fbc116f4261f0bb55688fbd50d1dd49bf7ea10309e799b32ca56d59d4afe408`.
+SHA-256 исходников: `2198f455f3afda10d6258bff0ccc870f359032997cec71551a00c7d84cf89610`.
 
 Показаны столбцы, первичные и внешние ключи. CHECK, индексы, триггеры и данные не отображаются.
 Справочники и платформенные таблицы включены так же, как при запуске сервиса.
@@ -33,6 +33,7 @@ erDiagram
         timestamptz created_at
         timestamptz updated_at
         bigint version
+        jsonb match_summary
     }
     ref_clinic ||--o{ clinical_request : "clinic_id"
     request_status_dict ||--o{ clinical_request : "request_status_code"
@@ -172,3 +173,4 @@ erDiagram
 - [services/matching/migrations/00130_followup.sql](../../../services/matching/migrations/00130_followup.sql)
 - [services/matching/migrations/00140_outgoing_choice.sql](../../../services/matching/migrations/00140_outgoing_choice.sql)
 - [services/matching/migrations/00150_cancellation_result.sql](../../../services/matching/migrations/00150_cancellation_result.sql)
+- [services/matching/migrations/00160_request_summary.sql](../../../services/matching/migrations/00160_request_summary.sql)
