@@ -43,19 +43,21 @@ func matches(r *kgo.Record, marker, typ string) bool {
 	return source == contracts.TopicLogisticsCommands && cause != "" && gotType == typ
 }
 
+func newClient() (*kgo.Client, error) {
+	return kgo.NewClient(
+		kgo.SeedBrokers("kafka.bs-app.svc:9092"),
+		kgo.RequiredAcks(kgo.AllISRAcks()),
+		kgo.ConsumePartitions(map[string]map[int32]kgo.Offset{contracts.TopicLogisticsCommands + contracts.DLTSuffix: {0: kgo.NewOffset().AtStart()}}),
+		kgo.RecordPartitioner(kgo.ManualPartitioner()),
+	)
+}
+
 func run(ctx context.Context) error {
 	marker, typ := os.Getenv("CHAOS_MARKER"), os.Getenv("CHAOS_TYPE")
 	if marker == "" || typ == "" {
 		return fmt.Errorf("CHAOS_MARKER and CHAOS_TYPE are required")
 	}
-	dlt := contracts.TopicLogisticsCommands + contracts.DLTSuffix
-	client, err := kgo.NewClient(
-		kgo.SeedBrokers("kafka.bs-app.svc:9092"),
-		kgo.RequiredAcks(kgo.AllISRAcks()),
-		kgo.ConsumePartitions(map[string]map[int32]kgo.Offset{dlt: {0: kgo.NewOffset().AtStart()}}),
-		kgo.RecordPartitioner(kgo.ManualPartitioner()),
-		kgo.DisableAutoCommit(),
-	)
+	client, err := newClient()
 	if err != nil {
 		return err
 	}

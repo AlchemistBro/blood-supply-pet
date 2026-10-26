@@ -9,6 +9,14 @@ import (
 	"github.com/AlchemistBro/blood-supply-pet/libs/messaging"
 )
 
+func TestDirectPartitionClientConfigurationIsValid(t *testing.T) {
+	client, err := newClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.Close()
+}
+
 func TestPoisonIsRejectedByRealEnvelopeParser(t *testing.T) {
 	r := poison("marker", "ChaosPoison")
 	if _, err := messaging.FromRecord(r); err == nil {

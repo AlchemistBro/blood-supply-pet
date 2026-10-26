@@ -463,7 +463,17 @@ class Stand:
             # complete timeout, and retain only non-sensitive injector logs.
             def complete():
                 job = self.obj("bs-app", "job", name)
-                require(not job["status"].get("failed"), f"DLT injector {name} failed")
+                if job["status"].get("failed"):
+                    directory = self.args.report.parent
+                    directory.mkdir(parents=True, exist_ok=True)
+                    path = directory / (name + '.log')
+                    try:
+                        diagnostic = self.kubectl('-n', 'bs-app', 'logs', 'job/' + name)
+                    except Exception:
+                        diagnostic = 'Injector logs unavailable; status: ' + json.dumps(job['status'])
+                    path.write_text(diagnostic[:65536], encoding='utf8')
+                    self.report.setdefault('injector_failures', []).append({'job': name, 'log': str(path)})
+                    raise RuntimeError(f'DLT injector {name} failed; see {path}')
                 return job["status"].get("succeeded", 0) == 1
             eventually("exact poison record in real Kafka DLT", complete, timeout=200)
             logs = self.kubectl("-n", "bs-app", "logs", "job/" + name)
