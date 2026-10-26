@@ -71,14 +71,8 @@ func run() error {
 	now := (clock.System{}).Now().UTC()
 	forecastStart := time.Date(now.Year(), now.Month()+1, 1, 0, 0, 0, 0, time.UTC)
 	year := forecastStart.Year()
-	if err := s.json(http.MethodPost, s.aist+"/dev/seed", "", map[string]any{"seed": 42, "units": 10000}, nil); err != nil {
-		return fmt.Errorf("запас АИСТ-М: %w", err)
-	}
-	if err := s.json(http.MethodPost, s.inventory+"/dev/seed-norms", it, map[string]any{"consumption_year": year - 1}, nil); err != nil {
-		return fmt.Errorf("демо-нормативы: %w", err)
-	}
-	if err := s.waitSync(operator); err != nil {
-		return fmt.Errorf("синхронизация АИСТ-М: %w", err)
+	if err := s.prepareInventory(it, operator, year); err != nil {
+		return err
 	}
 	csv := testdata.CSVConfig{Seed: 20261020, Year: year}
 	profile, err := s.file(analyst, "DISTRICT_PROFILE", testdata.DistrictProfileCSV(ref, csv))
@@ -118,5 +112,23 @@ func run() error {
 		return fmt.Errorf("демо-заявка: %w", err)
 	}
 	slog.Info("Демо подготовлено: выбор варианта и подтверждение выполняются пользователем", "plan_id", planKey, "request_id", clinical.ID)
+	return nil
+}
+
+// Prepare norms before starting the 10000-unit import. Otherwise the demo bulk
+// request competes with synchronization, outbox and projections for the same DB.
+func (s seeder) prepareInventory(it, operator string, year int) error {
+	if err := s.waitSync(operator); err != nil {
+		return fmt.Errorf("начальная синхронизация АИСТ-М: %w", err)
+	}
+	if err := s.seedNorms(it, year-1); err != nil {
+		return fmt.Errorf("демо-нормативы: %w", err)
+	}
+	if err := s.json(http.MethodPost, s.aist+"/dev/seed", "", map[string]any{"seed": 42, "units": 10000}, nil); err != nil {
+		return fmt.Errorf("запас АИСТ-М: %w", err)
+	}
+	if err := s.waitSync(operator); err != nil {
+		return fmt.Errorf("синхронизация АИСТ-М: %w", err)
+	}
 	return nil
 }

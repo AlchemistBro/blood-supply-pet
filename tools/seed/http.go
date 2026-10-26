@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -20,6 +22,8 @@ import (
 )
 
 type statusError struct{ Code int }
+
+var errStandTimeout = errors.New("превышено время ожидания ответа стенда")
 
 func (e statusError) Error() string { return fmt.Sprintf("HTTP %d", e.Code) }
 func (s seeder) call(method, address, token, kind string, body io.Reader, out any) error {
@@ -35,6 +39,10 @@ func (s seeder) call(method, address, token, kind string, body io.Reader, out an
 	}
 	response, err := s.http.Do(request)
 	if err != nil {
+		var timeout net.Error
+		if errors.As(err, &timeout) && timeout.Timeout() {
+			return errStandTimeout
+		}
 		return errors.New("соединение со стендом не установлено")
 	}
 	defer func() { _ = response.Body.Close() }()
@@ -154,9 +162,12 @@ func (s seeder) waitPlan(token string, id, forecast, estimate uuid.UUID) (uuid.U
 
 // waitSync не принимает пропущенный из-за фонового опроса сеанс за готовность данных.
 func (s seeder) waitSync(token string) error {
+	ctx, cancel := context.WithTimeout(s.ctx, 2*time.Minute)
+	defer cancel()
+	s.ctx = ctx
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
-	for attempts := 0; attempts < 120; attempts++ {
+	for {
 		var result struct {
 			Result  string `json:"result"`
 			Skipped bool   `json:"skipped"`
@@ -169,7 +180,7 @@ func (s seeder) waitSync(token string) error {
 			return nil
 		}
 		var status statusError
-		if err != nil && (!errors.As(err, &status) || (status.Code != 409 && status.Code != 503)) {
+		if err != nil && !errors.Is(err, errStandTimeout) && (!errors.As(err, &status) || (status.Code != 409 && status.Code != 503)) {
 			return err
 		}
 		select {
@@ -178,5 +189,25 @@ func (s seeder) waitSync(token string) error {
 		case <-ticker.C:
 		}
 	}
-	return errors.New("синхронизация занята другим сеансом дольше двух минут")
+}
+
+// seedNorms can safely resume a timed-out bulk request: the server only fills
+// missing norms and retains committed progress and manually entered values.
+func (s seeder) seedNorms(token string, year int) error {
+	ctx, cancel := context.WithTimeout(s.ctx, 2*time.Minute)
+	defer cancel()
+	s.ctx = ctx
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		err := s.json(http.MethodPost, s.inventory+"/dev/seed-norms", token, map[string]any{"consumption_year": year}, nil)
+		if err == nil || !errors.Is(err, errStandTimeout) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
 }

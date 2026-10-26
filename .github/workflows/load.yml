@@ -33,6 +33,13 @@ jobs:
           go test ./services/planning/internal/domain -run '^$' -bench '^BenchmarkBuildPlanNFR002$' -benchmem -count=1 | tee artifacts/plan-benchmark.txt
       - name: Измерить NFR003
         run: task load
+      - name: Диагностика подготовки стенда и нагрузки
+        if: failure()
+        run: |
+          mkdir -p artifacts
+          docker compose -f deploy/compose/compose.yaml --env-file deploy/compose/.env --profile services logs --no-color --tail=200 > artifacts/compose.log 2>&1 || true
+          docker stats --no-stream > artifacts/docker-stats.txt 2>&1 || true
+          df -h > artifacts/disk.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
