@@ -11,6 +11,9 @@
 | [clinical-request.bpmn](clinical-request.bpmn) | Заявка врача → варианты → выбор → задание источнику → ИНТ-05 | Врач, matching, transfer, оператор источника, inventory → АИСТ-М, notification | [06-matching.md](../../../tasks/06-matching.md), FR029–FR035, FR043, FR044, FR051, FR052 |
 | [csv-demand.bpmn](csv-demand.bpmn) | Загрузка CSV → проверка → расчёт → публикация версии оценки | Аналитик, demand, planning | [04-demand.md](../../../tasks/04-demand.md), FR016–FR020, FR045, FR046 |
 
+Бизнес-процесс AS IS и TO BE (как клиника получает компонент сейчас и с АС) с картинками для GitHub —
+[as-is-to-be/README.md](as-is-to-be/README.md).
+
 Соглашения:
 
 - Один пул на процесс, дорожки — участники (роль или сервис). Обмен между сервисами идёт через Kafka; на схеме он

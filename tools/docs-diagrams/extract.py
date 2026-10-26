@@ -18,7 +18,7 @@ def main():
             stem = source.removesuffix(".md").replace("/", "__") + f"--{number}"
             (OUTPUT / (stem + ".mmd")).write_text(block, encoding="utf-8", newline="\n")
             items.append({"source": source, "input": stem + ".mmd", "svg": stem + ".svg", "kind": "mermaid"})
-    for path in sorted((ROOT / "docs/architecture/diagrams/bpmn").glob("*.bpmn")):
+    for path in sorted((ROOT / "docs/architecture/diagrams/bpmn").rglob("*.bpmn")):
         items.append({"source": path.relative_to(ROOT).as_posix(), "svg": "bpmn--" + path.stem + ".svg", "kind": "bpmn"})
     if not items:
         raise ValueError("исходники диаграмм не найдены")

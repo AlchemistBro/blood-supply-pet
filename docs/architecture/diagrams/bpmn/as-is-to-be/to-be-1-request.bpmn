@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0" xmlns:color="http://www.omg.org/spec/BPMN/non-normative/color/1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_ToBe1" targetNamespace="https://github.com/AlchemistBro/blood-supply-pet/bpmn">
+  <bpmn:collaboration id="Collaboration_ToBe1">
+    <bpmn:participant id="Participant_ToBe1_ext" name="C03 Служба перевозки" />
+    <bpmn:participant id="Participant_ToBe1" name="Заявка врача и подбор вариантов (TO BE)" processRef="Process_ToBe1" />
+    <bpmn:messageFlow id="Msg_1_ToBe1" name="ИНТ-03: запрос оценки времени" sourceRef="S3" targetRef="Participant_ToBe1_ext" />
+    <bpmn:messageFlow id="Msg_2_ToBe1" name="Оценка времени доставки" sourceRef="Participant_ToBe1_ext" targetRef="S3" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_ToBe1" name="TO BE, часть 1. Заявка врача и подбор вариантов" isExecutable="false">
+    <bpmn:laneSet id="LaneSet_ToBe1">
+      <bpmn:lane id="Lane_doc" name="Врач-трансфузиолог">
+        <bpmn:flowNodeRef>St</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>T1</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>T2</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_sys" name="АС распределения компонентов крови">
+        <bpmn:flowNodeRef>S1</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>S2</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>S3</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>G1</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>S5</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>S6</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>S4</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>E1</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>LAt</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="St" name="Пациенту нужен компонент крови"><bpmn:outgoing>Flow_1</bpmn:outgoing></bpmn:startEvent>
+    <bpmn:userTask id="T1" name="Создать заявку: компонент, ограничения, номер случая"><bpmn:incoming>Flow_1</bpmn:incoming><bpmn:outgoing>Flow_2</bpmn:outgoing></bpmn:userTask>
+    <bpmn:userTask id="T2" name="Выбрать вариант"><bpmn:incoming>Flow_9</bpmn:incoming><bpmn:outgoing>Flow_10</bpmn:outgoing></bpmn:userTask>
+    <bpmn:serviceTask id="S1" name="Зашифровать номер случая, записать в аудит"><bpmn:incoming>Flow_2</bpmn:incoming><bpmn:outgoing>Flow_3</bpmn:outgoing></bpmn:serviceTask>
+    <bpmn:serviceTask id="S2" name="Подобрать варианты по правилам и ограничениям"><bpmn:incoming>Flow_3</bpmn:incoming><bpmn:outgoing>Flow_4</bpmn:outgoing></bpmn:serviceTask>
+    <bpmn:serviceTask id="S3" name="Оценить время доставки, ранжировать варианты"><bpmn:incoming>Flow_4</bpmn:incoming><bpmn:outgoing>Flow_5</bpmn:outgoing></bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="G1" name="Есть варианты?"><bpmn:incoming>Flow_5</bpmn:incoming><bpmn:outgoing>Flow_6</bpmn:outgoing><bpmn:outgoing>Flow_7</bpmn:outgoing></bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="S5" name="Показать варианты с объяснением"><bpmn:incoming>Flow_6</bpmn:incoming><bpmn:outgoing>Flow_9</bpmn:outgoing></bpmn:serviceTask>
+    <bpmn:sendTask id="S6" name="Создать задание источнику, отправить письмо оператору"><bpmn:incoming>Flow_10</bpmn:incoming><bpmn:outgoing>Flow_11</bpmn:outgoing></bpmn:sendTask>
+    <bpmn:serviceTask id="S4" name="Записать дефицит заявки в реестр"><bpmn:incoming>Flow_7</bpmn:incoming><bpmn:outgoing>Flow_8</bpmn:outgoing></bpmn:serviceTask>
+    <bpmn:endEvent id="E1" name="Дефицит в реестре"><bpmn:incoming>Flow_8</bpmn:incoming></bpmn:endEvent>
+    <bpmn:intermediateThrowEvent id="LAt" name="К подтверждению (A)"><bpmn:incoming>Flow_11</bpmn:incoming><bpmn:linkEventDefinition id="LAt_def" name="A" /></bpmn:intermediateThrowEvent>
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="St" targetRef="T1" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="T1" targetRef="S1" />
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="S1" targetRef="S2" />
+    <bpmn:sequenceFlow id="Flow_4" sourceRef="S2" targetRef="S3" />
+    <bpmn:sequenceFlow id="Flow_5" sourceRef="S3" targetRef="G1" />
+    <bpmn:sequenceFlow id="Flow_6" sourceRef="G1" targetRef="S5" name="да" />
+    <bpmn:sequenceFlow id="Flow_7" sourceRef="G1" targetRef="S4" name="нет" />
+    <bpmn:sequenceFlow id="Flow_8" sourceRef="S4" targetRef="E1" />
+    <bpmn:sequenceFlow id="Flow_9" sourceRef="S5" targetRef="T2" />
+    <bpmn:sequenceFlow id="Flow_10" sourceRef="T2" targetRef="S6" />
+    <bpmn:sequenceFlow id="Flow_11" sourceRef="S6" targetRef="LAt" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="Diagram_ToBe1" name="TO BE, часть 1. Заявка врача и подбор вариантов">
+    <bpmndi:BPMNPlane id="Plane_ToBe1" bpmnElement="Collaboration_ToBe1">
+      <bpmndi:BPMNShape id="Participant_ToBe1_ext_di" bpmnElement="Participant_ToBe1_ext" isHorizontal="true"><dc:Bounds x="40" y="40" width="1240" height="60" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Participant_ToBe1_di" bpmnElement="Participant_ToBe1" isHorizontal="true"><dc:Bounds x="40" y="170" width="1240" height="470" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_doc_di" bpmnElement="Lane_doc" isHorizontal="true"><dc:Bounds x="70" y="170" width="1210" height="160" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_sys_di" bpmnElement="Lane_sys" isHorizontal="true"><dc:Bounds x="70" y="330" width="1210" height="310" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="St_di" bpmnElement="St" bioc:stroke="#4F8F3E" bioc:fill="#E4F3DF" color:background-color="#E4F3DF" color:border-color="#4F8F3E"><dc:Bounds x="142" y="227" width="36" height="36" /><bpmndi:BPMNLabel><dc:Bounds x="100" y="269" width="120" height="34" /></bpmndi:BPMNLabel></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T1_di" bpmnElement="T1" bioc:stroke="#4F6F9F" bioc:fill="#E8EEF9" color:background-color="#E8EEF9" color:border-color="#4F6F9F"><dc:Bounds x="260" y="200" width="130" height="90" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="T2_di" bpmnElement="T2" bioc:stroke="#4F6F9F" bioc:fill="#E8EEF9" color:background-color="#E8EEF9" color:border-color="#4F6F9F"><dc:Bounds x="920" y="200" width="130" height="90" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="S1_di" bpmnElement="S1" bioc:stroke="#4F6F9F" bioc:fill="#E8EEF9" color:background-color="#E8EEF9" color:border-color="#4F6F9F"><dc:Bounds x="260" y="360" width="130" height="90" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="S2_di" bpmnElement="S2" bioc:stroke="#4F6F9F" bioc:fill="#E8EEF9" color:background-color="#E8EEF9" color:border-color="#4F6F9F"><dc:Bounds x="425" y="360" width="130" height="90" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="S3_di" bpmnElement="S3" bioc:stroke="#4F6F9F" bioc:fill="#E8EEF9" color:background-color="#E8EEF9" color:border-color="#4F6F9F"><dc:Bounds x="590" y="360" width="130" height="90" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="G1_di" bpmnElement="G1" bioc:stroke="#B8952E" bioc:fill="#FDF4D7" color:background-color="#FDF4D7" color:border-color="#B8952E" isMarkerVisible="true"><dc:Bounds x="795" y="380" width="50" height="50" /><bpmndi:BPMNLabel><dc:Bounds x="775" y="342" width="90" height="30" /></bpmndi:BPMNLabel></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="S5_di" bpmnElement="S5" bioc:stroke="#4F6F9F" bioc:fill="#E8EEF9" color:background-color="#E8EEF9" color:border-color="#4F6F9F"><dc:Bounds x="920" y="360" width="130" height="90" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="S6_di" bpmnElement="S6" bioc:stroke="#4F6F9F" bioc:fill="#E8EEF9" color:background-color="#E8EEF9" color:border-color="#4F6F9F"><dc:Bounds x="1085" y="360" width="130" height="90" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="S4_di" bpmnElement="S4" bioc:stroke="#4F6F9F" bioc:fill="#E8EEF9" color:background-color="#E8EEF9" color:border-color="#4F6F9F"><dc:Bounds x="755" y="510" width="130" height="90" /></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="E1_di" bpmnElement="E1" bioc:stroke="#B33A3A" bioc:fill="#F9E0E0" color:background-color="#F9E0E0" color:border-color="#B33A3A"><dc:Bounds x="967" y="537" width="36" height="36" /><bpmndi:BPMNLabel><dc:Bounds x="925" y="579" width="120" height="34" /></bpmndi:BPMNLabel></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="LAt_di" bpmnElement="LAt" bioc:stroke="#C47D1E" bioc:fill="#FCEBD2" color:background-color="#FCEBD2" color:border-color="#C47D1E"><dc:Bounds x="1132" y="537" width="36" height="36" /><bpmndi:BPMNLabel><dc:Bounds x="1090" y="579" width="120" height="34" /></bpmndi:BPMNLabel></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1"><di:waypoint x="178" y="245" /><di:waypoint x="260" y="245" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_2_di" bpmnElement="Flow_2"><di:waypoint x="325" y="290" /><di:waypoint x="325" y="360" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_3_di" bpmnElement="Flow_3"><di:waypoint x="390" y="405" /><di:waypoint x="425" y="405" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_4_di" bpmnElement="Flow_4"><di:waypoint x="555" y="405" /><di:waypoint x="590" y="405" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_5_di" bpmnElement="Flow_5"><di:waypoint x="720" y="405" /><di:waypoint x="795" y="405" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_6_di" bpmnElement="Flow_6"><di:waypoint x="845" y="405" /><di:waypoint x="920" y="405" /><bpmndi:BPMNLabel><dc:Bounds x="853" y="385" width="30" height="14" /></bpmndi:BPMNLabel></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_7_di" bpmnElement="Flow_7"><di:waypoint x="820" y="430" /><di:waypoint x="820" y="510" /><bpmndi:BPMNLabel><dc:Bounds x="828" y="434" width="30" height="14" /></bpmndi:BPMNLabel></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_8_di" bpmnElement="Flow_8"><di:waypoint x="885" y="555" /><di:waypoint x="967" y="555" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_9_di" bpmnElement="Flow_9"><di:waypoint x="985" y="360" /><di:waypoint x="985" y="290" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_10_di" bpmnElement="Flow_10"><di:waypoint x="1050" y="245" /><di:waypoint x="1150" y="245" /><di:waypoint x="1150" y="360" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_11_di" bpmnElement="Flow_11"><di:waypoint x="1150" y="450" /><di:waypoint x="1150" y="537" /></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Msg_1_ToBe1_di" bpmnElement="Msg_1_ToBe1"><di:waypoint x="630" y="360" /><di:waypoint x="630" y="100" /><bpmndi:BPMNLabel><dc:Bounds x="504" y="108" width="120" height="40" /></bpmndi:BPMNLabel></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Msg_2_ToBe1_di" bpmnElement="Msg_2_ToBe1"><di:waypoint x="680" y="100" /><di:waypoint x="680" y="360" /><bpmndi:BPMNLabel><dc:Bounds x="686" y="108" width="120" height="40" /></bpmndi:BPMNLabel></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

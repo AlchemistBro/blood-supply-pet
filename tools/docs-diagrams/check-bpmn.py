@@ -11,7 +11,7 @@ DI = "http://www.omg.org/spec/BPMN/20100524/DI"
 
 
 def main():
-    paths = sorted((ROOT / "docs/architecture/diagrams/bpmn").glob("*.bpmn"))
+    paths = sorted((ROOT / "docs/architecture/diagrams/bpmn").rglob("*.bpmn"))
     documents = [(path, ET.parse(path).getroot()) for path in paths]
     processes = {element.get("id") for _, root in documents for element in root.findall(f"{{{MODEL}}}process")}
     failures = []

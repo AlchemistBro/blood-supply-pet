@@ -113,7 +113,7 @@
 | C4 | [контекст](docs/architecture/c4-context.md) · [контейнеры](docs/architecture/c4-containers.md) · [компоненты transfer и шлюза](docs/architecture/c4-components.md) |
 | DDD | [карта контекстов](docs/domain/context-map.md) · [состояния O07](docs/domain/obligation-states.md) |
 | UML | [сага и компенсации](docs/architecture/saga-confirmation.md) · [состояния и сверка шлюза](docs/architecture/uml.md) |
-| BPMN 2.0 | [подтверждение передачи](docs/architecture/diagrams/bpmn/confirm-transfer.bpmn) · [план пополнения](docs/architecture/diagrams/bpmn/replenishment-plan.bpmn) · [заявка врача](docs/architecture/diagrams/bpmn/clinical-request.bpmn) · [загрузка CSV](docs/architecture/diagrams/bpmn/csv-demand.bpmn) |
+| BPMN 2.0 | [подтверждение передачи](docs/architecture/diagrams/bpmn/confirm-transfer.bpmn) · [план пополнения](docs/architecture/diagrams/bpmn/replenishment-plan.bpmn) · [заявка врача](docs/architecture/diagrams/bpmn/clinical-request.bpmn) · [загрузка CSV](docs/architecture/diagrams/bpmn/csv-demand.bpmn) · [процесс AS IS и TO BE](docs/architecture/diagrams/bpmn/as-is-to-be/README.md) |
 | Данные и платформа | [события и команды](docs/architecture/events.md) · [модель данных](docs/architecture/data-model.md) · [развёртывание](docs/architecture/deployment.md) · [ADR](docs/adr/README.md) |
 
 Полный перечень и способы открыть — [docs/architecture/diagrams](docs/architecture/diagrams/README.md).

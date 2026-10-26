@@ -22,6 +22,7 @@
 | BPMN | Планирование пополнения по прогнозу ЧС | [bpmn/replenishment-plan.bpmn](bpmn/replenishment-plan.bpmn) | BPMN 2.0 XML + DI |
 | BPMN | Обработка заявки врача | [bpmn/clinical-request.bpmn](bpmn/clinical-request.bpmn) | BPMN 2.0 XML + DI |
 | BPMN | Загрузка CSV и публикация оценки | [bpmn/csv-demand.bpmn](bpmn/csv-demand.bpmn) | BPMN 2.0 XML + DI |
+| BPMN, бизнес-уровень | AS IS и TO BE: обеспечение клиники компонентом, 6 частей | [bpmn/as-is-to-be/](bpmn/as-is-to-be/README.md) | BPMN 2.0 XML + DI, PNG для показа |
 
 Подробнее о BPMN-процессах и соглашениях моделирования — [bpmn/README.md](bpmn/README.md).
 
