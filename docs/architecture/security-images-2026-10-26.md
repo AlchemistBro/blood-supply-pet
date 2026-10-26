@@ -29,9 +29,9 @@ trivy image --image-src docker --scanners vuln --severity HIGH,CRITICAL \
 JSON-отчёты сохраняются в артефакт `trivy-images`, включая случай ошибки.
 Публикация в реестр для проверки не требуется.
 
-Полный [CI `e1c0ca7`](https://github.com/AlchemistBro/blood-supply-pet/actions/runs/40243649650)
+Полный [CI `efdb928`](https://github.com/AlchemistBro/blood-supply-pet/actions/runs/40245975922)
 успешен. Все 12 образов собраны исходным `deploy/docker/Dockerfile` на GitHub;
-артефакт [trivy-images](https://github.com/AlchemistBro/blood-supply-pet/actions/runs/40243649650/artifacts/12618390614)
+артефакт [trivy-images](https://github.com/AlchemistBro/blood-supply-pet/actions/runs/40245975922/artifacts/12619270230)
 содержит 12 JSON-отчётов, в каждом 0 HIGH/CRITICAL. ОС итоговых образов — Debian 12.15.
 
 Результат относится к указанным образам и состоянию базы сканера на дату

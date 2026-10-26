@@ -322,6 +322,9 @@ kubectl create secret tls bs-tls -n bs-edge --cert tls.crt --key tls.key
 сохраняет голый `Z`, отклоняемый параметром PostgreSQL `recovery_target_time`:
 [исходник преобразования](https://github.com/cloudnative-pg/machinery/blob/v0.3.1/pkg/postgres/time/time.go).
 
+Проверка 26.10.2026 в GitHub Actions: RTO 218 с, маркеры до/после цели — 1/0,
+интервал до выбранной цели — 4 с; [отчёт и границы результата](../../docs/perf/pitr-2026-10-26.md).
+
 ## Допущения и ограничения
 
 1. **Изоляция баз в одном кластере PostgreSQL.** NetworkPolicy работает на уровне пода и порта: под, которому

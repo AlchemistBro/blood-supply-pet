@@ -8,12 +8,12 @@
 
 | Проверка | Подтверждённый результат |
 | --- | --- |
-| CI: линтеры, генерация, контракты, race, PostgreSQL/Kafka, безопасность, сборка | [Успешный полный прогон `e1c0ca7`](https://github.com/AlchemistBro/blood-supply-pet/actions/runs/40243649650), все шесть заданий |
-| E2E, включая конкурентное подтверждение и отказы | [Успешный прогон `e1c0ca7`](https://github.com/AlchemistBro/blood-supply-pet/actions/runs/40243649649): все 10 сценариев |
+| CI: линтеры, генерация, контракты, race, PostgreSQL/Kafka, безопасность, сборка | [Успешный полный прогон `efdb928`](https://github.com/AlchemistBro/blood-supply-pet/actions/runs/40245975922), все шесть заданий |
+| E2E, включая конкурентное подтверждение и отказы | [Успешный прогон `efdb928`](https://github.com/AlchemistBro/blood-supply-pet/actions/runs/40245975885): все 10 сценариев |
 | Диаграммы, ссылки, ER и BPMN | [Успешный прогон `d3598b9`](https://github.com/AlchemistBro/blood-supply-pet/actions/runs/40242029478), 29 SVG в `architecture-svg` (25 Mermaid, 4 BPMN); схемы C4 в SVG также сохранены в репозитории |
 | Вход через реальный Keycloak | Chrome: `analyst1`, `physician1`, `operator-c001`; страницы `/demand`, `/requests`, `/stock` открылись, ошибок JavaScript нет |
 | Повторная загрузка CSV и расчёт оценки | Chrome: повторная загрузка не создала дубль (3 файла до и после); форма доступна, версия долей выбрана; расчёт по 48 периодам создал 2499 строк со статусом `CALCULATED` |
-| Уязвимости 12 образов приложения | Локально и в CI `e1c0ca7`: 0 HIGH/CRITICAL, включая находки без исправлений; 12 JSON в `trivy-images`; [границы проверки](../architecture/security-images-2026-10-26.md) |
+| Уязвимости 12 образов приложения | Локально и в CI `efdb928`: 0 HIGH/CRITICAL, включая находки без исправлений; 12 JSON в `trivy-images`; [границы проверки](../architecture/security-images-2026-10-26.md) |
 | DLT и продолжение обработки | Локальные PostgreSQL/Kafka: весь пакет `libs/messaging` с `-tags integration` прошёл; усиленный тест проверяет следующее корректное сообщение после ядовитого |
 | NFR003, локальный compose | 50 VU, 9755 запросов в устойчивой фазе, p95 203,17 мс, ошибок 0, все 15162 проверки успешны; [отчёт](load-2026-10-26.md) |
 | NFR003, GitHub Actions | [Успешный прогон `511f569`](https://github.com/AlchemistBro/blood-supply-pet/actions/runs/40240975065): 50 VU, 7460 запросов в устойчивой фазе, p95 1753,58 мс, ошибок 0, все 12371 проверки успешны |
