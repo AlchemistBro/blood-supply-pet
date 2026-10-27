@@ -1,42 +1,46 @@
 # Этап 8. Kubernetes
 
-Цель: вся система разворачивается в kind одной командой с продовыми практиками; NFR005–NFR007, NFR012 подтверждаются учением восстановления.
+Цель: воспроизводимый демонстрационный kind, изоляция сервисов, наблюдаемость и проверенное восстановление.
 Спецификация: `docs/architecture/deployment.md`, ADR-0009.
 
-## Чеклист
+## Реализация
 
-Состояние 26.10.2026: [Kubernetes workflow `e1c0ca7`](https://github.com/AlchemistBro/blood-supply-pet/actions/runs/40243693985)
-прошёл в kind на GitHub с overlay `ci`: развёртывание платформы и сервисов,
-разрешённый/запрещённый сетевой поток, TLS и HTTP/роль smoke, отказ primary и PITR.
-RTO до сверки маркеров и готовности исходного кластера — 218 с, интервал до цели — 4 с,
-маркеры — 1/0. Это управляемое учение, не общая гарантия RPO.
-[Отчёт, артефакты и ограничения](../perf/pitr-2026-10-26.md).
-Холодная сборка с развёртыванием заняла 16 мин 58 с на двух CPU:
-критерий ≤ 10 мин пока не подтверждён. Образы собраны на runner без публикации.
+- [x] CloudNativePG: два экземпляра PostgreSQL, девять баз с собственными ролями, MinIO, непрерывный архив WAL и расписание копий.
+- [x] Девять Deployment/Service/PDB; HPA у web, inventory и matching; probes, ресурсы и стандарт безопасности через components/go-service.
+- [x] NetworkPolicy по сегментам и отдельные правила K1. Разделение баз внутри общего PostgreSQL обеспечивают роли и pg_hba, не отдельный сетевой адрес каждой БД.
+- [x] TLS ingress и отдельные Exact-маршруты BFF /auth/login и /auth/callback; Keycloak под /auth.
+- [x] Overlays local, ci и prod-example собираются kustomize. Рабочие проверки используют ci, prod-example не развёртывался.
+- [x] task k8s:up/down/smoke/logs/network-check/chaos/drill, task seed:kind.
+- [x] metrics-server и обязательная проверка ScalingActive трёх HPA и metrics API. Масштабирование под нагрузкой этим не доказывается: в ci min=max=1.
+- [x] Готовые образы из images.json фиксируются по digest и исходному SHA; приватные образы читаются через отдельный pull Secret.
+- [x] Холодный запуск готового релиза измеряется от начала up.sh, включая создание kind, сетевые проверки, загрузку образов, платформу, сервисы и HPA. Предел 600 с обязателен. Сборка исходников учитывается отдельным режимом.
+- [x] Kubernetes chaos: остановка/возврат gateway, Kafka, Keycloak; реальный DLT, счётчик Prometheus, штатный алерт Grafana и доставка в Mailpit.
+- [x] PITR: маркер до цели, завершённая копия, проверка WAL, отказ primary, восстановление pg-drill, сверка маркеров 1/0.
+- [x] Прикладная проверка копии: сохранённая заявка и расшифровка, запись только в pg-drill, здоровая сага с перевозкой, readiness, OIDC-вход трёх ролей, возврат исходных подключений.
 
-### Манифесты
-- [x] `deploy/k8s/base`: namespaces `bs-edge`, `bs-app`, `bs-data`, `bs-observability`; CloudNativePG operator + `Cluster` (2 экземпляра, backup в MinIO, `ScheduledBackup` суточный, retention 7d), `Database` и роль на сервис; Kafka StatefulSet (KRaft) + init топиков; Keycloak + realm ConfigMap; OTel Collector + lgtm; Mailpit; MinIO. Развёрнуто и проверено в `ci`.
-- [ ] На каждый сервис: Deployment (probes, resources, securityContext, env из ConfigMap/Secret), Service, HPA (web, inventory, matching), PDB, NetworkPolicy, ServiceMonitor/PodMonitor (или OTel scrape).
-- [x] ingress-nginx: Ingress для `web` (TLS, самоподписанный в local), путь ИНТ-02 к `planning`, rate limit; `/auth` к Keycloak. Exact-маршруты `/auth/login` и `/auth/callback` ведут в BFF; TLS и разделение маршрутов проверены smoke.
-- [ ] NetworkPolicy по сегментам: `bs-data` ← только `bs-app`; `matching` ↔ своя БД отдельной политикой; `bs-observability` только ingress; имитаторы в `bs-sims` (только local/ci).
-- [x] Overlays: `local` (NodePort/ingress на localhost, демо-секреты, имитаторы), `ci` (минимальные ресурсы, smoke с runner), `prod-example` (реплики, внешние секреты, без имитаторов). Все три собираются kustomize и проверяются Trivy; фактически развёрнут только `ci`.
-- [ ] `kubeconform` и `kube-linter` в CI на `kustomize build` всех overlays.
+## Подтверждённые прогоны и текущая приёмка
 
-### Автоматизация
-- [x] `task k8s:up`: kind create (конфиг с портами 80/443), установка операторов (CNPG, ingress-nginx), применение выбранного overlay, ожидание платформы и сервисов, вывод URL и демо-учёток; подтверждено прогоном `ci`.
-- [ ] `task k8s:down`, `task k8s:smoke` (e2e против ingress), `task k8s:logs`.
-- [ ] `task seed` работает против kind.
-- [ ] Kubernetes chaos/nightly: текущий workflow проверяет overlay `ci`, smoke и PITR (вручную с `drill=true` и еженедельно по расписанию). Сага/пауза Kafka проверены отдельным compose E2E; Kubernetes chaos из исходного плана остаётся открытым.
+Базовый Kubernetes/PITR на d0f56db прошёл 26.10.2026: [40317938338](https://github.com/AlchemistBro/blood-supply-pet/actions/runs/40317938338), RTO 207 с, интервал до цели 3 с, маркеры 1/0. Этот прежний прогон не включал прикладную проверку копии и Kubernetes chaos.
 
-### Учение восстановления (NFR006, NFR007, NFR012)
-- [x] `deploy/k8s/drill/drill.sh` (`task k8s:drill`): маркер → завершённая копия → цель PITR → второй маркер → проверка WAL → удаление primary → восстановление на `targetTime` → сверка 1/0 и готовности исходного кластера; RTO 218 с, окно до цели 4 с. Исходный отчёт `drill-20261025233122.md` в артефакте, [публичная сводка](../perf/pitr-2026-10-26.md). Полный прикладной smoke восстановленной копии — отдельная открытая проверка.
-- [ ] Nightly и ежемесячный drill из исходного плана: сейчас настроен еженедельный запуск; подтверждён ручной прогон.
+Финальная приёмка на 9a3093b прошла: [40359456280](https://github.com/AlchemistBro/blood-supply-pet/actions/runs/40359456280), кандидат [40358106495](https://github.com/AlchemistBro/blood-supply-pet/actions/runs/40358106495). Холодный старт — 410 с (6 мин 50 с), RTO — 202 с, интервал до выбранной цели — 4 с. Все четыре отказных сценария, реальное письмо Grafana, проверка приложения на восстановленной БД и возврат исходных подключений успешны. [Подробный отчёт](../perf/release-v1.0.0-2026-10-26.md).
 
-### Эксплуатационная документация
-- [ ] `docs/architecture/deployment.md` обновлён фактическими манифестами; схема развёртывания (deployment diagram) в Mermaid.
-- [ ] Runbook `docs/runbooks/`: «C03 молчит», «АИСТ-М недоступна», «DLT не пуст», «relay отстаёт», «восстановление БД».
-- [ ] Дашборды Grafana (JSON в репозитории): RED по сервисам, lag outbox/consumer, статусы O07, время расчёта плана.
+Результат запуска — dist/k8s-startup.json; HPA — dist/k8s-hpa.json; отказы и алерты — artifacts/k8s-chaos/report.json; приложение после PITR — dist/drill-application.json и dist/drill-saga.json. Все файлы сохраняет артефакт kubernetes-diagnostics.
 
-## Критерий выхода
-`task k8s:up` на чистой машине с Docker → через ≤ 10 мин система доступна по `https://localhost`, e2e smoke зелёный;
-`task k8s:drill` показывает RTO ≤ 60 мин (в демо минуты) и RPO ≤ 15 мин; k8s.yml зелёный в CI.
+Наличие кода проверки не означает успешную приёмку. Для выпуска требуется успешный запуск на точном images.json кандидата; tools/k8sdrill/evidence.py собирает подтверждение только из прошедших проверок.
+
+## Документация и границы
+
+- [x] deployment.md сверён с реальной структурой; deployment-диаграмма существует.
+- [x] Runbook-файлы для C03, АИСТ-М, DLT/relay, цепочки аудита и восстановления БД существуют.
+- [x] Шесть JSON-дашбордов, правила и контакт Grafana подключены через ConfigMap; сервисы экспортируют OTLP.
+- [ ] kubeconform и kube-linter: пока не подключены; имеющиеся k8scheck и Trivy не выдаются за эти инструменты.
+- [ ] Полное покрытие метриками outbox/consumer lag/O07/времени расчёта плана: остаются placeholder-панели.
+- [ ] Фактический task seed:kind и полный сценарий пользователя через ingress требуют отдельной приёмки.
+- [ ] Ночной и ежемесячный drill из первоначального плана: сейчас настроен еженедельный запуск, фактически подтверждены ручные прогоны.
+
+Одноузловой kind не проверяет отказ физического узла. Интервал управляемого PITR
+не является общей гарантией RPO; эти ограничения сохраняются после успешного учения.
+
+## Критерий выпуска
+
+Готовый кандидат развёрнут на чистом kind не более чем за 600 с; readiness/HPA, chaos/алерт и PITR с прикладной проверкой успешны. Конкретный source SHA, candidate run, digest-манифест и runtime-отчёт связаны в dist/k8s-release-evidence.json.

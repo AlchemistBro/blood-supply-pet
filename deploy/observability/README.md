@@ -48,18 +48,18 @@ Runbook-и, на которые ссылаются алерты: `docs/runbooks/
 Имена — как их показывает Prometheus из OTLP: точки заменяются на `_`, счётчики получают `_total`, единица — суффикс
 (`_seconds`); `job` — значение `service.name`.
 
-| Метрика | Откуда | Состояние на 23.10.2026 |
+| Метрика | Откуда | Состояние реализации на 26.10.2026 |
 | --- | --- | --- |
 | `http_server_request_duration_seconds_*` (`http_request_method`, `http_response_status_code`) | `otelhttp` в `libs/observability` | есть в main |
-| `httpx_client_calls_total{client,outcome}` | `libs/httpx` (`httpx.client.calls`) | в ветках этапа 1, в main — со слиянием этапа 1 |
-| `transfer_expiry_failures_total` | `services/transfer` (`transfer.expiry.failures`) | в ветке этапа 1 (transfer) |
+| `httpx_client_calls_total{client,outcome}` | `libs/httpx` (`httpx.client.calls`) | реализовано в main |
+| `transfer_expiry_failures_total` | `services/transfer` (`transfer.expiry.failures`) | реализовано в main |
 | `messaging_outbox_unpublished`, `messaging_outbox_oldest_age_seconds`, `messaging_outbox_published_total`, `messaging_outbox_failures_total` | хуки `RelayMetrics` в `libs/messaging` | **нет**: хуки не подключены к счётчикам; этап 8 |
-| `messaging_consumer_handled_total`, `messaging_consumer_duration_seconds`, `messaging_consumer_dead_letters_total` | хуки `ConsumerMetrics` | **нет**: этап 8 |
+| `messaging_consumer_handled_total`, `messaging_consumer_duration_seconds`, `messaging_consumer_dead_letters_total` | `libs/observability.ConsumerMetrics` | подключены к реальному consumer logistics-gateway; остальные consumers требуют отдельного подключения |
 | `messaging_consumer_lag{group,topic}` | consumer (оффсеты группы) | **нет**: этап 8 |
 | `transfer_obligations{status}`, `transfer_confirmations_total{result}`, `transfer_broken_total` | `services/transfer` | **нет**: этап 8 |
 | `transfer_escalations_total{reason}` | `services/transfer` | **нет**: этап 7 (S7-WP2) |
 | `logistics_transport_orders{status}`, `logistics_c03_attempts_total{outcome}` | `services/logistics-gateway` | **нет**: этап 8 |
-| `audit_chain_verify_ok`, `audit_chain_verify_last_run_timestamp_seconds`, `audit_records_total{module,action,result}`, `security_incidents_suspected_total{rule}` | `services/audit` | **нет**: этап 7 (S7-WP4a, ADR-0025) |
+| `audit_chain_verify_ok`, `audit_chain_verify_last_run_timestamp_seconds`, `security_incidents_suspected_total{rule}` | `services/audit/internal/app/metrics.go` | реализовано в main; историческая пометка об отсутствии устарела |
 
 Панели с отсутствующей метрикой подписаны «(метрика появится в этапе N)» и показывают это же вместо данных.
 Метрики Go-рантайма (`go_*`, `process_*`) регистрируются только в `/metrics` сервиса; otel-lgtm их не опрашивает,
@@ -89,6 +89,12 @@ Runbook-и, на которые ссылаются алерты: `docs/runbooks/
 Файлы монтируются по одному, а не каталогом: каталог закрыл бы собственный provisioning образа (источники данных).
 
 ## Подключение в Kubernetes
+
+В local/ci компонент sims задаёт SMTP Grafana на `mailpit.bs-sims.svc:1025`; отдельные правила разрешают
+только этот поток от Grafana к Mailpit. Это настоящий путь демонстрационного оповещения, а не внешний
+почтовый сервис. Kubernetes chaos проверяет точное DLT-сообщение, рост реального счётчика Prometheus,
+срабатывание штатного правила для уникального type и письмо с этим type в Mailpit. Пустой результат
+метрик, NoData/OK или одно наличие правила не считается успешной приёмкой.
 
 `deploy/k8s/base/platform/observability/kustomization.yaml` включает этот каталог как ресурс: `configMapGenerator`
 даёт ConfigMap `grafana-dashboards` и `grafana-provisioning` в `bs-observability`, Deployment `otel-lgtm` монтирует их

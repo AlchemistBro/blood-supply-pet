@@ -1,5 +1,13 @@
 # Release v1.0.0
 
+Published release: [v1.0.0](https://github.com/AlchemistBro/blood-supply-pet/releases/tag/v1.0.0),
+source `9a3093bdbeaca2b7f96188ec9f000fb41bae852f`, platform `linux/amd64`.
+[Promotion](https://github.com/AlchemistBro/blood-supply-pet/actions/runs/40420225780)
+preserved all 13 tested image digests. The release contains 73 assets;
+all 71 checksum entries were checked after download. See the
+[acceptance report](perf/release-v1.0.0-2026-10-26.md) for CI/E2E, cold startup,
+chaos/alert delivery, application operations after PITR, load results and their limits.
+
 Release publication has two explicit operations: build a candidate from `main`, then promote that tested candidate from an existing version tag. Neither workflow publishes on a `main` push. `images.yml` is a reusable workflow called by `release.yml`; it has no direct push or dispatch trigger. Repository workflow enablement, dispatches, tag creation, and package visibility are maintainer operations.
 
 The inventory contains 12 application images (`audit`, `demand`, `inventory`, `logistics-gateway`, `matching`, `notification`, `planning`, `sim-aist`, `sim-emergency`, `sim-logistics`, `transfer`, `web`) and the MinIO platform image. The application images use `deploy/docker/Dockerfile`; MinIO uses `deploy/docker/Minio.Dockerfile` and includes both `minio` and `mc`. All release images target **linux/amd64**. This release does not rebuild or mirror the other upstream platform images.
@@ -50,6 +58,15 @@ The same bytes are used for candidate testing and final release publication:
 The example abbreviates the map: real manifests contain exactly all 13 images. `source_commit`, rather than `revision`, is the source identity field. `version` includes `v`; container tag keys omit it. Values identify the complete OCI image index, including BuildKit attestations, rather than a mutable tag or an individual platform manifest. Final tag keys may not exist while testing the candidate. Split each key at its last colon to remove the version tag, then append `@` and the digest value. Validate the expected repository, full commit, version, platform, inventory, and digest syntax; never silently fall back to building from source if validation fails.
 
 ## Promotion
+
+For a local Compose demonstration with published application images, keep PostgreSQL local and select the version explicitly:
+
+```powershell
+$env:IMAGE_TAG = '1.0.0'
+docker compose -f deploy/compose/compose.yaml --env-file deploy/compose/.env --profile services up -d --no-build --pull missing --wait
+```
+
+Create `deploy/compose/.env` using the setup instructions in [demo.md](demo.md) first, and authenticate Docker to GHCR if the packages are private. This starts local containers and keeps the demo database on your computer. Use `stop` to pause them; `down -v` removes their database volumes.
 
 After the exact candidate passes CI and the Kubernetes gate, the maintainer creates and pushes `v1.0.0` at its `source_commit`. The workflows never create or move Git tags. Protect release tags and restrict GHCR write access so other writers cannot bypass the workflow's checks.
 

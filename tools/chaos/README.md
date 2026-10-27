@@ -5,7 +5,7 @@ readiness and before PITR. Nothing here creates a cluster, resets Docker, change
 NetworkPolicy/RBAC, or connects to a cloud database. Do not run this concurrently
 with rollout, restore, autoscaling changes, or another chaos run.
 
-Parent integration command (Linux GitHub runner, from repository root):
+Command (Linux GitHub runner, from repository root):
 
 ```sh
 BS_CHAOS_EPHEMERAL=1 bash deploy/k8s/chaos.sh
@@ -112,8 +112,10 @@ packet loss. The gateway scenario exercises a stopped consumer with queued work,
 not a kill precisely between carrier acceptance and local commit. The Keycloak
 check covers warmed API JWT validation and demo direct grants; browser sessions,
 refresh expiry, fresh verifier pods and key rotation are not covered (parent's
-browser acceptance covers HTML login). Alert delivery to email and automatic
-resolution after the ten-minute window are not asserted. DLT records and their
+browser acceptance covers HTML login). The DLT check also waits for an actual
+Grafana notification containing this run's unique type in Mailpit. SMTP and its
+two narrow NetworkPolicies are enabled only by the local/ci simulator component.
+Automatic resolution after the ten-minute window is not asserted. DLT records and their
 short-lived metric/alert instances intentionally remain as test evidence; no fault
 remains active after successful completion.
 
