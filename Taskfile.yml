@@ -187,6 +187,7 @@ tasks:
     cmds:
       - python tools/docs-diagrams/c4.py
       - python tools/docs-diagrams/sequence.py
+      - python tools/docs-diagrams/check-labels.py
 
   docs:er:
     desc: Обновить ER восьми баз из Up-миграций без подключения к PostgreSQL

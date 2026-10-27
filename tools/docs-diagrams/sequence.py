@@ -5,10 +5,13 @@
 allocatePatient) и logistics-gateway; описание саги — docs/architecture/saga-confirmation.md.
 """
 
-from svgkit import FONT, ROOT, esc, measure
+from svgkit import FONT, ROOT, esc, measure, wrap
 
 SIZE = 13
 ROW = 30
+LINE = 16    # шаг строки подписи, если она перенесена
+CAP = 300    # подпись шире переносится на следующую строку
+PAD = 24     # отступ подписи от линии жизни: полоса активации и рамки фрагментов
 HEAD = 40
 TOP = 60
 
@@ -88,32 +91,33 @@ STEPS = [
     ("async", "I", "K", "PatientAllocationAcknowledged"), ("off", "I"),
     ("end",),
     ("async", "K", "W", "TransportRequested"), ("on", "W"),
-    ("async", "W", "D", "SSE: перевозка заказана"),
-    ("async", "W", "O", "SSE: перевозка заказана"), ("off", "W"),
+    ("async", "W", "D", "статус: перевозка заказана"),
+    ("async", "W", "O", "статус: перевозка заказана"), ("off", "W"),
 ]
 
 
 def layout():
-    """Расставляет линии жизни так, чтобы подпись каждого сообщения помещалась между концами стрелки."""
+    """Расставляет линии жизни так, чтобы подпись каждого сообщения помещалась в один промежуток между линиями.
+
+    Подпись не должна закрывать чужие линии жизни: она стоит в самом широком промежутке своей стрелки,
+    а длинная переносится на несколько строк не шире CAP.
+    """
     names = {ident: label for ident, label, _ in LIFELINES}
     order = [ident for ident, _, _ in LIFELINES]
     gaps = [max(150, (measure(names[a], SIZE, True) + measure(names[b], SIZE, True)) / 2 + 40) for a, b in zip(order, order[1:])]
     number = 0
-    needs = []
     for step in STEPS:
         if step[0] in ("call", "async", "reply"):
             number += 1
             i, j = sorted((order.index(step[1]), order.index(step[2])))
-            needs.append((i, j, measure(f"{number}: {step[3]}", SIZE) + 40))
+            need = min(measure(f"{number}: {step[3]}", SIZE), CAP) + 2 * PAD + 12
+            k = max(range(i, j), key=lambda g: gaps[g])
+            gaps[k] = max(gaps[k], need)
         elif step[0] == "self":
             number += 1
             i = order.index(step[1])
-            needs.append((i, i + 1, measure(f"{number}: {step[2]}", SIZE) + 60))
-    for i, j, need in sorted(needs, key=lambda n: n[1] - n[0]):
-        have = sum(gaps[i:j])
-        if have < need:
-            for k in range(i, j):
-                gaps[k] += (need - have) / (j - i)
+            if i < len(gaps):
+                gaps[i] = max(gaps[i], min(measure(f"{number}: {step[2]}", SIZE), CAP) + 48 + PAD + 14)
     xs, x = {}, 90
     for ident, gap in zip(order, gaps + [0]):
         xs[ident] = x
@@ -140,6 +144,21 @@ def render():
         left = x - w / 2 if anchor == "middle" else x
         texts.append(f'<rect x="{left - 3:.1f}" y="{y_text - SIZE:.1f}" width="{w + 6:.1f}" height="{SIZE + 4}" fill="#FFFFFF"/>'
                      f'<text x="{x:.1f}" y="{y_text:.1f}" font-size="{SIZE}" text-anchor="{anchor}">{esc(content)}</text>')
+
+    def free(lo, hi):
+        """Самый широкий участок [lo, hi] без вертикальных рамок открытых фрагментов."""
+        cuts = sorted(x for f in stack for x in (f["x1"], f["x2"]) if lo < x < hi)
+        bounds = [lo] + [v for x in cuts for v in (x - 6, x + 6)] + [hi]
+        return max(zip(bounds[::2], bounds[1::2]), key=lambda span: span[1] - span[0])
+
+    def region(a, b):
+        """Свободный промежуток между соседними линиями жизни a и b с учётом полос активации."""
+        lo = xs[a] + (7 + 6 * (len(active[a]) - 1) if active[a] else 0) + 8
+        hi = xs[b] - (7 + 6 * (len(active[b]) - 1) if active[b] else 0) - 8
+        return free(lo, hi)
+
+    def lines_for(content, width):
+        return wrap(content, SIZE, max(width - 6, 60))
 
     def arrowhead(x, yy, direction, filled):
         tip, back, half = x, x - 10 * direction, 5
@@ -168,8 +187,14 @@ def render():
             x2 = edge_x(dst, xs[src])
             direction = 1 if x2 > x1 else -1
             dash = ' stroke-dasharray="6 4"' if kind == "reply" else ""
+            i, j = sorted((order.index(src), order.index(dst)))
+            spans = [region(order[k], order[k + 1]) for k in range(i, j)]
+            lo, hi = max(spans, key=lambda span: span[1] - span[0])
+            rows = lines_for(f"{number}: {content}", hi - lo)
+            y += LINE * (len(rows) - 1)
             msgs.append(f'<path d="M{x1:.1f},{y} H{x2:.1f}" stroke="#000000" stroke-width="1"{dash}/>' + arrowhead(x2, y, direction, kind == "call"))
-            label((x1 + x2) / 2, y - 6, f"{number}: {content}")
+            for n, row in enumerate(rows):
+                label((lo + hi) / 2, y - 6 - LINE * (len(rows) - 1 - n), row)
             y += ROW
         elif kind == "self":
             number += 1
@@ -177,8 +202,13 @@ def render():
             x1 = edge_x(who, xs[who] + 1)
             x2 = xs[who] + 40
             msgs.append(f'<path d="M{x1:.1f},{y - 4} H{x2:.1f} V{y + 12} H{x1 + 1:.1f}" fill="none" stroke="#000000" stroke-width="1"/>' + arrowhead(x1 + 1, y + 12, -1, True))
-            label(x2 + 8, y + 7, f"{number}: {content}", anchor="start")
-            y += ROW + 8
+            k = order.index(who)
+            right = region(who, order[k + 1])[1] if k + 1 < len(order) else width - 30
+            lo, hi = free(x2 + 8, right)
+            rows = lines_for(f"{number}: {content}", hi - lo)
+            for n, row in enumerate(rows):
+                label(lo, y + 7 + LINE * n, row, anchor="start")
+            y += ROW + 8 + LINE * (len(rows) - 1)
         elif kind == "frag":
             _, operator, left, right, guard = step
             depth = len(stack)

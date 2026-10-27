@@ -26,6 +26,8 @@ jobs:
           python3 tools/docs-diagrams/c4.py
           python3 tools/docs-diagrams/sequence.py
           git diff --exit-code -- docs/architecture/diagrams/c4 docs/architecture/diagrams/uml
+      - name: Подписи схем C4 и UML не закрывают чужие линии
+        run: python3 tools/docs-diagrams/check-labels.py
       - uses: actions/setup-node@v4
         with:
           node-version: "22"

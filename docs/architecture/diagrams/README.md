@@ -70,6 +70,9 @@
 - BPMN: `python tools/docs-diagrams/check-bpmn.py` статически проверяет XML, уникальность id, ссылки,
   вызываемые процессы и наличие фигур/рёбер DI. В CI это делает `docs.yml` (см. [testing.md](../testing.md));
   затем bpmn-js дополнительно проверяет импорт при экспорте.
+- Схемы C4 и UML для README: `python tools/docs-diagrams/check-labels.py` проверяет, что белый фон подписи не закрывает
+  чужие связи, пунктиры границ, линии жизни и острия стрелок, а подписи не налезают друг на друга. Стрелки к
+  пользователям подписываются действием, без протоколов.
 - Mermaid: рендер `mmdc` в `docs.yml`.
 - Схемы сверяются с кодом при изменении процесса: переходы O07 — с `services/transfer/internal/domain`, состояния
   заказа перевозки — с `services/logistics-gateway/internal/domain` и миграцией `transport_request`.
