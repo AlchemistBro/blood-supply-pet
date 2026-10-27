@@ -106,6 +106,62 @@
 Схемы открываются в полном размере по щелчку; файлы `.drawio.svg` редактируются в draw.io,
 исходник и перегенерация — `task docs:c4` ([как устроено](docs/architecture/diagrams/README.md#c4-и-uml-для-readme)).
 
+### BPMN · как клиника получает компонент: AS IS → TO BE
+
+Сейчас компонент ищут по звонкам, с АС — подбором, подтверждением и заказом перевозки в системе. Части процесса
+связаны событиями-ссылками с буквами (A, B, C, D); красным в AS IS отмечены узкие места. Описание каждой части —
+[AS IS и TO BE](docs/architecture/diagrams/bpmn/as-is-to-be/README.md).
+
+**AS IS · поиск компонента по звонкам**
+
+[![AS IS, часть 1: поиск компонента по заявке врача](docs/architecture/diagrams/bpmn/as-is-to-be/as-is-1-search.png)](docs/architecture/diagrams/bpmn/as-is-to-be/as-is-1-search.png)
+
+**AS IS · передача и приёмка**
+
+[![AS IS, часть 2: передача и приёмка компонента](docs/architecture/diagrams/bpmn/as-is-to-be/as-is-2-transfer.png)](docs/architecture/diagrams/bpmn/as-is-to-be/as-is-2-transfer.png)
+
+**TO BE · заявка врача и подбор вариантов**
+
+[![TO BE, часть 1: заявка врача и подбор вариантов](docs/architecture/diagrams/bpmn/as-is-to-be/to-be-1-request.png)](docs/architecture/diagrams/bpmn/as-is-to-be/to-be-1-request.png)
+
+**TO BE · подтверждение передачи источником**
+
+[![TO BE, часть 2: подтверждение передачи источником](docs/architecture/diagrams/bpmn/as-is-to-be/to-be-2-confirmation.png)](docs/architecture/diagrams/bpmn/as-is-to-be/to-be-2-confirmation.png)
+
+**TO BE · перевозка, отправка и приёмка**
+
+[![TO BE, часть 3: перевозка, отправка и приёмка](docs/architecture/diagrams/bpmn/as-is-to-be/to-be-3-transport.png)](docs/architecture/diagrams/bpmn/as-is-to-be/to-be-3-transport.png)
+
+**TO BE · пополнение запаса по прогнозу ЧС**
+
+[![TO BE, часть 4: пополнение запаса по прогнозу ЧС](docs/architecture/diagrams/bpmn/as-is-to-be/to-be-4-emergency-plan.png)](docs/architecture/diagrams/bpmn/as-is-to-be/to-be-4-emergency-plan.png)
+
+### BPMN · процессы по сервисам
+
+Те же процессы на уровне сервисов: дорожки — `matching`, `transfer`, `planning`, `inventory`, сообщения Kafka и
+компенсации. Схемы широкие: по щелчку открываются в полном размере.
+
+<details>
+<summary><b>Четыре схемы по сервисам</b>: заявка врача, подтверждение передачи, план пополнения, загрузка CSV</summary>
+
+**Заявка врача: варианты → выбор → задание источнику → закрепление в АИСТ-М**
+
+[![BPMN: обработка заявки врача](docs/architecture/diagrams/bpmn/clinical-request.png)](docs/architecture/diagrams/bpmn/clinical-request.png)
+
+**Подтверждение передачи: от задания до доставки**
+
+[![BPMN: подтверждение передачи](docs/architecture/diagrams/bpmn/confirm-transfer.png)](docs/architecture/diagrams/bpmn/confirm-transfer.png)
+
+**План пополнения по прогнозу ЧС**
+
+[![BPMN: план пополнения по прогнозу ЧС](docs/architecture/diagrams/bpmn/replenishment-plan.png)](docs/architecture/diagrams/bpmn/replenishment-plan.png)
+
+**Загрузка CSV и публикация оценки потребности**
+
+[![BPMN: загрузка CSV и публикация оценки](docs/architecture/diagrams/bpmn/csv-demand.png)](docs/architecture/diagrams/bpmn/csv-demand.png)
+
+</details>
+
 ### Схемы подробно
 
 | Вид | Схемы |
