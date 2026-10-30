@@ -33,7 +33,7 @@ require (
 	golang.org/x/sync v0.24.0
 	golang.org/x/tools v0.52.0
 	gopkg.in/yaml.v3 v3.0.1
-	pgregory.net/rapid v1.2.0
+	pgregory.net/rapid v1.3.0
 )
 
 require (
