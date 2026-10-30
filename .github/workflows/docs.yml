@@ -16,7 +16,7 @@ jobs:
     name: Mermaid, ссылки, BPMN
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Сверка ER с Up-миграциями без подключения к БД
         run: python3 tools/docs-er/generate.py --check
       - name: Статическая сверка BPMN XML, ссылок и DI
