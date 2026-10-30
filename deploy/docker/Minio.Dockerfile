@@ -8,7 +8,7 @@ RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache
     go install -trimpath -ldflags="-s -w" github.com/minio/minio@${MINIO_VERSION} && \
     go install -trimpath -ldflags="-s -w" github.com/minio/mc@${MC_VERSION}
 
-FROM alpine:3.22
+FROM alpine:3.24
 RUN apk add --no-cache ca-certificates
 COPY --from=build /out/minio /usr/bin/minio
 COPY --from=build /out/mc /usr/bin/mc
