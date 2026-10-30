@@ -64,7 +64,7 @@ jobs:
         env:
           CGO_ENABLED: "1"
         run: go test -race -count=1 -coverprofile=coverage.txt ./libs/... ./libs/testdata ./services/... ./tools/...
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: coverage
           path: coverage.txt
@@ -149,7 +149,7 @@ jobs:
         run: python3 -m unittest discover -s tools/security -p 'test_*.py'
       - name: Проверить все находки Trivy
         run: python3 tools/security/check_trivy_config.py dist/trivy-config.json dist/security-config
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: trivy-config
@@ -190,7 +190,7 @@ jobs:
             fi
           done
           exit "$failed"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: trivy-images

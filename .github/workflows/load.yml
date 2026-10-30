@@ -40,7 +40,7 @@ jobs:
           docker compose -f deploy/compose/compose.yaml --env-file deploy/compose/.env --profile services logs --no-color --tail=200 > artifacts/compose.log 2>&1 || true
           docker stats --no-stream > artifacts/docker-stats.txt 2>&1 || true
           df -h > artifacts/disk.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: performance
