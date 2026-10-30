@@ -68,7 +68,7 @@ jobs:
           path: dist/release
       - name: Доступ к приватным образам
         if: inputs.images_run_id != ''
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
