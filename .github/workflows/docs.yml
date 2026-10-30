@@ -51,7 +51,7 @@ jobs:
           npm install --no-save --package-lock=false @mermaid-js/mermaid-cli@11 bpmn-js@18.9.1
           python3 tools/docs-diagrams/extract.py
           node tools/docs-diagrams/render.mjs
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: architecture-svg
           path: |
